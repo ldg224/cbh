@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.9.2 (2026-11-17)
+
+**Added:** a **live shift timer**. While you're on shift, the Shifts page shows your time counting up each second (hours:minutes:seconds), with the time you started. On a break the timer stops and your break time counts up instead. **This week** and the times in **On now** keep up by themselves too.
+
+Bot: no change.
+Database change: none.
+
 ## 0.9.1 (2026-11-17)
 
 **Fixed:**

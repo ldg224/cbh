@@ -1038,6 +1038,7 @@ function renderSubmission(body, s, form) {
 // ----- Shifts (#shifts): started and ended in Discord only; the page shows who's on and your hours -----
 const shiftSecs = (s, now = Date.now()) => Math.max(0, ((s.ended_at ? new Date(s.ended_at) : now) - new Date(s.started_at)) / 1000
   - (s.break_seconds || 0) - (s.status === 'break' && s.break_started_at ? (now - new Date(s.break_started_at)) / 1000 : 0));
+const clock = (sec) => { sec = Math.floor(sec); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}`; };
 const hrs = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m`; };
 function weekStartSydney() {
   // Monday 00:00 in Sydney, as an ISO time.
@@ -1063,8 +1064,9 @@ async function renderShifts(body) {
     <div class="card shift-me">
       <span class="t-ico big" style="--c:${myNow ? '#16b364' : '#9aa9c4'};--icon:${iconUrl('clock')}" aria-hidden="true"></span>
       <div class="case-main"><strong class="thread-subject">${myNow ? (myNow.status === 'break' ? 'On a break' : 'On shift') : 'Off shift'}</strong>
-        <span class="muted small-meta">${myNow ? `${esc(myNow.department)} · ${hrs(shiftSecs(myNow))} so far` : (myDepartments.length ? 'Ready when you are' : 'You need a department role to start a shift')}</span></div>
-      <div class="stat-mini"><span class="muted small-meta">This week</span><strong>${hrs(weekSecs)}</strong></div>
+        <span class="muted small-meta">${myNow ? `${esc(myNow.department)} · since ${new Date(myNow.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${myNow.status === 'break' ? ` · break <span data-tick="brk">${clock((Date.now() - new Date(myNow.break_started_at)) / 1000)}</span>` : ''}` : (myDepartments.length ? 'Ready when you are' : 'You need a department role to start a shift')}</span></div>
+      ${myNow ? `<div class="shift-timer${myNow.status === 'break' ? ' paused' : ''}" data-tick="me" aria-label="Time on shift">${clock(shiftSecs(myNow))}</div>` : ''}
+      <div class="stat-mini"><span class="muted small-meta">This week</span><strong data-tick="week">${hrs(weekSecs)}</strong></div>
     </div>
     <div class="shift-actions">${myNow
       ? `<button class="ghost" id="sh-break">${myNow.status === 'break' ? 'End break' : 'Take a break'}</button><button class="refresh" id="sh-end">End shift</button>`
@@ -1075,14 +1077,28 @@ async function renderShifts(body) {
     <div class="card">${(on.data || []).length ? on.data.map((s) => `
       <div class="row-item"><span class="dot-status ${s.status === 'break' ? 'brk' : 'on'}"></span>
         <div class="case-main"><strong>${esc(s.name)}</strong><span class="muted small-meta">${esc(s.department)}${s.status === 'break' ? ' · on a break' : ''}</span></div>
-        <span class="muted small-meta">${hrs(shiftSecs(s))}</span></div>`).join('') : '<p class="muted small">Nobody is on shift right now.</p>'}</div>
+        <span class="muted small-meta" data-tick="on-${s.id}">${hrs(shiftSecs(s))}</span></div>`).join('') : '<p class="muted small">Nobody is on shift right now.</p>'}</div>
     <h2 class="menu-label aud-staff"><span class="aud-dot"></span>Your shifts</h2>
     <div class="card">${(mine.data || []).length ? mine.data.map((s) => `
       <div class="row-item"><div class="case-main"><strong>${new Date(s.started_at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</strong>
         <span class="muted small-meta">${esc(s.department)} · ${new Date(s.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${s.ended_at ? '–' + new Date(s.ended_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ' · now'}${s.ended_by === 'auto' ? ' · ended automatically' : ''}</span></div>
         <strong>${hrs(shiftSecs(s))}</strong></div>`).join('') : '<p class="muted small">No shifts yet.</p>'}</div>`;
   wireShiftButtons(body);
+  // Live timers: only these numbers update each second; nothing else on the page redraws.
+  const pastWeek = weekSecs - (myNow && myNow.started_at >= week ? shiftSecs(myNow) : 0);
+  clearInterval(shiftTicker);
+  shiftTicker = setInterval(() => {
+    if (!body.isConnected || !body.querySelector('[data-tick]')) { clearInterval(shiftTicker); return; }
+    const set = (k, v) => { const el = body.querySelector(`[data-tick="${k}"]`); if (el && el.textContent !== v) el.textContent = v; };
+    if (myNow) {
+      set('me', clock(shiftSecs(myNow)));
+      if (myNow.status === 'break') set('brk', clock((Date.now() - new Date(myNow.break_started_at)) / 1000));
+      if (myNow.started_at >= week) set('week', hrs(pastWeek + shiftSecs(myNow)));
+    }
+    for (const s of on.data || []) set('on-' + s.id, hrs(shiftSecs(s)));
+  }, 1000);
 }
+let shiftTicker = null;
 
 // Shift buttons (back end: Bravo's shift_* RPCs; the bot does roles, #shift-logs and auto-end).
 async function shiftAction(body, fn, args) {
