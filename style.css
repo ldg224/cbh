@@ -1066,6 +1066,8 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 @media (max-width: 560px) { .pg-roster .ro-chips2 { justify-content: flex-start; } }
 
 /* ===== Sessions page (Bravo, 0.15.x redesign). Scoped to .pg-sess. ===== */
+.pg-sess { min-width: 0; max-width: 100%; }
+.pg-sess > * { min-width: 0; }
 .pg-sess .ss-tag { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;
   color: color-mix(in srgb, var(--t) 62%, #0b1e4a); background: color-mix(in srgb, var(--t) 13%, #fff); border: 1px solid color-mix(in srgb, var(--t) 45%, #fff); }
 .pg-sess .ss-live { position: relative; overflow: hidden; padding: 22px 24px; margin-bottom: 18px; }
@@ -1135,7 +1137,7 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .pg-sess .ss-meta { grid-column: 1; font-size: 13px; }
 .pg-sess .ss-row-act { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .pg-sess .danger { color: #b42318; }
-@media (max-width: 760px) { .pg-sess .ss-week { grid-template-columns: repeat(7, minmax(78px, 1fr)); overflow-x: auto; padding-bottom: 6px; } }
+@media (max-width: 760px) { .pg-sess .ss-week { display: flex; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; } .pg-sess .ss-day { flex: 0 0 96px; scroll-snap-align: start; } }
 @media (max-width: 560px) {
   .pg-sess .ss-live { padding: 20px 18px; }
   .pg-sess .ss-live-host { margin-left: 0; flex-basis: 100%; }
