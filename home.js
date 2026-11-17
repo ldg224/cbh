@@ -329,10 +329,7 @@ function drawLive() {
   const el = $('h-live');
   const h = HC || {};
   const s = h.session || currentSession || {};
-  if (!s.live) {
-    el.innerHTML = s.next ? `<p class="h-next"><span class="h-dot"></span>Next session ${esc(whenAhead(s.next.scheduled_for))}${s.next.host_name ? ' with ' + esc(s.next.host_name) : ''} · join code <strong>${esc(s.code || joinCode)}</strong></p>` : '';
-    return;
-  }
+  if (!s.live) { drawIdle(el, h, s); return; }
   const live = s.live, me = h.my_shift, on = h.on_shift || {};
   const since = live.started_at ? new Date(live.started_at) : null;
   const byDept = Object.entries(on.by_dept || {}).filter(([, v]) => v).map(([k, v]) => `${k === 'Community Engagement' ? 'CE' : k === 'Administration' ? 'Admin' : k} ${v}`).join(' · ');
@@ -353,6 +350,33 @@ function drawLive() {
         <span class="h-small">${esc(byDept || 'Nobody yet')}${n0(on.on_break) ? ` · ${n0(on.on_break)} on a break` : ''}</span></div>` : ''}
     </div></section>`;
   el.querySelector('#h-copy').onclick = async (e) => { try { await navigator.clipboard.writeText(live.join_code || s.code || joinCode); e.target.textContent = 'Copied'; } catch { /* on screen */ } };
+  const act = async (fn, args) => { const { error } = await sb.rpc(fn, args || {}); if (error) alert(error.message); else renderHome(); };
+  el.querySelector('#h-break')?.addEventListener('click', () => act('shift_break'));
+  el.querySelector('#h-end')?.addEventListener('click', () => { if (confirm('End your shift?')) act('shift_end'); });
+  el.querySelector('#h-start')?.addEventListener('click', () => act('shift_start', { department: el.querySelector('#h-dept')?.value || myDepartments[0] }));
+}
+// No session running (0.14.6): a quiet light bar in the same place, so your shift and the session are always one
+// glance away. The bold Session active block above takes over while a session is live.
+function drawIdle(el, h, s) {
+  const me = h.my_shift, staff = canSee('staff');
+  const code = s.code || joinCode;
+  const sessText = s.next ? `Next session ${esc(whenAhead(s.next.scheduled_for))}${s.next.host_name ? ' with ' + esc(s.next.host_name) : ''}` : 'No session running';
+  const sessHref = canSee('sessions') ? (canSee('director') ? '#directors/sessions' : '#admin/sessions') : '';
+  const shiftPart = !staff ? '' : me
+    ? `<div class="h-idle-part"><span class="h-plabel-d">YOUR SHIFT \u00b7 ${esc(me.department).toUpperCase()}</span>
+        <div class="h-row"><strong class="h-idle-clock" data-tick="live-clock">${clock(shiftSecs(me))}</strong>
+        <button class="ghost small-btn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button><button class="refresh small-btn" id="h-end">End shift</button></div></div>`
+    : myDepartments.length
+      ? `<div class="h-idle-part"><span class="h-plabel-d">YOUR SHIFT</span><div class="h-row"><span class="h-idle-off">Off shift</span>
+          ${myDepartments.length > 1 ? `<select id="h-dept" class="h-sel h-sel-l" aria-label="Department">${myDepartments.map((d) => `<option>${esc(d)}</option>`).join('')}</select>` : ''}
+          <button class="refresh small-btn" id="h-start">Start shift${myDepartments.length === 1 ? ' \u00b7 ' + esc(myDepartments[0]) : ''}</button></div></div>`
+      : '';
+  el.innerHTML = `<section class="h-idle" aria-label="Session and shift">
+      <div class="h-idle-part"><span class="h-plabel-d"><span class="h-idle-dot${s.next ? ' next' : ''}"></span>SESSION</span>
+        <div class="h-row"><span class="h-idle-sess">${sessText}</span><span class="h-idle-code">Join code <strong>${esc(code)}</strong></span>
+        ${sessHref ? `<a class="ghost small-btn h-idle-link" href="${sessHref}">${s.next ? 'Sessions' : 'Start a session'}</a>` : ''}</div></div>
+      ${shiftPart}
+    </section>`;
   const act = async (fn, args) => { const { error } = await sb.rpc(fn, args || {}); if (error) alert(error.message); else renderHome(); };
   el.querySelector('#h-break')?.addEventListener('click', () => act('shift_break'));
   el.querySelector('#h-end')?.addEventListener('click', () => { if (confirm('End your shift?')) act('shift_end'); });

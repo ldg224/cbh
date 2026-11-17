@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.14.6 (2026-11-17)
+
+**Added:** a **Session and shift** bar on the home page, in the same spot as the Session active block (above **Pinned**), for when no session is running. It shows "No session running" or when the next session is, the join code, and a **Start a session** button for people who run sessions. For staff it also shows **your shift**: the live timer with **Take a break** and **End shift**, or **Off shift** with **Start shift** (pick a department if you're in more than one). The bold navy **Session active** block still takes over while a session is live.
+
+Bot: no change.
+Database change: none.
+
 ## 0.14.5 (2026-11-17)
 
 **Fixed:** with lots of pins (up to 7), titles like **Administration** or **Community Engagement** no longer run off the edge of their tile. Pins never get narrower than a long name needs: extra pins move onto a second row instead of squeezing (about five across on a computer, four on a tablet and two on a phone), and long names can take two lines. Every pin is now the same size. **Sessions** used to stretch across the whole row when pinned.
