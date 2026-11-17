@@ -34,5 +34,15 @@ $('logout').addEventListener('click', async () => {
   render(null);
 });
 
+// A failed Discord login comes back with ?error_description=... in the address. Show it, then tidy the address.
+(function showLoginError() {
+  const params = new URLSearchParams(location.search + '&' + location.hash.slice(1));
+  const desc = params.get('error_description');
+  if (!desc) return;
+  $('login-error').textContent = "Discord login didn't work: " + desc + '. Ask the Hospital Director to check the dashboard setup.';
+  $('login-error').hidden = false;
+  history.replaceState(null, '', location.pathname);
+})();
+
 sb.auth.onAuthStateChange((_event, session) => render(session));
 sb.auth.getSession().then(({ data }) => render(data.session));
