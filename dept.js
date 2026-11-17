@@ -49,6 +49,7 @@ async function renderDept(body, tool) {
   const route = `#directors/${tool.id}`;
   const here = () => location.hash.split('/').slice(0, 2).join('/') === route;   // a tab may follow: #directors/<id>/<tab>
   const linked = location.hash.split('/')[2];
+  let linkedSub = location.hash.split('/').slice(3).join('/');   // e.g. one application: #directors/<dept>/applications/<id>
   $('page-title').hidden = true;
   body.style.setProperty('--dept-tab', dep.color);
   body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
@@ -159,14 +160,17 @@ async function renderDept(body, tool) {
 
   function show(id, focus) {
     tab = dpTab[dept] = id;
-    try { history.replaceState(null, '', `${route}${id === 'overview' ? '' : '/' + id}`); } catch { /* fine without it */ }
+    // The deep-linked tab keeps its sub-path (and hands it to an extra tab's render) on its first show only.
+    const sub = id === linked ? linkedSub : '';
+    if (id === linked) linkedSub = '';
+    try { history.replaceState(null, '', `${route}${id === 'overview' ? '' : '/' + id}${sub ? '/' + sub : ''}`); } catch { /* fine without it */ }
     tabsEl.querySelectorAll('[role=tab]').forEach((b) => { const on = b.dataset.tab === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
     const cur = tabsEl.querySelector('[aria-selected="true"]');   // keep the chosen tab in view on narrow screens
     if (cur && (cur.offsetLeft < tabsEl.scrollLeft || cur.offsetLeft + cur.offsetWidth > tabsEl.scrollLeft + tabsEl.clientWidth)) tabsEl.scrollLeft = cur.offsetLeft - 12;
     pane.setAttribute('aria-labelledby', 'dpt-' + id);
     fail('');
     const ext = TABS.find((t) => t.id === id)?.ext;
-    if (ext) { pane.innerHTML = ''; try { ext.render(pane, dept); } catch (e) { pane.innerHTML = `<p class="error">${esc(e.message || String(e))}</p>`; } }
+    if (ext) { pane.innerHTML = ''; try { ext.render(pane, dept, sub); } catch (e) { pane.innerHTML = `<p class="error">${esc(e.message || String(e))}</p>`; } }
     else ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory, ranks: drawRanks })[id]();
     loadFaces(pane);
   }
