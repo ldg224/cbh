@@ -169,9 +169,18 @@ function drawHome() {
 // observations, attendance, inactive members) from a database summary.
 function drawNeeds() {
   const h = HC || {}, out = [];
-  const reviewDept = DEPARTMENTS.find((d) => canSee('dir:' + d.name) && hasPerm('applications.review', d.name));
-  if (n0(h.apps_waiting) && reviewDept) out.push({ ico: 'resume', c: reviewDept.color, t: `${plural(n0(h.apps_waiting), 'application')} to review`,
-    s: h.apps_oldest_at ? 'Oldest ' + when(h.apps_oldest_at) : 'Waiting for a decision', b: 'Review', href: `#directors/${reviewDept.id}/applications` });
+  // Per department, from my_todo() (desk.js, migration 0045): only what this person may act on.
+  const todo = window.deskTodo || {};
+  for (const d of DEPARTMENTS) {
+    const t = todo[d.name]; if (!t) continue;
+    const base = `#directors/${d.id}`, c = d.color;
+    if (n0(t.apps)) out.push({ ico: 'resume', c, t: `${plural(n0(t.apps), 'application')} to review`, s: d.name + (t.apps_oldest ? ' \u00b7 oldest ' + when(t.apps_oldest) : ''), b: 'Review', href: base + '/applications' });
+    for (const m of (t.attendance_list || []).slice(0, 2)) out.push({ ico: 'calendar', c, t: `Take attendance for ${m.title}`, s: d.name + ' \u00b7 ' + when(m.at), b: 'Take attendance', href: base + '/meetings' });
+    if (n0(t.attendance) > 2) out.push({ ico: 'calendar', c, t: `${n0(t.attendance) - 2} more meetings need attendance`, s: d.name, b: 'Open', href: base + '/meetings' });
+    if (n0(t.inactive)) { const names = (t.inactive_list || []).slice(0, 3).map((x) => cleanName(x.name)).join(', ');
+      out.push({ ico: 'clock', c, t: `${plural(n0(t.inactive), 'member')} inactive for 14 days`, s: d.name + (names ? ' \u00b7 ' + names + (n0(t.inactive) > 3 ? '\u2026' : '') : ''), b: 'See who', href: base + '/members' }); }
+    if (n0(t.failed)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(t.failed), 'rank change')} didn\u2019t go through`, s: d.name, b: 'See why', href: base + '/history' });
+  }
   if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: '#admin/cases' });
   const tk = canSee('admin') ? '#admin/tickets' : canSee('leads') ? '#tickets' : '';
   if (n0(h.tickets_open) && tk) out.push({ ico: 'inbox', c: '#3a82d0', t: `${plural(n0(h.tickets_open), 'ticket')} open`,

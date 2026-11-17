@@ -10,6 +10,7 @@
 (() => {
   const OPEN_KEY = 'cbh-desk-open';
   let data = null, shift = null, endArmed = 0;
+  window.deskTodo = {};   // my_todo() (migration 0045): per department, what's waiting on me
   const icon = (name) => `--icon:${iconUrl(name)}`;
   const chev = '<svg class="ds-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
   const readOpen = () => { try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{}'); } catch { return {}; } };
@@ -87,10 +88,10 @@
     if (it.href === '#') return h === '#' || h === '';
     return h === it.href || h.startsWith(it.href + '/');
   }
-  function folder(key, name, small, ic, color, items) {
+  function folder(key, name, small, ic, color, items, n) {
     const here = items.some(isHere), isOpen = open[key] ?? here;
-    return `<button class="ds-dept${isOpen ? ' open' : ''}" type="button" data-fold="${key}" aria-expanded="${isOpen}" style="--c:${color};${icon(ic)}">
-        <span class="ds-tile"></span><span class="ds-dname"><b>${esc(name)}</b>${small ? `<small>${esc(small)}</small>` : ''}</span>${chev}</button>
+    return `<button class="ds-dept${isOpen ? ' open' : ''}" type="button" data-fold="${key}" aria-expanded="${isOpen}" aria-label="${esc(name)}${n ? `, ${n} waiting` : ''}" style="--c:${color};${icon(ic)}">
+        <span class="ds-tile"></span><span class="ds-dname"><b>${esc(name)}</b>${small ? `<small>${esc(small)}</small>` : ''}</span>${n ? `<span class="ds-n">${n}</span>` : ''}${chev}</button>
       ${isOpen ? `<div class="ds-sub" style="--c:${color}">${items.map((it) => link(it, color)).join('')}</div>` : ''}`;
   }
   function drawSide() {
@@ -104,7 +105,7 @@
         <div class="ds-cat">My stuff</div>
         ${myStuff().map((it) => link(it)).join('')}
         ${depts.length ? `<div class="ds-cat">Departments</div>` : ''}
-        ${depts.map((d) => folder(d.id, d.name, rankIn(d), d.icon, d.color, deptPages(d))).join('')}
+        ${depts.map((d) => folder(d.id, d.name, rankIn(d), d.icon, d.color, deptPages(d), (window.deskTodo[d.name] || {}).total || 0)).join('')}
         ${hosp.length ? `<div class="ds-cat">Hospital</div>${folder('hospital', 'Hospital tools', access.exec ? 'Executive' : 'Administration', 'shield', '#22579f', hosp)}` : ''}
         <div class="ds-cat">Help</div>
         ${link({ href: '#rules', label: 'Rules & info', icon: 'book' })}${link({ href: '#commands', label: 'Commands', icon: 'console' })}
@@ -141,7 +142,8 @@
       canSee('staff') && myDepartments.length ? { href: '#shifts', label: 'Shift', icon: 'clock' } : { href: '#contact', label: 'Contact', icon: 'chat' },
     ];
     const cur = (it) => (it.dept ? hash().startsWith(it.href) : it.href === '#' ? hash() === '#' : hash() === it.href);
-    tabs.innerHTML = items.map((it) => `<a href="${it.href}"${cur(it) ? ' aria-current="page"' : ''}><span class="dt-i" style="${icon(it.icon)}"></span>${esc(it.label)}</a>`).join('')
+    tabs.innerHTML = items.map((it) => { const n = it.dept ? (window.deskTodo[it.dept.name] || {}).total : 0;
+      return `<a href="${it.href}"${cur(it) ? ' aria-current="page"' : ''}><span class="dt-i" style="${icon(it.icon)}"></span>${esc(it.label)}${n ? `<span class="ds-n">${n}</span>` : ''}</a>`; }).join('')
       + `<button type="button" data-desk="drawer"><span class="dt-i" style="${icon('menu')}"></span>Menu</button>`;
   }
   function drawAll() { if (!document.body.classList.contains('desk')) return; drawSide(); drawTabs(); }
@@ -195,12 +197,17 @@
   window.addEventListener('hashchange', () => setTimeout(drawAll, 0));
 
   // ---------- hooks for app.js ----------
+  async function loadTodo() {
+    const { data: t } = await sb.rpc('my_todo');
+    window.deskTodo = t || {};
+  }
   window.deskDraw = async (d) => {
     data = d;
     document.body.classList.add('desk');
     drawAll();
-    await loadShift().catch(() => {});
+    await Promise.all([loadShift().catch(() => {}), loadTodo().catch(() => {})]);
     drawAll();
+    if (!$('home').hidden && typeof drawNeeds === 'function' && $('h-need-sec')) drawNeeds();
   };
   window.deskRefresh = drawAll;   // after the session banner or access changes
   window.deskOff = () => { data = null; shift = null; document.body.classList.remove('desk', 'desk-open'); };
