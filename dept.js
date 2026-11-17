@@ -55,7 +55,7 @@ async function renderDept(body, tool) {
   body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
     <div class="card"><p class="muted small">Loading…</p></div>`;
 
-  const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ, disQ] = await Promise.all([
+  const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ, disQ, todoQ] = await Promise.all([
     sb.rpc('dept_roster', { department: dept }),
     sb.from('roles').select('id, name, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept).order('rank_order', { ascending: false }),
     sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100),
@@ -67,6 +67,8 @@ async function renderDept(body, tool) {
     director ? sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi') : Promise.resolve({ data: [] }),
     // Cleared To do items (0049): quiet members dealt with / snoozed / on leave, and dismissed failed rank changes.
     sb.from('todo_dismissals').select('kind, target, until, last_active, reason, dismissed_by_name, created_at').eq('department', dept),
+    // What's waiting on me here, the same my_todo() as the sidebar badge and Home (Desk sweep D6, 0.21.5).
+    window.deskTodo && window.deskTodo[dept] ? Promise.resolve({ data: window.deskTodo }) : sb.rpc('my_todo').then((r) => r, () => ({ data: null })),
   ]);
   if (!body.isConnected || !here()) return;
   if (roster.error) { body.innerHTML = ''; return liveError(body, roster.error); }
@@ -104,6 +106,7 @@ async function renderDept(body, tool) {
     const last = dpLastActive(p), stillQuiet = !last || !x.last_active || last <= new Date(x.last_active).getTime();
     return stillQuiet && (!x.until || new Date(x.until) > new Date()) ? x : null; };
   const inactive = seeAct ? people.filter((p) => dpInactive(p) && !cleared(p)) : [];
+  const todo = (todoQ && todoQ.data && todoQ.data[dept]) || null;
   const weekTotal = people.reduce((a, p) => a + Number(p.week_hours || 0), 0);
 
   const rankBadge = (p) => {
@@ -196,7 +199,11 @@ async function renderDept(body, tool) {
   // ---------- Overview ----------
   function drawOverview() {
     const attention = [
-      ...hist.filter((c) => c.status === 'failed').slice(0, 3).map((c) => ({ id: c.target_discord_id, name: nameOf(c.target_discord_id, c.target_name), why: 'Change failed: ' + (c.error || 'try again'), flag: ['bad', 'Failed'] })),
+      // Applications and attendance come from my_todo(), so this card agrees with the sidebar badge and Home.
+      ...(todo && Number(todo.apps) ? [{ ico: 'resume', name: plural(Number(todo.apps), 'application') + ' to review', why: todo.apps_oldest ? 'Oldest ' + when(todo.apps_oldest) : 'Waiting for a decision', go: 'applications', btn: 'Review' }] : []),
+      ...(todo ? (todo.attendance_list || []).slice(0, 3).map((m) => ({ ico: 'calendar', name: 'Take attendance for ' + m.title, why: when(m.at), go: 'meetings', btn: 'Take attendance' })) : []),
+      // Failed rank changes: like my_todo(), the last 7 days and not dismissed.
+      ...hist.filter((c) => c.status === 'failed' && !dismissed['failed_change:' + c.id] && (!todo || Date.now() - new Date(c.created_at) < 7 * 864e5)).slice(0, 3).map((c) => ({ id: c.target_discord_id, name: nameOf(c.target_discord_id, c.target_name), why: 'Change failed: ' + (c.error || 'try again'), flag: ['bad', 'Failed'] })),
       ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: dpLastActive(p) ? 'Not active since ' + new Date(dpLastActive(p)).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'No shifts or meetings yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
     ];
     const max = Math.max(1, ...deptWeeks);
@@ -207,9 +214,9 @@ async function renderDept(body, tool) {
     };
     pane.innerHTML = `<div class="dp-ov">
       <div class="dp-col">
-        ${seeAct || editM ? `<section class="card dp-card"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
-          ${attention.length ? `<div class="dp-list">${attention.map((a) => `<div class="dp-mini">${face({ name: a.name, discordId: a.id, avatarUrl: a.av || byId[a.id]?.avatar_url || '', size: 'm' })}
-              <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div><span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span></div>`).join('')}</div>`
+        ${seeAct || editM || attention.length ? `<section class="card dp-card"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
+          ${attention.length ? `<div class="dp-list">${attention.map((a) => `<div class="dp-mini">${a.ico ? `<span class="hd-ico" style="--c:${dep.color};--icon:${iconUrl(a.ico)}" aria-hidden="true"></span>` : face({ name: a.name, discordId: a.id, avatarUrl: a.av || byId[a.id]?.avatar_url || '', size: 'm' })}
+              <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div>${a.go ? `<button type="button" class="ghost small-btn" data-go="${a.go}">${a.btn}</button>` : `<span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span>`}</div>`).join('')}</div>`
             : `<p class="muted small">${seeAct ? `Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.` : 'Nothing needs you right now.'}</p>`}
         </section>` : ''}
         ${seeHist ? `<section class="card dp-card"><div class="dp-head"><h2>Recent changes</h2>${hist.length > 5 ? '<button class="linkish" data-go="history">See all</button>' : ''}</div>
