@@ -3,6 +3,23 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.23.0 (2026-11-18)
+
+**Added:**
+- **Courses** on each department page. Big course blocks made of modules and steps: written lessons, **Google Slides** shown in the site, YouTube, Google Docs and links, uploaded **PDFs** (a slide-by-slide viewer), PowerPoints (download) and images.
+- Reading steps count when you reach the end (the PDF's last page, the end of a YouTube video, the bottom of a lesson); Slides, Docs and PowerPoints use **I've finished**.
+- **Quizzes and formal exams** with an answer key, points, tries, a wait between tries, a time limit and an answer-reveal setting. Multiple choice marks itself; written answers go to a **Marking** page (Assess courses), and until everything is marked you only see "Submitted. Results usually within…".
+- **Practical evaluations** marked Not yet / Developing / Standard / Exceeding per competency.
+- Who a course is for (e.g. Trainees only), its open date, courses to finish first and its due date are all enforced by the database. Files are private to the course's people once it opens.
+- The course editor autosaves a draft, and **Publish** makes it live. A progress table per course, and a **Courses 2/3** chip on Members.
+- **My courses** in the sidebar opens your courses.
+- Department members can now open their department page and see the parts meant for them (e.g. Courses).
+
+**Bot:**
+- DMs when a course opens for you, is due soon or overdue, or when your result is ready.
+
+Database change: yes, migrations 0048 (courses) and 0051 (private course files); already applied.
+
 ## 0.22.2 (2026-11-18)
 
 **Fixed:**
