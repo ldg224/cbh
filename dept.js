@@ -49,6 +49,7 @@ async function renderDept(body, tool) {
   const route = `#directors/${tool.id}`;
   const here = () => location.hash.split('/').slice(0, 2).join('/') === route;   // a tab may follow: #directors/<id>/<tab>
   const linked = location.hash.split('/')[2];
+  let linkedSub = location.hash.split('/').slice(3).join('/');   // e.g. one application: #directors/<dept>/applications/<id>
   $('page-title').hidden = true;
   body.style.setProperty('--dept-tab', dep.color);
   body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
@@ -159,14 +160,17 @@ async function renderDept(body, tool) {
 
   function show(id, focus) {
     tab = dpTab[dept] = id;
-    try { history.replaceState(null, '', `${route}${id === 'overview' ? '' : '/' + id}`); } catch { /* fine without it */ }
+    // The deep-linked tab keeps its sub-path (and hands it to an extra tab's render) on its first show only.
+    const sub = id === linked ? linkedSub : '';
+    if (id === linked) linkedSub = '';
+    try { history.replaceState(null, '', `${route}${id === 'overview' ? '' : '/' + id}${sub ? '/' + sub : ''}`); } catch { /* fine without it */ }
     tabsEl.querySelectorAll('[role=tab]').forEach((b) => { const on = b.dataset.tab === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
     const cur = tabsEl.querySelector('[aria-selected="true"]');   // keep the chosen tab in view on narrow screens
     if (cur && (cur.offsetLeft < tabsEl.scrollLeft || cur.offsetLeft + cur.offsetWidth > tabsEl.scrollLeft + tabsEl.clientWidth)) tabsEl.scrollLeft = cur.offsetLeft - 12;
     pane.setAttribute('aria-labelledby', 'dpt-' + id);
     fail('');
     const ext = TABS.find((t) => t.id === id)?.ext;
-    if (ext) { pane.innerHTML = ''; try { ext.render(pane, dept); } catch (e) { pane.innerHTML = `<p class="error">${esc(e.message || String(e))}</p>`; } }
+    if (ext) { pane.innerHTML = ''; try { ext.render(pane, dept, sub); } catch (e) { pane.innerHTML = `<p class="error">${esc(e.message || String(e))}</p>`; } }
     else ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory, ranks: drawRanks })[id]();
     loadFaces(pane);
   }
@@ -684,7 +688,7 @@ async function renderDept(body, tool) {
     const held = {};
     (permQ.data || []).forEach((x) => { if (rankById[x.role_id]) held[x.role_id + '|' + x.perm] = x; });
     const low = rows.slice().sort((a, b) => a.rank_order - b.rank_order);
-    const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
+    const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.filter((x) => x.rank_order < r.rank_order).map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
     pane.innerHTML = `<div class="card dp-perms-card">
       <div class="dp-head"><h2>Who can do what</h2><span class="muted small-meta">The Director and executives can always do everything.</span></div>
       <p class="error" id="dp-perm-err" hidden></p>
@@ -693,9 +697,9 @@ async function renderDept(body, tool) {
         ${rows.map((r) => `<div class="dp-prow" role="row" style="--c:${r.badge_color ? hex(r.badge_color) : '#9aa9c4'}">
           <span role="rowheader" class="dp-prank"><span class="rbadge"><span class="rl">${esc(r.rank_label)}</span></span></span>
           ${PERMS.map(([k, l]) => { const on = !!held[r.id + '|' + k]; const w = held[r.id + '|members.edit'];
-            return `<span role="cell" class="dp-pcell" data-label="${esc(l)}">
+            return `<span role="cell" class="dp-pcell${k === 'members.edit' && on && w ? ' has-win' : ''}" data-label="${esc(l)}">
               <label class="dp-tick"><input type="checkbox" data-role="${esc(r.id)}" data-perm="${k}"${on ? ' checked' : ''} aria-label="${esc(r.rank_label)}: ${esc(l)}"><span aria-hidden="true"></span></label>
-              ${k === 'members.edit' && on && w ? `<span class="dp-win">${winSel(r, 'lo', w.window_lo)}<em>to</em>${winSel(r, 'hi', w.window_hi)}</span>` : ''}</span>`; }).join('')}
+              ${k === 'members.edit' && on && w ? `<span class="dp-win" title="Up to the rank below ${esc(r.rank_label)}">${winSel(r, 'lo', w.window_lo)}<em>to</em>${winSel(r, 'hi', w.window_hi)}</span>` : ''}</span>`; }).join('')}
         </div>`).join('')}
       </div></div>`;
     const err = pane.querySelector('#dp-perm-err');
