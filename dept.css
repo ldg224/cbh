@@ -180,6 +180,7 @@
 .dp-att-seg button.a-late[aria-checked="true"] { background: #e09a00; border-color: #e09a00; }
 .dp-att-seg button.a-absent[aria-checked="true"] { background: #c42b2b; border-color: #c42b2b; }
 .dp-moved { display: inline-block; margin-top: 3px; font-size: 11.5px; font-weight: 700; color: #7a5200; background: #fff4dc; border-radius: 6px; padding: 1px 7px; justify-self: start; }
+.dp-gone { color: #8a1c1c; background: #ffe6e3; }
 .dp-f2 { grid-template-columns: 1fr 1fr; }
 .dp-where { display: grid; gap: 12px; }
 .dp-guest { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--blue-deep); background: #e8f0fb; border-radius: 6px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }

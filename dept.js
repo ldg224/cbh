@@ -383,7 +383,9 @@ async function renderDept(body, tool) {
   // Upcoming and past meetings. The Director (or an exec) schedules, edits, starts, ends or cancels them, marks
   // attendance and keeps notes. CareBeyond Helper posts each one in the department's channel (meetings cog).
   const meetState = { open: null };   // 'new' | 'edit:<id>' | 'att:<id>' | 'notes:<id>' | 'cancel:<id>'
-  const meetWhere = (m) => (m.voice_channel_id ? (chanName(m.voice_channel_id) || 'Voice channel') : m.location || 'Discord');
+  // A voice channel deleted in Discord leaves a dead id on the meeting: flag it so the Director picks another.
+  const chanGone = (m) => !!(m.voice_channel_id && chans.length && !chanName(m.voice_channel_id));
+  const meetWhere = (m) => (m.voice_channel_id ? (chanName(m.voice_channel_id) || 'Deleted channel') : m.location || 'Discord');
   // Where picker: voice channels by category, or somewhere else (in game, etc.) as text.
   function wherePicker(m) {
     const groups = {};
@@ -391,18 +393,19 @@ async function renderDept(body, tool) {
     const other = !!(m && !m.voice_channel_id && m.location);
     return `<div class="dp-where"><label class="f"><span>Where</span><select name="vc">
         ${Object.entries(groups).map(([g, list]) => `<optgroup label="${esc(g)}">${list.map((c) => `<option value="${esc(c.id)}"${m && m.voice_channel_id === c.id ? ' selected' : ''}>${esc(dpChan(c.name))}</option>`).join('')}</optgroup>`).join('')}
+        ${m && chanGone(m) ? '<option value="__gone" selected disabled>Channel deleted: pick another</option>' : ''}
         <option value=""${other || (!m && !chans.length) || (m && !m.voice_channel_id && !m.location) ? ' selected' : ''}>Somewhere else</option></select></label>
       <label class="f dp-else"${other ? '' : ' hidden'}><span>Where exactly</span><input name="loc" maxlength="120" placeholder="e.g. In game, Ward 3" value="${esc(m?.location || '')}"></label></div>`;
   }
   function wireWhere(f) {
     const sel = f.querySelector('[name=vc]'), alt = f.querySelector('.dp-else');
-    const sync = () => { alt.hidden = !!sel.value; };
+    const sync = () => { alt.hidden = !!sel.value && sel.value !== '__gone'; if (sel.value === '__gone') alt.hidden = true; };
     if (!f.dataset.edit && !sel.value && chans.length) {   // a new meeting starts in the department's own voice channel if there is one
       const own = chans.find((c) => new RegExp(dept.split(' ')[0], 'i').test(c.name) && c.kind === 'voice') || chans[0];
       sel.value = own.id;
     }
     sel.onchange = sync; sync();
-    return () => ({ voice_channel_id: sel.value || null, location: sel.value ? null : (f.querySelector('[name=loc]').value.trim() || null) });
+    return () => (sel.value === '__gone' ? { gone: true } : { voice_channel_id: sel.value || null, location: sel.value ? null : (f.querySelector('[name=loc]').value.trim() || null) });
   }
   function meetLine(m) {
     const d = new Date(m.scheduled_for);
@@ -412,6 +415,7 @@ async function renderDept(body, tool) {
       <span class="dp-date" aria-hidden="true"><b>${esc(d.toLocaleDateString([], { month: 'short' }).toUpperCase())}</b><span>${d.getDate()}</span></span>
       <div class="dp-m"><strong>${esc(m.title)}</strong>
         <span>${esc(d.toLocaleDateString([], { weekday: 'short' }))} ${esc(d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))} · ${esc(meetWhere(m))} · ${m.duration_minutes || 60} min</span>
+        ${m.status === 'scheduled' && chanGone(m) ? '<span class="dp-moved dp-gone">Channel deleted, pick another</span>' : ''}
         ${m.moved_at && m.status === 'scheduled' ? `<span class="dp-moved">Moved${m.moved_from_at ? ' from ' + esc(dpWhenShort(m.moved_from_at)) : ''}${m.moved_from_channel_id && m.moved_from_channel_id !== m.voice_channel_id ? (m.moved_from_at ? ', ' : ' from ') + esc(chanName(m.moved_from_channel_id) || 'another channel') : ''}</span>` : ''}</div>${st}</div>`;
   }
   function drawMeetings() {
@@ -469,9 +473,11 @@ async function renderDept(body, tool) {
       const v = (n) => f.querySelector(`[name=${n}]`).value.trim();
       const when = sydneyToIso(v('date'), v('time'));
       if (!m && new Date(when) < Date.now() - 5 * 6e4) { er.textContent = 'Pick a time in the future.'; er.hidden = false; return; }
+      const w = where();
+      if (w.gone) { er.textContent = 'The voice channel was deleted in Discord. Pick another.'; er.hidden = false; return; }
       b.disabled = true; er.hidden = true;
       const { error } = await sb.rpc('meeting_save', { mid: m ? m.id : null, department: dept, title: v('title'), scheduled_for: when,
-        duration_minutes: +v('len'), ...where(), agenda: v('agenda') || null, ping: f.querySelector('[name=ping]').checked });
+        duration_minutes: +v('len'), ...w, agenda: v('agenda') || null, ping: f.querySelector('[name=ping]').checked });
       if (error) { er.textContent = error.message; er.hidden = false; b.disabled = false; return; }
       meetState.open = null; dpTab[dept] = 'meetings';
       renderDept(body, tool);
@@ -508,8 +514,10 @@ async function renderDept(body, tool) {
         const er = f.querySelector('.error'), b = f.querySelector('[type=submit]');
         const iso = sydneyToIso(f.querySelector('[name=date]').value, f.querySelector('[name=time]').value);
         if (new Date(iso) < Date.now() - 5 * 6e4) { er.textContent = 'Pick a time in the future.'; er.hidden = false; return; }
+        const w = where();
+        if (w.gone) { er.textContent = 'The voice channel was deleted in Discord. Pick another.'; er.hidden = false; return; }
         b.disabled = true; er.hidden = true;
-        const { error } = await sb.rpc('meeting_move', { mid: m.id, scheduled_for: iso, ...where() });
+        const { error } = await sb.rpc('meeting_move', { mid: m.id, scheduled_for: iso, ...w });
         if (error) { er.textContent = error.message === 'Nothing changed' ? 'That’s the same time and place as now.' : error.message; er.hidden = false; b.disabled = false; return; }
         dpTab[dept] = 'meetings'; renderDept(body, tool);
       };
