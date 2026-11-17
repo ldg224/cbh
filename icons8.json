@@ -139,6 +139,16 @@
         "id": "7317",
         "commonName": "controller",
         "use": "Session banner (Maple Hospital)"
+      },
+      "org-chart": {
+        "id": "57085",
+        "commonName": "stacked-organizational-chart",
+        "use": "Directors hub"
+      },
+      "calendar": {
+        "id": "10053",
+        "commonName": "calendar",
+        "use": "Sessions (Directors hub, Admin hub)"
       }
     }
   }

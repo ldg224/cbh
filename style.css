@@ -517,3 +517,30 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .shift-timer { font-size: 34px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1; }
 .shift-timer.paused { color: var(--muted); }
 @media (max-width: 560px) { .shift-me .shift-timer { order: 5; width: 100%; font-size: 40px; text-align: center; } }
+
+/* Directors hub (0.10.0): violet, between Executive navy and Admin indigo. */
+.aud-director { --g1: #3d2a8f; --g2: #6a4fd6; --g3: #a18cf5; --ink: #4f37b8; }
+/* Sessions page */
+.sess-now { display: flex; align-items: center; gap: 16px; }
+.sess-now.is-live { border-color: rgba(22, 179, 100, .45); }
+/* Department pages */
+.dept-bar { justify-content: flex-end; }
+.dept-row { align-items: center; }
+.dept-row .avatar { width: 36px; height: 36px; flex: none; }
+.dept-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.dp-rank { font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text); padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.dp-rank:focus { outline: 2px solid rgba(58, 130, 208, .35); border-color: var(--blue); }
+.dot-inline { display: inline-block; margin: 0 0 1px 4px; vertical-align: middle; }
+.dp-add { display: grid; gap: 14px; }
+.dp-results { display: flex; flex-wrap: wrap; gap: 8px; }
+.dp-results:empty { display: none; }
+.dp-pick { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text);
+  padding: 5px 12px 5px 5px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
+.dp-pick .avatar { width: 26px; height: 26px; border-width: 1px; }
+.dp-pick:hover { border-color: var(--blue); }
+.dp-pick.on { background: var(--teal-wash); border-color: var(--teal); }
+@media (max-width: 560px) {
+  .dept-row { flex-wrap: wrap; }
+  .dept-ctl { width: 100%; justify-content: flex-start; padding-left: 50px; }
+  .dept-bar .refresh { flex: 1; }
+}

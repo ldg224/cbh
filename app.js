@@ -269,7 +269,6 @@ function draw(data) {
   setAccess(me, roles, data.access, data.reviewTeams);
   buildMenu();
   buildSessionBanner(data.session);
-  buildSessionAdmin(data.session);
   route();
   // No "how this page works" text: the note only appears for loading and errors.
   note('');
@@ -363,11 +362,18 @@ $('login').addEventListener('click', async () => {
 // colour. Pages are TEMPLATES for now (layout + placeholder blocks) until the back end for each lands.
 const AUDIENCES = [
   { id: 'exec',     label: 'Executive' },
+  { id: 'director', label: 'Directors' },
   { id: 'admin',    label: 'Admin' },
   { id: 'staff',    label: 'Staff' },
   { id: 'everyone', label: 'Everyone' },
 ];
 // id = route (#id); hubs hold tools (#hub/tool). `photo`: a Roblox screenshot in assets/photos/ (tinted by CSS).
+const DEPARTMENTS = [
+  { id: 'administration', name: 'Administration', icon: 'clipboard' },
+  { id: 'nursing', name: 'Nursing', icon: 'nurse' },
+  { id: 'paramedicine', name: 'Paramedicine', icon: 'ambulance' },
+  { id: 'community', name: 'Community Engagement', icon: 'handshake' },
+];
 const PAGES = [
   { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
     { id: 'reports',  title: 'Reports',       icon: 'bar-chart', layout: 'reports' },
@@ -375,7 +381,13 @@ const PAGES = [
     { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form', building: true },
     { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
   ] },
+  // Directors hub: sessions, plus one page per department for its Director (execs see all four).
+  { id: 'directors', aud: 'director', title: 'Directors hub', icon: 'org-chart', wide: true, tools: [
+    { id: 'sessions', title: 'Sessions', icon: 'calendar', layout: 'sessions' },
+    ...DEPARTMENTS.map((d) => ({ id: d.id, title: d.name, icon: d.icon, layout: 'dept', dept: d.name, aud: 'dir:' + d.name })),
+  ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
+    { id: 'sessions',     title: 'Sessions',     icon: 'calendar', layout: 'sessions' },
     { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'cases' },
     { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'logs' },
     { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'tickets' },
@@ -401,13 +413,29 @@ function setAccess(me, roles, acc, reviewTeams = []) {
       leads: !acc.admin && (acc.leads || []).length > 0,
       reviewer: !!acc.exec || (acc.leads || []).some((d) => reviewTeams.includes(d)) };
     access['reviewer-lead'] = access.reviewer && !acc.admin;
+    setDirectorAccess(acc.directs, roles, !!acc.exec, acc.run_sessions);
     return;
   }
   const exec = roles.some((r) => r.kind === 'leadership' || r.kind === 'executive');
   const admin = exec || roles.some((r) => r.department === 'Administration');
   access = { exec, admin, staff: !!me.is_staff || admin, everyone: true };
+  setDirectorAccess(null, roles, exec);
+}
+// Directors hub: departments I direct (my_access().directs; worked out from my roles until the database says).
+let myDirects = [];
+function setDirectorAccess(directs, roles, exec, runSessions) {
+  myDirects = directs || (exec ? DEPARTMENTS.map((d) => d.name)
+    : roles.filter((r) => r.kind === 'rank' && r.rank_label === 'Director').map((r) => r.department));
+  access.director = exec || myDirects.length > 0;
+  for (const d of DEPARTMENTS) access['dir:' + d.name] = myDirects.includes(d.name);
+  access.sessions = runSessions ?? (access.director || access.admin);
+  // Sessions sit in both hubs; show them once, in the Directors hub, to people who can see it.
+  access['sessions-admin'] = access.sessions && !access.director;
 }
 const canSee = (aud) => !!access[aud];
+// A tool's access key (Sessions in the Admin hub has its own) and the audience colour its tile wears.
+const toolAud = (page, t) => (t.layout === 'sessions' && page.id === 'admin') ? 'sessions-admin' : (t.layout === 'sessions' ? 'sessions' : (t.aud || page.aud));
+const tileAud = (page, t) => t.aud === 'reviewer' ? 'exec' : (AUDIENCES.some((x) => x.id === t.aud) ? t.aud : page.aud);
 const iconUrl = (name) => `url('assets/icons/${name}.png')`;   // single quotes: also used inside style="..."
 
 function tileEl(href, p, aud, extra = '') {
@@ -511,7 +539,7 @@ function findRoute() {
   const page = PAGES.find((p) => p.id === a && canSee(p.aud));
   if (!page) return null;
   if (!b) return { page };
-  const tool = (page.tools || []).find((t) => t.id === b && canSee(t.aud || page.aud));
+  const tool = (page.tools || []).find((t) => t.id === b && canSee(toolAud(page, t)));
   return tool ? { page, tool } : { page };
 }
 
@@ -528,7 +556,7 @@ function route() {
   const r = findRoute();
   $('signed-in').hidden = !!r;
   $('session').hidden = !!r;
-  $('session-admin').hidden = !!r || !access.admin;
+  $('session-admin').hidden = true;   // sessions are run from the Directors hub / Admin hub (0.10.0)
   $('menu').hidden = !!r;
   $('page').hidden = !r;
   if (!r) { document.title = 'CareBeyond Dashboard'; fitBadges(); return; }
@@ -539,16 +567,16 @@ function route() {
   const body = $('page-body');
   body.classList.remove('is-building');
   if (tool) {
-    setPageTitle(tool.icon, tool.title, tool.aud === 'reviewer' ? 'exec' : (tool.aud || page.aud));
-    if (LIVE[tool.layout]) LIVE[tool.layout](body);
+    setPageTitle(tool.icon, tool.title, tileAud(page, tool));
+    if (LIVE[tool.layout]) LIVE[tool.layout](body, tool);
     else { body.innerHTML = (tool.building ? BUILDING_NOTE(tool.title) : '') + LAYOUTS[tool.layout](); body.classList.toggle('is-building', !!tool.building); }
   } else if (page.tools) {
     setPageTitle(page.icon, page.title, page.aud);
     const grid = document.createElement('div');
     grid.className = 'hub-grid';
-    for (const t of page.tools.filter((x) => canSee(x.aud || page.aud))) {
-      const a = tileEl(`#${page.id}/${t.id}`, t, t.aud === 'reviewer' ? 'exec' : (t.aud || page.aud), 'tool');
-      if (t.aud && t.aud !== page.aud) {
+    for (const t of page.tools.filter((x) => canSee(toolAud(page, x)))) {
+      const a = tileEl(`#${page.id}/${t.id}`, t, tileAud(page, t), 'tool');
+      if (t.aud && t.aud !== page.aud && AUDIENCES.some((x) => x.id === t.aud) || t.aud === 'reviewer') {
         a.insertAdjacentHTML('beforeend', `<span class="tile-flag">${t.aud === 'reviewer' ? 'Execs & team leads' : AUDIENCES.find((x) => x.id === t.aud).label + ' only'}</span>`);
       }
       grid.append(a);
@@ -1263,7 +1291,116 @@ async function renderRoster(body) {
   draw();
 }
 
-Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, reports: renderReports, people: renderRoster, settings: renderSettings });
+// ----- Department pages (#directors/<dept>): a Director manages their department; execs manage all four -----
+// Back end (Bravo, migration 0011): dept_roster, member_search, dept_set_rank / dept_add / dept_remove, which queue
+// role_changes rows that CareBeyond Helper carries out in Discord (pending, then done or failed).
+const CHANGE_LABEL = { pending: 'Pending', done: 'Done', failed: 'Failed' };
+async function renderDept(body, tool) {
+  const dept = tool.dept, exec = access.exec;
+  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const [roster, ranksQ, changes] = await Promise.all([
+    sb.rpc('dept_roster', { department: dept }),
+    sb.from('roles').select('id, name, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept).order('rank_order', { ascending: false }),
+    sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(12),
+  ]);
+  if (roster.error) { body.innerHTML = ''; return liveError(body, roster.error); }
+  const ranks = (ranksQ.data || []).sort((a, b) => b.rank_order - a.rank_order);
+  const rankById = Object.fromEntries(ranks.map((r) => [r.id, r]));
+  const canGive = ranks.filter((r) => exec || r.rank_label !== 'Director');
+  const people = (roster.data || []).sort((a, b) => (b.rank_order || 0) - (a.rank_order || 0) || cleanName(a.display_name).localeCompare(cleanName(b.display_name)));
+  const pending = Object.fromEntries((changes.data || []).filter((c) => c.status === 'pending').map((c) => [c.target_discord_id, c]));
+  const nameOf = Object.fromEntries(people.map((p) => [p.discord_id, cleanName(p.display_name)]));
+  // A Director can't change themselves or another Director (execs can); the database checks this too.
+  const locked = (p) => !exec && (p.discord_id === myDiscordId || p.rank_label === 'Director');
+  const week = people.reduce((a, p) => a + Number(p.week_hours || 0), 0);
+  const rankOpts = (sel) => canGive.map((r) => `<option value="${esc(r.id)}"${r.id === sel ? ' selected' : ''}>${esc(r.rank_label)}</option>`).join('');
+  const word = ranks.some((r) => /^Year/.test(r.rank_label)) ? 'year' : 'rank';
+
+  body.innerHTML = `
+    <div class="grid-3">
+      <div class="card tight stat"><span class="muted small-meta">Members</span><strong>${people.length}</strong></div>
+      <div class="card tight stat"><span class="muted small-meta">On shift now</span><strong>${people.filter((p) => p.on_shift).length}</strong></div>
+      <div class="card tight stat"><span class="muted small-meta">Hours this week</span><strong>${week.toFixed(1)}</strong></div>
+    </div>
+    <div class="toolbar dept-bar"><button class="refresh" id="dp-add-open">Add someone</button></div>
+    <form class="card dp-add" id="dp-add" hidden>
+      <label class="f"><span>Find a server member</span><input id="dp-q" autocomplete="off" placeholder="Start typing a name"></label>
+      <div id="dp-results" class="dp-results"></div>
+      <label class="f"><span>Starting ${word}</span><select id="dp-rank">${rankOpts(canGive[canGive.length - 1]?.id)}</select></label>
+      <div class="f-actions"><button type="button" class="linkish" id="dp-add-cancel">Cancel</button><button class="refresh" type="submit" id="dp-add-go" disabled>Add to ${esc(dept)}</button></div>
+    </form>
+    <p class="error" id="dp-err" hidden></p>
+    <h2 class="menu-label aud-director"><span class="aud-dot"></span>Members <span class="muted count">${people.length}</span></h2>
+    <div class="card">${people.length ? people.map((p) => {
+      const pend = pending[p.discord_id];
+      const r = rankById[p.rank_role_id];
+      return `<div class="row-item dept-row">
+        <img class="avatar" src="${esc(sized(p.avatar_url || '', 64))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div class="case-main"><strong>${esc(cleanName(p.display_name))}${p.on_shift ? ' <span class="dot-status on dot-inline" title="On shift"></span>' : ''}</strong>
+          <span class="muted small-meta">${esc(hrs(Number(p.week_hours || 0) * 3600))} this week · ${Number(p.shifts_30d || 0)} shift${p.shifts_30d == 1 ? '' : 's'} in 30 days${p.last_shift_at ? ' · last ' + esc(when(p.last_shift_at)) : ''}</span></div>
+        <div class="dept-ctl">
+          ${pend ? `<span class="st sub-pending">${CHANGE_LABEL.pending}</span>` : ''}
+          ${locked(p) || pend ? `<span class="rbadge" style="--c:${r && r.badge_color ? hex(r.badge_color) : '#9aa9c4'}"><span class="rl">${esc(p.rank_label || 'No ' + word)}</span></span>`
+            : `<select class="dp-rank" data-id="${esc(p.discord_id)}" aria-label="${word === 'year' ? 'Year' : 'Rank'} for ${esc(cleanName(p.display_name))}">${p.rank_role_id ? '' : `<option value="" selected>No ${word}</option>`}${rankOpts(p.rank_role_id)}</select>
+               <button class="ghost small-btn danger" data-remove="${esc(p.discord_id)}">Remove</button>`}
+        </div></div>`;
+    }).join('') : `<p class="muted small">Nobody is in ${esc(dept)} yet.</p>`}</div>
+    ${(changes.data || []).length ? `<h2 class="menu-label aud-director"><span class="aud-dot"></span>Recent changes</h2>
+    <div class="card">${changes.data.map((c) => `<div class="row-item"><div class="case-main">
+        <strong>${esc(nameOf[c.target_discord_id] || c.target_name || 'Someone')}: ${esc(c.action === 'remove' ? 'removed' : (c.action === 'add' ? 'added as ' : 'now ') + (c.rank_label || rankById[c.rank_role_id]?.rank_label || ''))}</strong>
+        <span class="muted small-meta">${esc(when(c.created_at))}${c.status === 'failed' && c.error ? ' · ' + esc(c.error) : ''}</span></div>
+        <span class="st ${c.status === "done" ? "sub-accepted" : c.status === "failed" ? "sub-denied" : "sub-pending"}">${esc(CHANGE_LABEL[c.status] || c.status)}</span></div>`).join('')}</div>` : ''}`;
+
+  const fail = (msg) => { const e = body.querySelector('#dp-err'); e.textContent = msg; e.hidden = false; };
+  const act = async (fn, args) => {
+    const { error } = await sb.rpc(fn, args);
+    if (error) return fail(error.message);
+    renderDept(body, tool);
+  };
+  body.querySelectorAll('.dp-rank').forEach((sel) => sel.addEventListener('change', () => {
+    const r = rankById[sel.value];
+    if (!r || !confirm(`Change ${nameOf[sel.dataset.id]} to ${r.rank_label}? CareBeyond Helper will update their Discord roles.`)) {
+      sel.value = people.find((p) => p.discord_id === sel.dataset.id).rank_role_id || '';
+      return;
+    }
+    act('dept_set_rank', { target: sel.dataset.id, department: dept, rank_role_id: sel.value });
+  }));
+  body.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm(`Remove ${nameOf[b.dataset.remove]} from ${dept}? They lose the ${dept} role and their ${word}.`)) return;
+    act('dept_remove', { target: b.dataset.remove, department: dept });
+  }));
+
+  // Add someone: search server members, pick one, pick a starting year or rank.
+  const form = body.querySelector('#dp-add'), q = body.querySelector('#dp-q'), res = body.querySelector('#dp-results'), go = body.querySelector('#dp-add-go');
+  let picked = null, timer = null;
+  body.querySelector('#dp-add-open').onclick = () => { form.hidden = false; q.focus(); };
+  body.querySelector('#dp-add-cancel').onclick = () => { form.hidden = true; };
+  q.oninput = () => {
+    clearTimeout(timer); picked = null; go.disabled = true;
+    const term = q.value.trim();
+    if (term.length < 2) { res.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const { data, error } = await sb.rpc('member_search', { q: term });
+      if (q.value.trim() !== term) return;
+      if (error) { res.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
+      const list = (data || []).filter((m) => !nameOf[m.discord_id]);
+      res.innerHTML = list.length ? list.map((m) => `<button type="button" class="dp-pick" data-id="${esc(m.discord_id)}">
+          <img class="avatar" src="${esc(sized(m.avatar_url || '', 64))}" alt="" onerror="this.style.visibility='hidden'"><span>${esc(cleanName(m.display_name))}</span></button>`).join('')
+        : `<p class="muted small">Nobody found who isn't already in ${esc(dept)}.</p>`;
+    }, 250);
+  };
+  res.onclick = (e) => {
+    const b = e.target.closest('.dp-pick'); if (!b) return;
+    res.querySelectorAll('.dp-pick').forEach((x) => x.classList.toggle('on', x === b));
+    picked = b.dataset.id; go.disabled = false;
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    if (picked) act('dept_add', { target: picked, department: dept, rank_role_id: body.querySelector('#dp-rank').value });
+  };
+}
+
+Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, reports: renderReports, people: renderRoster, settings: renderSettings, sessions: renderSessions, dept: renderDept });
 
 // ---------- running sessions (admins) ----------
 // Sessions are run from the website only (the /session commands were removed). The website writes the sessions
@@ -1277,9 +1414,20 @@ function sydneyToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());   // YYYY-MM-DD
 }
 
-function buildSessionAdmin(sess) {
-  const box = $('session-admin');
-  if (!access.admin) { box.hidden = true; return; }
+// Sessions page (#directors/sessions, #admin/sessions): the live one, start now, schedule, upcoming.
+async function renderSessions(body) {
+  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const sess = await fetchSession();
+  const live = sess && sess.live;
+  body.innerHTML = `<div class="card sess-now${live ? ' is-live' : ''}">
+      <span class="t-ico big" style="--c:${live ? '#16b364' : '#9aa9c4'};--icon:${iconUrl('calendar')}" aria-hidden="true"></span>
+      <div class="case-main"><strong class="thread-subject">${live ? 'Session live now' : 'No session running'}</strong>
+        <span class="muted small-meta">${live ? esc([live.host_name && 'Hosted by ' + live.host_name, live.started_at && 'since ' + new Date(live.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })].filter(Boolean).join(' · '))
+          : esc(sess && sess.next ? 'Next: ' + whenAhead(sess.next.scheduled_for) : 'Join code ' + ((sess && sess.code) || joinCode))}</span></div>
+    </div><div class="session-admin" id="sess-box"></div>`;
+  buildSessionAdmin(sess, body.querySelector('#sess-box'));
+}
+function buildSessionAdmin(sess, box) {
   const live = sess && sess.live, upcoming = (sess && sess.upcoming) || [];
   box.hidden = false;
   box.innerHTML = `

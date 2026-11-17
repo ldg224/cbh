@@ -3,6 +3,26 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.10.0 (2026-11-17)
+
+**Added:**
+- **Directors hub**, on the home menu between Executive and Admin, in its own violet colour. Department Directors see it; executives see all of it.
+- **Department pages** in the hub for **Administration**, **Nursing**, **Paramedicine** and **Community Engagement**. Each Director runs their own department; executives can run all four. Each page shows:
+  - members, who's on shift now, and the department's hours this week;
+  - every member with their hours this week, shifts in the last 30 days and last shift;
+  - **change someone's year or rank**, **Remove** them from the department, or **Add someone** (search the server, pick a starting year or rank);
+  - **Recent changes**, each marked **Pending**, **Done** or **Failed** (with the reason). CareBeyond Helper makes the Discord role changes.
+- **Sessions** page in the Directors hub (and in the Admin hub for the Admin team): start a session now, schedule one, start or cancel upcoming sessions, and end the live one.
+
+**Changed:**
+- Session controls have moved off the home page into the **Sessions** page. Everyone still sees the session banner and join code on the home page.
+- Directors and executives can now run sessions as well as the Admin team.
+
+Rules (checked by the database): a Director can't change their own rank, change another Director, executive or leadership member, or make someone a Director. Only executives can.
+
+Bot (by Bravo): a new part carries out role changes requested on the website (also catching up after time offline) and posts each one to #server-logs. **The bot needs uploading to Wispbyte** before changes go through; until then they wait as **Pending**.
+Database change: yes, migration 0011 (by Bravo).
+
 ## 0.9.2 (2026-11-17)
 
 **Added:** a **live shift timer**. While you're on shift, the Shifts page shows your time counting up each second (hours:minutes:seconds), with the time you started. On a break the timer stops and your break time counts up instead. **This week** and the times in **On now** keep up by themselves too.
