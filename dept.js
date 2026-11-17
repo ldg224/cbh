@@ -697,7 +697,7 @@ async function renderDept(body, tool) {
         ${rows.map((r) => `<div class="dp-prow" role="row" style="--c:${r.badge_color ? hex(r.badge_color) : '#9aa9c4'}">
           <span role="rowheader" class="dp-prank"><span class="rbadge"><span class="rl">${esc(r.rank_label)}</span></span></span>
           ${PERMS.map(([k, l]) => { const on = !!held[r.id + '|' + k]; const w = held[r.id + '|members.edit'];
-            return `<span role="cell" class="dp-pcell" data-label="${esc(l)}">
+            return `<span role="cell" class="dp-pcell${k === 'members.edit' && on && w ? ' has-win' : ''}" data-label="${esc(l)}">
               <label class="dp-tick"><input type="checkbox" data-role="${esc(r.id)}" data-perm="${k}"${on ? ' checked' : ''} aria-label="${esc(r.rank_label)}: ${esc(l)}"><span aria-hidden="true"></span></label>
               ${k === 'members.edit' && on && w ? `<span class="dp-win" title="Up to the rank below ${esc(r.rank_label)}">${winSel(r, 'lo', w.window_lo)}<em>to</em>${winSel(r, 'hi', w.window_hi)}</span>` : ''}</span>`; }).join('')}
         </div>`).join('')}
