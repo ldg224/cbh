@@ -1084,7 +1084,8 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .pg-sess .ss-sub { margin-top: 8px; font-size: 13.5px; }
 .pg-sess .ss-code { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--raised); border: 1px solid var(--line); }
 .pg-sess .ss-code-l { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.pg-sess .ss-code strong { font-size: 22px; font-weight: 800; letter-spacing: .03em; }
+.pg-sess .ss-code strong { font-size: 22px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; }
+.pg-sess .ss-code button { margin-left: auto; }
 .pg-sess .ss-crew { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .pg-sess .ss-crew-l { font-size: 13.5px; color: var(--muted); }
 .pg-sess .ss-crew-l strong { color: var(--text); font-size: 16px; margin-left: 2px; }
