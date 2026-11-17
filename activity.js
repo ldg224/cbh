@@ -9,7 +9,7 @@ const AC_RANGES = {
 };
 const AC_SORTS = [['hours', 'Hours'], ['sessions', 'Sessions'], ['actions', 'Mod actions']];
 const acNum = (n) => Number(n || 0);
-const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+const acPlural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const acH = (n) => { const v = acNum(n); return v >= 100 ? Math.round(v).toString() : v.toFixed(1); };
 const acDeptColour = (name) => (DEPARTMENTS.find((d) => d.name === name) || {}).color || '#3a82d0';
 
@@ -87,7 +87,7 @@ async function renderActivity(body) {
             <span class="ac-dept-name"><span class="ac-dot" aria-hidden="true"></span>${esc(x.name)}</span>
             <span class="meter"><span style="width:${(x.hours / max) * 100}%"></span></span>
             <span class="ac-dept-h"><strong>${acH(x.hours)} h</strong>${acTrend(x.hours, x.prev, { pct: true, quiet: true })}</span>
-            <span class="ac-dept-sub">${x.shifts ? `${plural(x.shifts, 'shift')} · ${plural(x.people, 'person', 'people')}` : 'No shifts'}</span>
+            <span class="ac-dept-sub">${x.shifts ? `${acPlural(x.shifts, 'shift')} · ${acPlural(x.people, 'person', 'people')}` : 'No shifts'}</span>
           </button>`).join('')}</div>
       </section>
 
@@ -110,7 +110,7 @@ async function renderActivity(body) {
             <span class="ac-n ac-hours${st.sort === 'hours' ? ' on' : ''}"><strong>${acH(p.hours)} h</strong>${acTrend(p.hours, p.prev_hours, { pct: true, quiet: true })}</span>
             <div class="ac-counts">${[['shifts', 'shift'], ['sessions', 'session'], ['actions', 'mod action']].map(([k, one]) => {
               const n = acNum(p[k]);
-              return `<span class="ac-n${st.sort === k ? ' on' : ''}${n ? '' : ' zero'}">${n || '–'}<span class="ac-lbl"> ${plural(n, one).replace(/^\d+ /, '')}</span></span>`;
+              return `<span class="ac-n${st.sort === k ? ' on' : ''}${n ? '' : ' zero'}">${n || '–'}<span class="ac-lbl"> ${acPlural(n, one).replace(/^\d+ /, '')}</span></span>`;
             }).join('')}</div>
           </div>`).join('')}` : `<p class="muted small ac-empty">No activity ${st.dept === 'all' ? '' : `in ${esc(st.dept)} `}in this period.</p>`}</div>
       </section>
