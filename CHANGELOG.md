@@ -3,6 +3,32 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.20.0 (2026-11-18)
+
+**Added:**
+- **Applications** now live inside each department page, in an **Applications** tab with **To review**, **Forms** and **Decided**.
+- Departments can have **several applications**, under groups they name (e.g. General, Promotions).
+- A **form builder**: questions in titled sections, reorder by dragging, question types, required, choices and **Preview**. Changes save as a draft while you type and only go live when you press **Publish**.
+- Each application chooses **who can see and apply**: everyone not in the department yet, or chosen ranks (e.g. **Become a Leader** for Trainees and Team Members).
+- Each application has its own stages, the rank and extra roles given on accept (Leader allowed, never Director), and its reapply wait.
+- Executives and Directors can **limit who reviews** an application (e.g. Board of Directors only), **require several approvals**, and have an executive give the final Accept. Pressing **Accept** counts as your approval.
+
+**Changed:**
+- **Apply** groups applications by department and only shows the ones open to you.
+- Old Applications links, home tiles and older Discord posts open the department's Applications tab.
+- Setting or changing the rank an application gives needs the right to give that rank; the form shows who set it.
+- **Administration Trainees** no longer count as admins (no Records, Mod actions, Discord logs, messages or incidents).
+
+**Fixed:**
+- **Records:** Warn, Time out, Kick and Ban on a record now show the person's history and the "check a ban is the right step" warning, and the record page no longer scrolls sideways on phones.
+- Applications can only be decided through the proper checks, applicants can't fill in review fields, session co-hosts can't take over a session, rank change windows can't reach the rank itself or above, and other security fixes from testing (already live).
+
+**Bot:**
+- Application posts link straight to the application in its department page.
+- Administration Trainees can't use the moderation commands.
+
+Database change: yes, migrations 0032 to 0044 (applications v2, reviewers and approvals, security fixes, Trainee access; already applied) and 0034 (drafts hidden; applied with this release).
+
 ## 0.19.2 (2026-11-18)
 
 **Added:**
