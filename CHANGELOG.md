@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.2.2 (2026-11-17)
+
+**Changed:**
+- The "CareBeyond Hospital" wordmark in the header is now real text in Montserrat, so it's sharp and easy to read on big screens and phones (it was a small picture before).
+- Every badge has a bold icon in its role colour: a crown for Hospital Director, a briefcase for COO, a group for the Board, a star for Executive, a clipboard, handshake, nurse or ambulance for each department, a seal for Verified and a person for Member.
+- Names are shown without emoji, which clashed with the CareBeyond look (badges already say who you are).
+- Phones and big screens each get their own spacing and sizes. A department and its year always stay together on one line.
+
+**Added:** "Icons by Icons8" credit in the footer.
+Database change: none.
+
 ## 0.2.1 (2026-11-17)
 
 **Removed:** the "Your server roles" list. Your badges already show who you are.

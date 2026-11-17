@@ -15,7 +15,10 @@
 <body>
   <header class="bar">
     <div class="brand">
-      <img class="logo" src="assets/cbh-logo-light.svg" alt="CareBeyond Hospital" width="185" height="48">
+      <a class="mark" href="./" aria-label="CareBeyond Hospital">
+        <img class="mark-icon" src="assets/cbh-icon.svg" alt="" width="44" height="44">
+        <span class="wordmark" aria-hidden="true"><span class="wm-name">CareBeyond</span><span class="wm-sub">Hospital</span></span>
+      </a>
       <span class="section">Staff dashboard</span>
     </div>
     <div id="who" class="who" hidden>
@@ -51,6 +54,7 @@
   <footer class="foot">
     CareBeyond Hospital <span aria-hidden="true">·</span>
     <a id="version" href="https://github.com/ldg224/cbh/blob/main/CHANGELOG.md" title="What's changed"></a>
+    <span aria-hidden="true">·</span> <a href="https://icons8.com" target="_blank" rel="noopener">Icons by Icons8</a>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>

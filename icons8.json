@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "icons": {
+    "pack": "ios_filled",
+    "sizes": [14, 16],
+    "color": "role colour via CSS mask (PNG stencils in assets/icons, 96px black on transparent)",
+    "items": {
+      "crown":      { "id": "12608", "commonName": "crown",            "use": "Hospital Director" },
+      "briefcase":  { "id": "2784",  "commonName": "briefcase",        "use": "Chief Operations Officer" },
+      "conference": { "id": "8951",  "commonName": "conference",       "use": "Board of Directors" },
+      "star":       { "id": "7856",  "commonName": "star",             "use": "Executive; fallback for other leadership" },
+      "clipboard":  { "id": "11765", "commonName": "clipboard",        "use": "Administration department" },
+      "handshake":  { "id": "10994", "commonName": "handshake",        "use": "Community Engagement department" },
+      "nurse":      { "id": "8997",  "commonName": "nurse-female",     "use": "Nursing department" },
+      "ambulance":  { "id": "9541",  "commonName": "ambulance",        "use": "Paramedicine department" },
+      "verified":   { "id": "36872", "commonName": "verified-account", "use": "Verified" },
+      "user":       { "id": "23265", "commonName": "user",             "use": "Member" }
+    }
+  }
+}

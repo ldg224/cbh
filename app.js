@@ -46,12 +46,28 @@ function fingerprint({ me, roles, departments }) {
 //   > Verified. Someone with none of these gets a plain "Member" badge.
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
+// Badge icons (Icons8 ios_filled, see icons8.json), tinted with the role colour by CSS.
+// Leadership roles by role ID (IDs never change when a role is renamed); any other leadership role gets the star.
+const LEADERSHIP_ICON = {
+  '1464007138882883725': 'crown',      // Hospital Director
+  '1472796994316534005': 'briefcase',  // Chief Operations Officer
+  '1472811961770049657': 'conference', // Board of Directors
+};
+const DEPARTMENT_ICON = {
+  'Administration': 'clipboard',
+  'Community Engagement': 'handshake',
+  'Nursing': 'nurse',
+  'Paramedicine': 'ambulance',
+};
+
 function buildBadges(roles, departments) {
   const out = [];
-  for (const r of roles.filter((x) => x.kind === 'leadership')) out.push({ label: r.name, color: r.badge_color });
+  for (const r of roles.filter((x) => x.kind === 'leadership')) {
+    out.push({ label: r.name, color: r.badge_color, icon: LEADERSHIP_ICON[r.id] || 'star' });
+  }
   if (roles.some((x) => x.kind === 'executive')) {
     const r = roles.find((x) => x.kind === 'executive');
-    out.push({ label: 'Executive', color: r.badge_color });
+    out.push({ label: 'Executive', color: r.badge_color, icon: 'star' });
   }
   const deptColour = Object.fromEntries(departments.map((d) => [d.department, d.badge_color]));
   const depts = [...new Set(roles.filter((x) => x.department).map((x) => x.department))];
@@ -59,32 +75,52 @@ function buildBadges(roles, departments) {
   const best = (d) => Math.max(0, ...roles.filter((x) => x.kind === 'rank' && x.department === d).map((x) => x.rank_order));
   depts.sort((a, b) => best(b) - best(a));
   for (const d of depts) {
-    out.push({ label: d + ' Department', color: deptColour[d] });
+    out.push({ label: d + ' Department', color: deptColour[d], icon: DEPARTMENT_ICON[d] });
     const rank = roles.filter((x) => x.kind === 'rank' && x.department === d).sort((a, b) => b.rank_order - a.rank_order)[0];
     if (rank) out.push({ label: rank.rank_label, color: rank.badge_color, joined: true });
   }
   if (roles.some((x) => x.kind === 'verified')) {
-    out.push({ label: 'Verified', color: roles.find((x) => x.kind === 'verified').badge_color, tick: true });
+    out.push({ label: 'Verified', color: roles.find((x) => x.kind === 'verified').badge_color, icon: 'verified' });
   }
-  if (!out.length) out.push({ label: 'Member', color: null });
+  if (!out.length) out.push({ label: 'Member', color: null, icon: 'user' });
   return out;
 }
 
 function drawBadges(badges) {
   const row = $('badges');
   row.replaceChildren();
-  for (const b of badges) {
+  let pair = null;
+  for (const [i, b] of badges.entries()) {
     const el = document.createElement('span');
     el.className = 'rbadge' + (b.joined ? ' joined' : '');
+    // A department and its joined year/rank sit in one unbreakable block, so they never split across lines.
+    const startsPair = badges[i + 1] && badges[i + 1].joined;
+    if (startsPair) {
+      pair = document.createElement('span');
+      pair.className = 'pair';
+      row.append(pair);
+    }
+    const parent = startsPair || b.joined ? pair : row;
     if (b.color) el.style.setProperty('--c', hex(b.color));
-    if (b.tick) {
-      el.insertAdjacentHTML('beforeend',
-        '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    if (b.icon) {
+      const ic = document.createElement('span');
+      ic.className = 'ri';
+      ic.setAttribute('aria-hidden', 'true');
+      ic.style.setProperty('--icon', `url("assets/icons/${b.icon}.png")`);
+      el.append(ic);
     }
     el.append(document.createTextNode(b.label));
-    row.append(el);
+    parent.append(el);
   }
   row.hidden = false;
+}
+
+// Names are shown without emoji: Discord's colourful emoji clash with the brand, and a person's badges already
+// say who they are (e.g. the crown icon on Hospital Director). Falls back to the raw name if it was all emoji.
+function cleanName(s) {
+  const t = (s || '').replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\u{1F3FB}-\u{1F3FF}️‍⃣]/gu, '')
+    .replace(/\s+/g, ' ').trim();
+  return t || s || '';
 }
 
 // ---------- drawing ----------
@@ -99,8 +135,8 @@ function draw(data) {
     note("We couldn't find you in the CareBeyond - Hospital server. Join it with this Discord account, then refresh.");
     return;
   }
-  $('welcome-name').textContent = me.display_name;
-  $('name').textContent = me.display_name;
+  $('welcome-name').textContent = cleanName(me.display_name);
+  $('name').textContent = cleanName(me.display_name);
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
   // No "how this page works" text: the note only appears for loading and errors.
@@ -164,8 +200,8 @@ function onSession(session) {
   if (!user) return;
   const meta = user.user_metadata || {};
   const name = meta.full_name || meta.custom_claims?.global_name || meta.name || 'staff member';
-  $('name').textContent = name;
-  $('welcome-name').textContent = name;
+  $('name').textContent = cleanName(name);
+  $('welcome-name').textContent = cleanName(name);
   if (meta.avatar_url) $('avatar').src = meta.avatar_url; else $('avatar').hidden = true;
   loadAndDraw();
 }
