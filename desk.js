@@ -103,7 +103,7 @@
         ${link({ href: '#', label: 'Home', icon: 'home' })}
         <div class="ds-cat">My stuff</div>
         ${myStuff().map((it) => link(it)).join('')}
-        ${depts.length ? `<div class="ds-cat">${depts.length > 1 ? 'My departments' : 'My department'}</div>` : ''}
+        ${depts.length ? `<div class="ds-cat">Departments</div>` : ''}
         ${depts.map((d) => folder(d.id, d.name, rankIn(d), d.icon, d.color, deptPages(d))).join('')}
         ${hosp.length ? `<div class="ds-cat">Hospital</div>${folder('hospital', 'Hospital tools', access.exec ? 'Executive' : 'Administration', 'shield', '#22579f', hosp)}` : ''}
         <div class="ds-cat">Help</div>

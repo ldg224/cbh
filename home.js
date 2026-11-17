@@ -189,16 +189,13 @@ function drawDeptCards() {
     sec.innerHTML = myDepartments.length ? '' : `<div class="hd-apply"><b>Join a department</b><span>Apply to Nursing, Paramedicine, Administration or Community Engagement.</span><a class="refresh" href="#apply">Apply</a></div>`;
     return;
   }
-  sec.innerHTML = `<h2 class="h-label">${mine.length > 1 ? 'Your departments' : 'Your department'}</h2><div class="hd-depts">${mine.map((d) => {
+  // Owner (18 Nov 2026): "Departments", one row each with a big arrow that opens the full department page.
+  sec.innerHTML = `<h2 class="h-label">Departments</h2><div class="hd-depts">${mine.map((d) => {
     const mem = n0(h.dept_members && h.dept_members[d.name]), on = n0(h.dept_on_now && h.dept_on_now[d.name]);
-    const can = (p) => hasPerm(p, d.name), base = `#directors/${d.id}`;
-    const appsTab = (window.DEPT_TABS || []).some((x) => { try { return x.id === 'applications' && x.show(d.name); } catch { return false; } });
-    const links = [can('dept.view') && ['Members', base + '/members'], (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && ['Meetings', base + '/meetings'],
-      appsTab && ['Applications', base + '/applications']].filter(Boolean);
-    const line = [mem && `${mem} member${mem === 1 ? '' : 's'}`, on && `${on} on shift now`].filter(Boolean).join(' · ') || 'Open';
-    return `<div class="hd-dept" style="--dept:${d.color};--icon:${iconUrl(d.icon)}">
-      <a class="hd-dhead" href="${can('dept.view') ? base : (links[0] ? links[0][1] : base)}"><span class="hd-dtile" aria-hidden="true"></span><span class="hd-dname"><b>${esc(d.name)}</b><span>${esc(line)}</span></span></a>
-      ${links.length ? `<div class="hd-dlinks">${links.map(([l, href]) => `<a href="${href}">${esc(l)}</a>`).join('')}</div>` : ''}</div>`;
+    const line = [mem && `${mem} member${mem === 1 ? '' : 's'}`, on && `${on} on shift now`].filter(Boolean).join(' \u00b7 ');
+    return `<a class="hd-dept" href="#directors/${d.id}" style="--dept:${d.color};--icon:${iconUrl(d.icon)}" aria-label="Open ${esc(d.name)}">
+      <span class="hd-dtile" aria-hidden="true"></span><span class="hd-dname"><b>${esc(d.name)}</b>${line ? `<span>${esc(line)}</span>` : ''}</span>
+      <svg class="hd-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></a>`;
   }).join('')}</div>`;
 }
 
