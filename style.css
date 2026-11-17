@@ -846,3 +846,7 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .h-hero { grid-template-columns: minmax(0, 1fr); }
 .h-sugg { max-width: min(780px, 100%); }
 .h-search { justify-self: center; }
+.h-title { min-height: 1.25em; }
+.h-title.typing .h-type::after { content: ""; display: inline-block; width: 3px; height: .9em; margin-left: 3px; vertical-align: -0.08em; background: var(--teal); animation: h-caret .9s steps(1) infinite; }
+@keyframes h-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .h-title.typing .h-type::after { animation: none; } }

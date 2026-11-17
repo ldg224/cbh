@@ -3,6 +3,15 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.14.1 (2026-11-17)
+
+**Fixed:** picking a person in the home search (with Enter, a click or **Record**) now opens **their record**. Before, it landed on the empty Records search page. The "Open …'s record" suggestion had the same problem and is fixed too.
+
+**Changed:** the home page heading now types itself out once when the page opens. It's one of 50 calm greetings or questions with your name, such as "Welcome back, Dr. Turtle." or "Where are we starting today, Dr. Turtle?". "Good morning / afternoon / evening" only appears at the right time of day. If your device is set to reduce motion, it appears straight away. Search works while it types.
+
+Bot: no change.
+Database change: none.
+
 ## 0.14.0 (2026-11-17)
 
 **A new home page** (the design chosen on the mockup canvas).

@@ -127,7 +127,7 @@ function homeShell() {
   const name = cleanName($('name').textContent || '');
   return `
     <div class="h-hero">
-      <h1 class="h-title">What do you need${name ? ', ' + esc(name) : ''}?</h1>
+      <h1 class="h-title" id="h-title"><span class="h-type" aria-hidden="true"></span></h1>
       <div class="h-search" id="h-search">
         <label class="h-box"><span class="h-glass" aria-hidden="true"></span>
           <input id="h-q" placeholder="Search people, tools or settings" autocomplete="off" aria-label="Search" aria-controls="h-results">
@@ -144,7 +144,7 @@ function homeShell() {
 async function renderHome() {
   const box = $('home');
   if (!box.dataset.built) { box.innerHTML = homeShell(); box.dataset.built = '1'; wireSearch(); }
-  else box.querySelector('.h-title').textContent = `What do you need${cleanName($('name').textContent) ? ', ' + cleanName($('name').textContent) : ''}?`;
+  typeHeadline();
   drawHome();
   await loadHomeData();
   if (!box.isConnected || box.hidden) return;
@@ -183,6 +183,59 @@ function folderCard(f, tools) {
     <div class="h-cards">${rest.map((t) => cardHtml(t)).join('')}
       ${depts.length ? `<div class="h-depts">${depts.map((t) => cardHtml(t)).join('')}</div>` : ''}</div>
   </div>`;
+}
+
+
+// ---------- the headline (0.14.1, owner) ----------
+// One line picked at random per page load, typed out once, then left alone. Calm, professional wording: no emoji,
+// no exclamation marks, no slang. Time-of-day greetings only appear at the right local time.
+const HEADLINES = {
+  any: [
+    'Welcome back, {name}.', 'Welcome, {name}.', 'Good to see you, {name}.', 'Hello, {name}.',
+    'Welcome back to CareBeyond, {name}.', 'Hello again, {name}.', 'Ready when you are, {name}.',
+    'Everything is here, {name}.', 'Here\u2019s where things stand, {name}.', 'Glad you\u2019re here, {name}.',
+    'What do you need, {name}?', 'What can I help with, {name}?', 'Where are we starting today, {name}?',
+    'What are you looking for, {name}?', 'Who are you looking for, {name}?', 'What\u2019s next, {name}?',
+    'Where would you like to go, {name}?', 'What would you like to do, {name}?', 'How can I help, {name}?',
+    'What are we working on, {name}?', 'Where to first, {name}?', 'What should we look at first, {name}?',
+    'What do you need to find, {name}?', 'Looking for someone, {name}?', 'Looking for a tool, {name}?',
+    'What brings you in, {name}?', 'Ready to get started, {name}?', 'What\u2019s on your list, {name}?',
+    'Who do you need, {name}?', 'What can we sort out, {name}?', 'Need to find something, {name}?',
+    'What would you like to check, {name}?', 'Where shall we begin, {name}?', 'What do you need today, {name}?',
+    'What\u2019s the plan, {name}?', 'Anything I can find for you, {name}?', 'What can I pull up, {name}?',
+    'Welcome back, {name}. What do you need?', 'Welcome back, {name}. Where would you like to start?',
+    'Hello, {name}. What can I help with?', 'Hello, {name}. Where would you like to start?',
+  ],
+  morning: ['Good morning, {name}.', 'Good morning, {name}. Where would you like to start?', 'Good morning, {name}. Here\u2019s where things stand.'],
+  afternoon: ['Good afternoon, {name}.', 'Good afternoon, {name}. What do you need?', 'Good afternoon, {name}. Here\u2019s where things stand.'],
+  evening: ['Good evening, {name}.', 'Good evening, {name}. What can I help with?', 'Good evening, {name}. Here\u2019s where things stand.'],
+};
+let headline = null;   // chosen once per page load
+function typeHeadline() {
+  const h1 = $('h-title'), span = h1 && h1.querySelector('.h-type');
+  if (!span) return;
+  const raw = cleanName($('name').textContent || '').split(' | ')[0].trim();
+  if (!headline) {
+    const hr = new Date().getHours();   // the viewer's local time
+    const part = hr >= 5 && hr < 12 ? 'morning' : hr >= 12 && hr < 17 ? 'afternoon' : hr >= 17 && hr < 22 ? 'evening' : null;
+    const pool = HEADLINES.any.concat(part ? HEADLINES[part] : []);
+    headline = { text: pool[Math.floor(Math.random() * pool.length)], typed: false };
+  }
+  const text = raw ? headline.text.replace('{name}', raw) : headline.text.replace(/,? \{name\}/, '');
+  h1.setAttribute('aria-label', text);
+  const instant = headline.typed || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (instant) { span.textContent = text; h1.classList.remove('typing'); return; }
+  headline.typed = true;
+  span.textContent = '';
+  h1.classList.add('typing');
+  let i = 0;
+  const step = () => {
+    if (!span.isConnected) return;
+    span.textContent = text.slice(0, ++i);
+    if (i < text.length) setTimeout(step, text[i - 1] === ',' || text[i - 1] === '.' ? 140 : 34);
+    else setTimeout(() => h1.classList.remove('typing'), 900);
+  };
+  setTimeout(step, 250);
 }
 
 // ---------- pins ----------
@@ -329,7 +382,13 @@ function drawSuggestions(tools) {
 
 // ---------- search ----------
 let pendingRecord = null, pendingCase = null;
-function openRecord(id) { pendingRecord = id; location.hash = '#admin/records'; if (location.hash === '#admin/records') route(); }
+// Open someone's record. If we're already on Records, redraw now; otherwise the hash change does it (once).
+// (0.14.1: calling route() right after setting the hash ran it twice: the first run used up pendingRecord and the
+// hashchange run then showed the empty Records page.)
+function openRecord(id) {
+  pendingRecord = id;
+  if (location.hash === '#admin/records') route(); else location.hash = '#admin/records';
+}
 function startCase(action, person) { pendingCase = { action, person }; if (location.hash === '#admin/cases') route(); else location.hash = '#admin/cases'; }
 function searchActions() {
   const a = [], h = HC || {};
