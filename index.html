@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CareBeyond Dashboard</title>
   <meta name="robots" content="noindex">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#071645">
+  <link rel="icon" href="assets/cbh-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="bar">
     <div class="brand">
-      <img src="favicon.svg" alt="" width="28" height="28">
-      <span>CareBeyond <b>Dashboard</b></span>
+      <img class="logo" src="assets/cbh-logo-dark.svg" alt="CareBeyond Hospital" width="185" height="48">
+      <span class="section">Staff dashboard</span>
     </div>
     <div id="who" class="who" hidden>
       <img id="avatar" alt="" width="28" height="28">
@@ -28,6 +29,7 @@
     </div>
 
     <section id="signed-out" class="card center" hidden>
+      <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="88" height="88">
       <h1>Staff dashboard</h1>
       <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
       <button id="login" class="discord">Log in with Discord</button>
