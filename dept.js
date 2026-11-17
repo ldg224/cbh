@@ -10,6 +10,10 @@ const DP_STATUS = { pending: 'Pending', done: 'Done', failed: 'Failed' };
 const DP_ST_CLASS = { pending: 'sub-pending', done: 'sub-accepted', failed: 'sub-denied' };
 const DP_INACTIVE_DAYS = 14;
 const dpTab = {};          // last tab per department, for this visit
+// Extra tabs other pages add to every department page (e.g. Applications, applications.js):
+//   window.DEPT_TABS.push({ id, label, show(dept) -> boolean, render(el, dept), count?(dept) -> Promise<number> })
+// They appear after History (before Ranks & permissions). Deep link: #directors/<dept id>/<tab id>.
+window.DEPT_TABS = window.DEPT_TABS || [];
 let dpWatch = null;
 
 const dpDay = 864e5;
@@ -40,6 +44,8 @@ async function renderDept(body, tool) {
   const attMt = manageMt || can('meetings.attendance');
   const dep = DEPARTMENTS.find((d) => d.name === dept) || { name: dept, color: '#3a82d0', icon: 'clock' };
   const route = `#directors/${tool.id}`;
+  const here = () => location.hash.split('/').slice(0, 2).join('/') === route;   // a tab may follow: #directors/<id>/<tab>
+  const linked = location.hash.split('/')[2];
   $('page-title').hidden = true;
   body.style.setProperty('--dept-tab', dep.color);
   body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
@@ -56,7 +62,7 @@ async function renderDept(body, tool) {
     director || !editM ? Promise.resolve({ data: null }) : sb.rpc('my_members_window', { department: dept }),
     director ? sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi') : Promise.resolve({ data: [] }),
   ]);
-  if (!body.isConnected || location.hash !== route) return;
+  if (!body.isConnected || !here()) return;
   if (roster.error) { body.innerHTML = ''; return liveError(body, roster.error); }
 
   const ranks = (ranksQ.data || []).sort((a, b) => b.rank_order - a.rank_order);
@@ -117,9 +123,10 @@ async function renderDept(body, tool) {
     { id: 'courses', label: 'Courses', soon: true },
     { id: 'meetings', label: 'Meetings', n: upcoming.length || null },
     { id: 'history', label: 'History', n: hist.length || null },
+    ...window.DEPT_TABS.filter((x) => { try { return x.show(dept); } catch { return false; } }).map((x) => ({ id: x.id, label: x.label, ext: x })),
     ...(director ? [{ id: 'ranks', label: 'Ranks & permissions' }] : []),
   ];
-  let tab = dpTab[dept] || 'overview';
+  let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || dpTab[dept] || 'overview';
   if (!TABS.some((t) => t.id === tab)) tab = 'overview';
   body.innerHTML = `
     <section class="dp-banner" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}">
@@ -134,20 +141,30 @@ async function renderDept(body, tool) {
         <div class="dp-stat"><b>${nextMeet ? (nextMeet.status === 'live' ? 'Now' : esc(dpDayShort(nextMeet.scheduled_for))) : 'None'}</b><span>${nextMeet && nextMeet.status === 'live' ? 'Meeting on' : 'Next meeting'}</span></div>
       </div>
     </section>
-    <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}">${t.label}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
+    <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}">${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
     <p class="error" id="dp-err" hidden></p>
     <div id="dp-pane" role="tabpanel"></div>`;
   const pane = body.querySelector('#dp-pane'), tabsEl = body.querySelector('.dp-tabs');
+  // Extra tabs' optional badge counts (e.g. applications waiting), filled in when they arrive.
+  TABS.filter((t) => t.ext && typeof t.ext.count === 'function').forEach((t) => {
+    Promise.resolve().then(() => t.ext.count(dept)).then((n) => {
+      const b = tabsEl.querySelector(`[data-tab="${t.id}"]`);
+      if (b && Number(n) > 0) b.insertAdjacentHTML('beforeend', ` <span class="n">${Number(n)}</span>`);
+    }, () => {});
+  });
   const fail = (msg) => { const e = body.querySelector('#dp-err'); e.textContent = msg; e.hidden = !msg; };
 
   function show(id, focus) {
     tab = dpTab[dept] = id;
+    try { history.replaceState(null, '', `${route}${id === 'overview' ? '' : '/' + id}`); } catch { /* fine without it */ }
     tabsEl.querySelectorAll('[role=tab]').forEach((b) => { const on = b.dataset.tab === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
     const cur = tabsEl.querySelector('[aria-selected="true"]');   // keep the chosen tab in view on narrow screens
     if (cur && (cur.offsetLeft < tabsEl.scrollLeft || cur.offsetLeft + cur.offsetWidth > tabsEl.scrollLeft + tabsEl.clientWidth)) tabsEl.scrollLeft = cur.offsetLeft - 12;
     pane.setAttribute('aria-labelledby', 'dpt-' + id);
     fail('');
-    ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory, ranks: drawRanks })[id]();
+    const ext = TABS.find((t) => t.id === id)?.ext;
+    if (ext) { pane.innerHTML = ''; try { ext.render(pane, dept); } catch (e) { pane.innerHTML = `<p class="error">${esc(e.message || String(e))}</p>`; } }
+    else ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory, ranks: drawRanks })[id]();
     loadFaces(pane);
   }
   tabsEl.onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) show(b.dataset.tab); };
@@ -716,11 +733,11 @@ async function renderDept(body, tool) {
   const waiting = hist.filter((c) => c.status === 'pending').map((c) => c.id);
   if (waiting.length) {
     dpWatch = setInterval(async () => {
-      if (!body.isConnected || location.hash !== route) return clearInterval(dpWatch);
+      if (!body.isConnected || !here()) return clearInterval(dpWatch);
       const { data } = await sb.from('role_changes').select('id, status').in('id', waiting);
       if ((data || []).some((c) => c.status !== 'pending')) {
         clearInterval(dpWatch);
-        setTimeout(() => { if (body.isConnected && location.hash === route) renderDept(body, tool); }, 2500);
+        setTimeout(() => { if (body.isConnected && here()) renderDept(body, tool); }, 2500);
       }
     }, 3000);
   }
