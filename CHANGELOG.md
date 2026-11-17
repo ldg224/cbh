@@ -3,9 +3,18 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
-## 0.14.2 (2026-11-17)
+## 0.14.3 (2026-11-17)
 
 **Changed:** three home headings were reworded to sound calmer and more professional: "What would you like to review, …?", "Which record do you need, …?" and "What can I open for you, …?". There are still 50 in total.
+
+**Fixed:** the **New action** button on the Moderation page was a plain square. It now has rounded corners like every other button. It was the only button built as a link, and links didn't get the button shape.
+
+Bot: no change.
+Database change: none.
+
+## 0.14.2 (2026-11-17)
+
+**Changed:** nothing on the site. This release was meant to reword three home headings, but the change didn't make it in. It's in 0.14.3.
 
 Bot: no change.
 Database change: none.

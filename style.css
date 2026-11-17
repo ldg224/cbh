@@ -850,3 +850,5 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .h-title.typing .h-type::after { content: ""; display: inline-block; width: 3px; height: .9em; margin-left: 3px; vertical-align: -0.08em; background: var(--teal); animation: h-caret .9s steps(1) infinite; }
 @keyframes h-caret { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .h-title.typing .h-type::after { animation: none; } }
+/* Links styled as buttons get the same shape as real buttons (the base rule only targets <button>). */
+a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8px; text-decoration: none; font-weight: 600; }

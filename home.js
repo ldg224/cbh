@@ -199,10 +199,10 @@ const HEADLINES = {
     'Where would you like to go, {name}?', 'What would you like to do, {name}?', 'How can I help, {name}?',
     'What are we working on, {name}?', 'Where to first, {name}?', 'What should we look at first, {name}?',
     'What do you need to find, {name}?', 'Looking for someone, {name}?', 'Looking for a tool, {name}?',
-    'What brings you in, {name}?', 'Ready to get started, {name}?', 'What\u2019s on your list, {name}?',
-    'Who do you need, {name}?', 'What can we sort out, {name}?', 'Need to find something, {name}?',
+    'What would you like to review, {name}?', 'Ready to get started, {name}?', 'What\u2019s on your list, {name}?',
+    'Who do you need, {name}?', 'Which record do you need, {name}?', 'Need to find something, {name}?',
     'What would you like to check, {name}?', 'Where shall we begin, {name}?', 'What do you need today, {name}?',
-    'What\u2019s the plan, {name}?', 'Anything I can find for you, {name}?', 'What can I pull up, {name}?',
+    'What can I open for you, {name}?', 'Anything I can find for you, {name}?', 'What can I pull up, {name}?',
     'Welcome back, {name}. What do you need?', 'Welcome back, {name}. Where would you like to start?',
     'Hello, {name}. What can I help with?', 'Hello, {name}. Where would you like to start?',
   ],
@@ -497,7 +497,7 @@ async function renderFolder(body, f) {
     <div class="fp-head">
       <span class="h-fico big" style="--g1:${f.g[0]};--g2:${f.g[1]};--icon:${iconUrl(f.icon)}" aria-hidden="true"></span>
       <div class="fp-title"><h1>${f.title}</h1><span class="muted">${f.blurb}</span></div>
-      ${f.id === 'moderation' && canSee('admin') ? `<div class="fp-quick"><button class="ghost" data-q="warn">Warn</button><button class="ghost" data-q="timeout">Time out</button><button class="ghost" data-q="kick">Kick</button><a class="refresh" href="#admin/cases">New action</a></div>` : ''}
+      ${f.id === 'moderation' && canSee('admin') ? `<div class="fp-quick"><button class="ghost" data-q="warn">Warn</button><button class="ghost" data-q="timeout">Time out</button><button class="ghost" data-q="kick">Kick</button><button class="refresh" data-q="new">New action</button></div>` : ''}
     </div>
     ${stats.length ? `<div class="fp-stats">${stats.map(([k, v]) => `<div class="card tight stat"><span class="muted small-meta">${k}</span><strong>${v}</strong></div>`).join('')}</div>` : ''}
     <div class="fp-cards">${rest.map((t) => cardHtml(t, true)).join('')}</div>
