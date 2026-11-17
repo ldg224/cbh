@@ -137,8 +137,11 @@ function homeShell() {
       <div class="h-sugg" id="h-sugg"></div>
     </div>
     <div id="h-live"></div>
-    <section class="h-sec" id="h-pins-sec"></section>
-    <section class="h-sec"><h2 class="h-label">Everything you can use</h2><div class="h-folders" id="h-folders"></div></section>`;
+    ${document.body.classList.contains('desk')
+      // Desk (phase 2): what needs you, then your departments; the sidebar replaces the folders.
+      ? `<section class="h-sec" id="h-need-sec"></section><section class="h-sec" id="h-dept-sec"></section><section class="h-sec" id="h-pins-sec"></section>`
+      : `<section class="h-sec" id="h-pins-sec"></section>
+    <section class="h-sec"><h2 class="h-label">Everything you can use</h2><div class="h-folders" id="h-folders"></div></section>`}`;
 }
 
 async function renderHome() {
@@ -155,8 +158,48 @@ function drawHome() {
   drawSuggestions(tools);
   drawLive();
   drawPins(tools);
-  $('h-folders').innerHTML = FOLDERS.map((f) => folderCard(f, tools.filter((t) => t.folder === f.id))).join('');
+  if ($('h-folders')) $('h-folders').innerHTML = FOLDERS.map((f) => folderCard(f, tools.filter((t) => t.folder === f.id))).join('');
+  if ($('h-need-sec')) { drawNeeds(); drawDeptCards(); }
   tickHome();
+}
+
+// ---------- Desk Home (phase 2) ----------
+// "Needs you": the things waiting on this person that home_counts already knows (applications, failed actions,
+// tickets), each with a button that goes straight to it. Phase 3 adds each department's To do (promotions,
+// observations, attendance, inactive members) from a database summary.
+function drawNeeds() {
+  const h = HC || {}, out = [];
+  const reviewDept = DEPARTMENTS.find((d) => canSee('dir:' + d.name) && hasPerm('applications.review', d.name));
+  if (n0(h.apps_waiting) && reviewDept) out.push({ ico: 'resume', c: reviewDept.color, t: `${plural(n0(h.apps_waiting), 'application')} to review`,
+    s: h.apps_oldest_at ? 'Oldest ' + when(h.apps_oldest_at) : 'Waiting for a decision', b: 'Review', href: `#directors/${reviewDept.id}/applications` });
+  if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: '#admin/cases' });
+  const tk = canSee('admin') ? '#admin/tickets' : canSee('leads') ? '#tickets' : '';
+  if (n0(h.tickets_open) && tk) out.push({ ico: 'inbox', c: '#3a82d0', t: `${plural(n0(h.tickets_open), 'ticket')} open`,
+    s: h.tickets_latest && h.tickets_latest.name ? `Latest from ${cleanName(h.tickets_latest.name)}${h.tickets_latest.team ? ' · ' + h.tickets_latest.team : ''}` : 'Waiting for a reply', b: 'Reply', href: tk });
+  const sec = $('h-need-sec');
+  sec.innerHTML = out.length ? `<h2 class="h-label">Needs you</h2><div class="hd-list">${out.map((x) => `<a class="hd-item" href="${x.href}" style="--c:${x.c}">
+      <span class="hd-ico" style="--icon:${iconUrl(x.ico)}" aria-hidden="true"></span><span class="hd-txt"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></span>
+      <span class="hd-go">${esc(x.b)}</span></a>`).join('')}</div>` : '';
+}
+function drawDeptCards() {
+  const h = HC || {};
+  const mine = DEPARTMENTS.filter((d) => canSee('dir:' + d.name));
+  const sec = $('h-dept-sec');
+  if (!mine.length) {
+    sec.innerHTML = myDepartments.length ? '' : `<div class="hd-apply"><b>Join a department</b><span>Apply to Nursing, Paramedicine, Administration or Community Engagement.</span><a class="refresh" href="#apply">Apply</a></div>`;
+    return;
+  }
+  sec.innerHTML = `<h2 class="h-label">${mine.length > 1 ? 'Your departments' : 'Your department'}</h2><div class="hd-depts">${mine.map((d) => {
+    const mem = n0(h.dept_members && h.dept_members[d.name]), on = n0(h.dept_on_now && h.dept_on_now[d.name]);
+    const can = (p) => hasPerm(p, d.name), base = `#directors/${d.id}`;
+    const appsTab = (window.DEPT_TABS || []).some((x) => { try { return x.id === 'applications' && x.show(d.name); } catch { return false; } });
+    const links = [can('dept.view') && ['Members', base + '/members'], (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && ['Meetings', base + '/meetings'],
+      appsTab && ['Applications', base + '/applications']].filter(Boolean);
+    const line = [mem && `${mem} member${mem === 1 ? '' : 's'}`, on && `${on} on shift now`].filter(Boolean).join(' · ') || 'Open';
+    return `<div class="hd-dept" style="--dept:${d.color};--icon:${iconUrl(d.icon)}">
+      <a class="hd-dhead" href="${can('dept.view') ? base : (links[0] ? links[0][1] : base)}"><span class="hd-dtile" aria-hidden="true"></span><span class="hd-dname"><b>${esc(d.name)}</b><span>${esc(line)}</span></span></a>
+      ${links.length ? `<div class="hd-dlinks">${links.map(([l, href]) => `<a href="${href}">${esc(l)}</a>`).join('')}</div>` : ''}</div>`;
+  }).join('')}</div>`;
 }
 
 function cardHtml(t, big) {
