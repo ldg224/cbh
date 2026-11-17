@@ -1,14 +1,14 @@
-/* Colours from the CareBeyond Hospital logo: navy #071645, deep blue #0B1E4A, blue #3A82D0, teal #2ED3C6. */
+/* Neutral charcoal so the logo's own blues are the only blues on the page; teal (#2ED3C6, the logo's
+   "HOSPITAL" and ring colour) is the accent. The logo is the transparent version (no navy block). */
 :root {
-  --navy: #071645;     /* logo background: the header matches it exactly */
-  --bg: #050f33;
-  --panel: #0b1e4a;
-  --raised: #12295e;
-  --line: #1d3670;
-  --text: #eef3fb;
-  --muted: #9fb1d1;
+  --header: #121418;
+  --bg: #0c0e11;
+  --panel: #15181d;
+  --raised: #1d2128;
+  --line: #2a2f37;
+  --text: #f2f4f7;
+  --muted: #9aa3ae;
   --brand: #2ed3c6;
-  --blue: #3a82d0;
   --discord: #5865f2;
   --error: #ff7a7a;
   color-scheme: dark;
@@ -22,7 +22,7 @@ body {
 }
 .bar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--navy);
+  padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--header);
 }
 .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .logo { display: block; height: 48px; width: auto; margin: -4px 0; }
@@ -58,7 +58,7 @@ h2 { margin: 24px 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .04
   margin: 0 0 16px; padding: 10px 12px 10px 16px; border-radius: 8px;
   background: rgba(46, 211, 198, .1); border: 1px solid rgba(46, 211, 198, .35);
 }
-.refresh { background: var(--brand); color: var(--navy); font-weight: 600; padding: 6px 14px; }
+.refresh { background: var(--brand); color: var(--bg); font-weight: 600; padding: 6px 14px; }
 .refresh:hover { filter: brightness(1.1); }
 [hidden] { display: none !important; }
 @media (max-width: 560px) {
