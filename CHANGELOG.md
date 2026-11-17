@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.9.1 (2026-11-17)
+
+**Fixed:**
+- **Anyone in CareBeyond can start their own shift**, with or without a session running. Executives and leadership with no department role (e.g. a Hospital Director) had no **Start shift** button; now they pick any of the four departments.
+- **Staff & roster:** names and badges no longer run off their cards. Long badges wrap neatly inside the card.
+
+**Changed:** **Staff & roster** shows every department role a person has, each as its own badge (e.g. **Hospital Director** and **Community Engagement Leader**). Inside a department's section the department is left out, so it reads **Year 5** instead of **Nursing Year 5**. Picking a department shows everyone in it, including people listed elsewhere (e.g. under Leadership).
+
+Bot: no change.
+Database change: yes, migration 0010 (by Bravo: executives can start shifts in any department).
+
 ## 0.9.0 (2026-11-17)
 
 **Added:**

@@ -265,7 +265,7 @@ function draw(data) {
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
   myDiscordId = me.discord_id;
-  myDepartments = (data.access && data.access.teams) || [...new Set(roles.filter((r) => r.department).map((r) => r.department))];
+  myDepartments = (data.access && (data.access.shift_teams || data.access.teams)) || [...new Set(roles.filter((r) => r.department).map((r) => r.department))];
   setAccess(me, roles, data.access, data.reviewTeams);
   buildMenu();
   buildSessionBanner(data.session);
@@ -1177,14 +1177,30 @@ async function renderReports(body) {
 
 // ----- Staff & roster (#roster) -----
 // Compact badges for person cards: a department + its rank stay one block ("Nursing · Year 5" style, shortened).
-function personBadges(badges) {
-  const one = (b) => `<span class="rbadge${b.joined ? ' joined' : ''}" style="--c:${b.color ? hex(b.color) : '#9aa9c4'}">${b.icon ? `<span class="ri" style="--icon:${iconUrl(b.icon)}"></span>` : ''}<span class="rl">${esc(b.label.replace(/ Department$/, ''))}</span></span>`;
-  let html = '';
-  for (let i = 0; i < badges.length; i++) {
-    if (badges[i + 1] && badges[i + 1].joined) { html += `<span class="pair">${one(badges[i])}${one(badges[i + 1])}</span>`; i++; }
-    else html += one(badges[i]);
+// Roster badges: one plain badge per role, never a joined pair, so nothing runs off a narrow card. In a department's
+// own section the department is implied, so its rank reads just "Year 5"; other departments say "Community
+// Engagement Leader". Leadership titles first, then each department (most senior first), then Executive.
+function rosterBadges(roles, depts, here) {
+  const deptColour = Object.fromEntries(depts.map((d) => [d.department, d.badge_color]));
+  const out = roles.filter((r) => r.kind === 'leadership').sort((a, b) => b.position - a.position)
+    .map((r) => ({ label: r.name, color: r.badge_color, icon: LEADERSHIP_ICON[r.id] || 'star' }));
+  const ranks = roles.filter((r) => r.kind === 'rank').sort((a, b) => (b.department === here) - (a.department === here) || b.rank_order - a.rank_order);
+  const seen = new Set();
+  for (const r of ranks) {
+    if (seen.has(r.department)) continue;
+    seen.add(r.department);
+    out.push({ label: r.department === here ? r.rank_label : `${r.department} ${r.rank_label}`, color: r.badge_color, icon: DEPARTMENT_ICON[r.department] });
   }
-  return html;
+  for (const r of roles.filter((x) => x.kind === 'department' && !seen.has(x.department))) {
+    seen.add(r.department);
+    out.push({ label: r.department, color: deptColour[r.department], icon: DEPARTMENT_ICON[r.department] });
+  }
+  const ex = roles.find((r) => r.kind === 'executive');
+  if (ex) out.push({ label: 'Executive', color: ex.badge_color, icon: 'star' });
+  return out;
+}
+function personBadges(badges) {
+  return badges.map((b) => `<span class="rbadge" style="--c:${b.color ? hex(b.color) : '#9aa9c4'}">${b.icon ? `<span class="ri" style="--icon:${iconUrl(b.icon)}"></span>` : ''}<span class="rl">${esc(b.label)}</span></span>`).join('');
 }
 async function renderRoster(body) {
   body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
@@ -1194,22 +1210,26 @@ async function renderRoster(body) {
   if (error) { body.innerHTML = ''; return liveError(body, error); }
   const byId = Object.fromEntries((allRoles || []).map((r) => [r.id, r]));
   const depts = (allRoles || []).filter((r) => r.kind === 'department');
-  const groups = {};
+  const groups = {}, everyone = [];
   for (const p of people || []) {
     const roles = (p.role_ids || []).map((id) => byId[id]).filter(Boolean);
     const lead = roles.some((r) => r.kind === 'leadership');
     const ranks = roles.filter((r) => r.kind === 'rank').sort((a, b) => b.rank_order - a.rank_order);
     const dept = lead ? 'Leadership' : (ranks[0]?.department || roles.find((r) => r.kind === 'department')?.department || 'Other');
+    everyone.push({ ...p, roles });
     (groups[dept] ||= []).push({ ...p, roles, order: lead ? Math.max(...roles.filter((r) => r.kind === 'leadership').map((r) => r.position)) : (ranks[0]?.rank_order || 0) });
   }
   const order = ['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'].filter((d) => groups[d]);
   let pick = 'all';
   const draw = () => {
-    body.querySelector('#ro-list').innerHTML = order.filter((d) => pick === 'all' || pick === d).map((d) => `
-      <h2 class="menu-label aud-staff"><span class="aud-dot"></span>${esc(d)} <span class="muted count">${groups[d].length}</span></h2>
-      <div class="grid-people">${groups[d].sort((a, b) => b.order - a.order || a.display_name.localeCompare(b.display_name)).map((p) => {
-        const all = buildBadges(p.roles, depts).filter((b) => b.label !== 'Verified' && b.label !== 'Member');
-        const badges = all.slice(0, all[1] && all[1].joined ? 2 : 1).concat(all[1] && !all[1].joined ? [all[1]] : []);
+    // Everyone: each person once, in their main section. One department picked: everyone in it, whatever their main section.
+    const sections = pick === 'all' ? order.map((d) => [d, groups[d]])
+      : [[pick, pick === 'Leadership' || pick === 'Other' ? groups[pick] : everyone.filter((p) => p.roles.some((r) => r.department === pick))
+          .map((p) => ({ ...p, order: Math.max(0, ...p.roles.filter((r) => r.kind === 'rank' && r.department === pick).map((r) => r.rank_order)) }))]];
+    body.querySelector('#ro-list').innerHTML = sections.map(([d, list]) => `
+      <h2 class="menu-label aud-staff"><span class="aud-dot"></span>${esc(d)} <span class="muted count">${list.length}</span></h2>
+      <div class="grid-people">${list.sort((a, b) => b.order - a.order || a.display_name.localeCompare(b.display_name)).map((p) => {
+        const badges = rosterBadges(p.roles, depts, d);
         return `<div class="card person">
           <img class="avatar big" src="${esc(sized(p.avatar_url || '', 128))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
           <strong class="person-name">${esc(cleanName(p.display_name))}</strong>
@@ -1217,7 +1237,7 @@ async function renderRoster(body) {
         </div>`;
       }).join('')}</div>`).join('') || '<div class="card"><p class="muted small">Nobody to show.</p></div>';
   };
-  body.innerHTML = `<div class="toolbar"><div class="chips" id="ro-filter"><button class="chip on" data-d="all">Everyone</button>${order.map((d) => `<button class="chip" data-d="${esc(d)}">${esc(d)}</button>`).join('')}</div></div><div id="ro-list" class="page-body"></div>`;
+  body.innerHTML = `<div class="toolbar"><div class="chips" id="ro-filter"><button class="chip on" data-d="all">Everyone</button>${['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'].filter((d) => groups[d] || everyone.some((p) => p.roles.some((r) => r.department === d))).map((d) => `<button class="chip" data-d="${esc(d)}">${esc(d)}</button>`).join('')}</div></div><div id="ro-list" class="page-body"></div>`;
   body.querySelector('#ro-filter').onclick = (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
     pick = b.dataset.d;

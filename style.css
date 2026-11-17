@@ -506,3 +506,9 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .set-msg { width: 100%; }
 .set-msg.ok { color: var(--teal-ink); font-weight: 600; }
 @media (max-width: 560px) { .setting-ctl { width: 100%; } .set-in { flex: 1; width: auto; } .shift-actions > * { flex: 1; } }
+
+/* Staff & roster (0.9.1): one badge per role; long ones wrap inside the badge instead of running off the card. */
+.grid-people > .person { min-width: 0; }
+.person-badges { max-width: 100%; }
+.person-badges .rbadge { white-space: normal; max-width: 100%; text-align: left; line-height: 1.35; padding: 3px 9px; border-radius: 12px; }
+.person-badges .rl { white-space: normal; overflow-wrap: anywhere; }
