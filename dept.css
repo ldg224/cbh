@@ -199,3 +199,34 @@
   .dp-att-seg { width: 100%; padding-left: 0; }
   .dp-att-seg button { flex: 1 1 0; min-width: 0; padding: 7px 2px; font-size: 12px; }
 }
+
+/* Ranks & permissions grid (0027/0029): ranks down the side, permissions across; one card per rank on phones */
+.dp-perms-card { padding: 20px; overflow: hidden; }
+.dp-perms-card .dp-head { flex-wrap: wrap; }
+.dp-pgrid { display: grid; overflow-x: auto; }
+.dp-prow { display: grid; grid-template-columns: 120px repeat(8, minmax(86px, 1fr)); align-items: center; gap: 0; border-top: 1px solid var(--line); }
+.dp-phead { border-top: 0; align-items: end; }
+.dp-phead span { font-size: 11.5px; font-weight: 700; color: var(--muted); line-height: 1.3; padding: 0 6px 10px; text-align: center; }
+.dp-phead span:first-child { text-align: left; padding-left: 0; }
+.dp-prank { padding: 10px 0; }
+.dp-pcell { display: grid; justify-items: center; gap: 6px; padding: 10px 4px; }
+.dp-tick { position: relative; display: inline-flex; cursor: pointer; }
+.dp-tick input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.dp-tick span { width: 24px; height: 24px; border-radius: 7px; border: 2px solid #c3cfe0; background: var(--panel); display: block; transition: background .12s, border-color .12s; }
+.dp-tick input:checked + span { background: var(--teal); border-color: var(--teal); }
+.dp-tick input:checked + span::after { content: ""; display: block; width: 6px; height: 11px; margin: 3px 0 0 7px; border: solid var(--text); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+.dp-tick input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+.dp-tick input:disabled + span { opacity: .5; }
+.dp-win { display: grid; gap: 3px; justify-items: center; font-size: 11px; color: var(--muted); }
+.dp-win em { font-style: normal; }
+.dp-win select { font: inherit; font-size: 12px; font-weight: 600; color: var(--text); padding: 3px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); max-width: 100%; }
+@media (max-width: 760px) {
+  .dp-pgrid { gap: 10px; overflow: visible; }
+  .dp-phead { display: none; }
+  .dp-prow { grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .dp-prank { grid-column: 1 / -1; padding: 2px 0 6px; }
+  .dp-pcell { grid-template-columns: auto 1fr; justify-items: start; align-items: center; padding: 6px 0; column-gap: 8px; }
+  .dp-pcell::after { content: attr(data-label); grid-row: 1; grid-column: 2; font-size: 12.5px; font-weight: 600; }
+  .dp-tick { grid-row: 1; grid-column: 1; }
+  .dp-win { grid-column: 1 / -1; grid-template-columns: 1fr auto 1fr; justify-items: stretch; align-items: center; }
+}

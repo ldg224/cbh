@@ -30,13 +30,13 @@ async function fetchMine() {
   const mine = new Set(me.role_ids);
   const roles = rows.filter((r) => mine.has(r.id)).sort((a, b) => b.position - a.position);
   const departments = rows.filter((r) => r.kind === 'department');
-  const [acc, sess, reviewTeams] = await Promise.all([
+  const [acc, sess, perms] = await Promise.all([
     sb.rpc('my_access').then((r) => r.data || null, () => null),
     fetchSession(),
-    // Departments whose applications I may review (rank permissions, 0027/0028). Execs always may.
-    sb.rpc('my_perms').then((r) => { myPerms = r.data || {}; return Object.keys(myPerms).filter((d) => (myPerms[d] || []).includes('applications.review')); }, () => []),
+    // Rank permissions per department (migration 0027): {"Nursing": ["dept.view", ...]}. Directors and execs have all.
+    sb.rpc('my_perms').then((r) => r.data || {}, () => ({})),
   ]);
-  return { me, roles, departments, access: acc, session: sess, reviewTeams };
+  return { me, roles, departments, access: acc, session: sess, perms };
 }
 
 // The banner: a live session, else the next scheduled one, plus the join code (from the session or settings).
@@ -267,7 +267,8 @@ function draw(data) {
   drawBadges(buildBadges(roles, departments));
   myDiscordId = me.discord_id;
   myDepartments = (data.access && (data.access.shift_teams || data.access.teams)) || [...new Set(roles.filter((r) => r.department).map((r) => r.department))];
-  setAccess(me, roles, data.access, data.reviewTeams);
+  myPerms = data.perms || {};
+  setAccess(me, roles, data.access);
   buildSessionBanner(data.session);
   buildMenu();
   loadFailNotices();
@@ -412,13 +413,13 @@ const PAGES = [
 // Administration department, or exec; staff = the bot's is_staff flag.
 let access = { exec: false, admin: false, staff: false, everyone: true };
 let myDiscordId = null;
-let myPerms = {};         // my_perms(): { Department: ['applications.review', …] } (rank permissions, 0027)
 let myDepartments = [];   // departments I can start a shift in (from my roles)
-function setAccess(me, roles, acc, reviewTeams = []) {
+function setAccess(me, roles, acc) {
   if (acc) {   // my_access() in Supabase: the same rules the database uses (RLS)
     access = { exec: !!acc.exec, admin: !!acc.admin, staff: !!acc.team || !!me.is_staff, everyone: true,
       leads: !acc.admin && (acc.leads || []).length > 0,
-      reviewer: !!acc.exec || reviewTeams.length > 0 };
+      // Applications: execs, Directors (has_perm always passes) and ranks granted applications.review (0027)
+      reviewer: !!acc.exec || (acc.directs || []).length > 0 || Object.values(myPerms).some((p) => (p || []).includes('applications.review')) };
     access['reviewer-lead'] = access.reviewer && !acc.admin;
     setDirectorAccess(acc.directs, roles, !!acc.exec, acc.run_sessions);
     return;
@@ -430,11 +431,13 @@ function setAccess(me, roles, acc, reviewTeams = []) {
 }
 // Directors hub: departments I direct (my_access().directs; worked out from my roles until the database says).
 let myDirects = [];
+let myPerms = {};   // rank permissions per department (my_perms(), 0027); a department page opens with 'dept.view'
+const hasPerm = (perm, dept) => !!access.exec || myDirects.includes(dept) || (myPerms[dept] || []).includes(perm);
 function setDirectorAccess(directs, roles, exec, runSessions) {
   myDirects = directs || (exec ? DEPARTMENTS.map((d) => d.name)
     : roles.filter((r) => r.kind === 'rank' && r.rank_label === 'Director').map((r) => r.department));
-  access.director = exec || myDirects.length > 0;
-  for (const d of DEPARTMENTS) access['dir:' + d.name] = myDirects.includes(d.name);
+  for (const d of DEPARTMENTS) access['dir:' + d.name] = myDirects.includes(d.name) || (myPerms[d.name] || []).includes('dept.view');
+  access.director = exec || DEPARTMENTS.some((d) => access['dir:' + d.name]);
   access.sessions = runSessions ?? (access.director || access.admin);
   // Sessions sit in both hubs; show them once, in the Directors hub, to people who can see it.
   access['sessions-admin'] = access.sessions && !access.director;

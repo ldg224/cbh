@@ -2,7 +2,7 @@
 // Back end: migration 0028 (app_* functions) on rank permissions (0027: has_perm 'applications.review' and
 // 'applications.settings'; execs and the department's Director always pass). The bot (Bravo) gives the roles from
 // role_changes, DMs the result and keeps the #form-submissions post up to date.
-// Loaded after app.js (questionField, DEPARTMENTS, iconUrl, myPerms), faces.js and cases.js (dayKey).
+// Loaded after app.js (questionField, DEPARTMENTS, iconUrl, hasPerm), faces.js and cases.js (dayKey).
 const APP_DEPTS = ['Administration', 'Nursing', 'Paramedicine', 'Community Engagement'];
 const appDept = (name) => DEPARTMENTS.find((d) => d.name === name) || { name, color: '#3a82d0', icon: 'resume' };
 const appDate = (iso) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
@@ -13,8 +13,8 @@ function appStatus(s) {
   return { accepted: { cls: 'accepted', label: 'Accepted' }, denied: { cls: 'denied', label: 'Not accepted' },
     withdrawn: { cls: 'withdrawn', label: 'Withdrawn' } }[s.status] || { cls: 'pending', label: s.status };
 }
-const appCanSettings = (dept) => access.exec || (myPerms[dept] || []).includes('applications.settings');
-const appReviewDepts = () => (access.exec ? APP_DEPTS : APP_DEPTS.filter((d) => (myPerms[d] || []).includes('applications.review')));
+const appCanSettings = (dept) => hasPerm('applications.settings', dept);
+const appReviewDepts = () => APP_DEPTS.filter((d) => hasPerm('applications.review', d));
 const appTag = (dept) => `<span class="app-dtag" style="--c:${appDept(dept).color}">${esc(dept)}</span>`;
 const appThumbs = (up, down) => (up || down) ? `<span class="app-votes">${up ? `<span class="app-v up"><span class="app-vi" style="--icon:${iconUrl('thumb-up')}" aria-hidden="true"></span>${up}</span>` : ''}${down ? `<span class="app-v down"><span class="app-vi" style="--icon:${iconUrl('thumb-down')}" aria-hidden="true"></span>${down}</span>` : ''}</span>` : '';
 
