@@ -4,7 +4,7 @@
 revoke select on public.forms from authenticated, anon;
 grant select (key, title, description, kind, audience, review_team, open, questions, sort, department, stages,
               accept_rank_role_id, accept_role_ids, cooldown_days, section, audience_ranks, archived, created_at, published_at,
-              rank_set_by_name, rank_set_at)
+              rank_set_by_name, rank_set_at, reviewer_roles, approvals_needed, final_by_exec, review_set_by_name, review_set_at)
   on public.forms to authenticated;
 
 -- The 0.19 page's write and list paths, replaced in v2 by the builder (app_form_draft_save / app_form_publish) and
