@@ -69,9 +69,9 @@
     return [
       can('dept.view') && { href: base, label: 'Overview', icon: 'home', tab: 'overview' },
       can('dept.view') && { href: base + '/members', label: 'Members', icon: 'people', tab: 'members', ...cnt('members') },
-      (can('dept.view') || can('courses.manage')) && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', tag: 'Soon' },
+      (can('dept.view') || can('courses.manage') || can('courses.assess')) && !ext.some((x) => x.id === 'courses') && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', tag: 'Soon' },
       (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && { href: base + '/meetings', label: 'Meetings', icon: 'calendar', tab: 'meetings', ...cnt('meetings') },
-      ...ext.map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.id === 'applications' ? 'resume' : 'clipboard', tab: x.id, ...cnt(x.id) })),
+      ...ext.map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.id === 'applications' ? 'resume' : x.id === 'courses' ? 'graduation-cap' : 'clipboard', tab: x.id, ...cnt(x.id) })),
       can('history.view') && { href: base + '/history', label: 'History', icon: 'history', tab: 'history', ...cnt('history') },
       director && { href: base + '/ranks', label: 'Ranks & permissions', icon: 'star', tab: 'ranks' },
     ].filter(Boolean);

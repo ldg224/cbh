@@ -482,7 +482,7 @@ function setDirectorAccess(directs, roles, exec, runSessions) {
     : roles.filter((r) => r.kind === 'rank' && r.rank_label === 'Director').map((r) => r.department));
   // A department page opens for its Director/execs, or anyone holding a permission there that gives them a tab
   // (the page then shows only those tabs; dept.js). activity.view / members.edit alone need dept.view to show anything.
-  const PAGE_PERMS = ['dept.view', 'history.view', 'meetings.manage', 'meetings.attendance', 'courses.manage', 'applications.review', 'applications.settings'];
+  const PAGE_PERMS = ['dept.view', 'history.view', 'meetings.manage', 'meetings.attendance', 'courses.manage', 'courses.assess', 'applications.review', 'applications.settings'];
   for (const d of DEPARTMENTS) access['dir:' + d.name] = myDirects.includes(d.name) || (myPerms[d.name] || []).some((x) => PAGE_PERMS.includes(x));
   access.director = exec || DEPARTMENTS.some((d) => access['dir:' + d.name]);
   access.sessions = runSessions ?? (access.director || access.admin);
