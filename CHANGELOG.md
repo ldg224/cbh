@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.13.1 (2026-11-17)
+
+**Fixed:** a removed warning now disappears completely. It no longer shows (crossed out) in **Records** or in the **Mod actions** list, and it doesn't count towards anyone's warnings.
+
+Bot: no change.
+Database change: none.
+
 ## 0.13.0 (2026-11-17)
 
 **Changed:** **no more hubs.** The home page is now one clearly separated block per group, most important first: **Executive**, **Directors**, **Admin**, **Staff** and **Everyone**. Each block holds every tool for that group, one tap away. You only see the blocks you can use: an admin sees Admin, Staff and Everyone, while executives see them all. **Back** on every page now goes straight to the menu.

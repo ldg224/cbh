@@ -826,7 +826,7 @@ async function renderCases(body) {
 
   async function load() {
     const list = $b('#case-list');
-    let qy = sb.from('mod_cases').select('*').neq('status', 'failed').order('created_at', { ascending: false }).limit(100);
+    let qy = sb.from('mod_cases').select('*').neq('status', 'failed').is('revoked_at', null).order('created_at', { ascending: false }).limit(100);
     if (filter === 'timeout') qy = qy.in('action', ['timeout', 'untimeout']);
     else if (filter !== 'all') qy = qy.eq('action', filter);
     const { data, error } = await qy;
@@ -931,7 +931,7 @@ async function showRecord(box, id) {
   const [rec, roleQ, casesQ, logsQ] = await Promise.all([
     sb.rpc('member_record', { discord_id: id }),
     sb.from('roles').select(ROLE_FIELDS),
-    sb.from('mod_cases').select('*').eq('target_discord_id', id).neq('status', 'failed').order('created_at', { ascending: false }).limit(200),
+    sb.from('mod_cases').select('*').eq('target_discord_id', id).neq('status', 'failed').is('revoked_at', null).order('created_at', { ascending: false }).limit(200),
     sb.from('discord_logs').select('*').eq('user_discord_id', id).order('at', { ascending: false }).limit(200),
   ]);
   if (rec.error) { box.innerHTML = ''; return liveError(box, rec.error); }
