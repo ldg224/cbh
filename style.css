@@ -589,6 +589,15 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .fn-x { flex: none; font: inherit; font-size: 20px; line-height: 1; width: 28px; height: 28px; margin: -4px -4px 0 0; border: 0; border-radius: 7px;
   background: none; color: #8a1c1c; cursor: pointer; }
 .fn-x:hover { background: rgba(196, 43, 43, .12); }
+/* 0.15.2: one calm line that expands, instead of a stack of bars. */
+.fail-note { align-items: center; padding: 8px 10px 8px 14px; font-size: 13.5px; }
+.fn-sum { flex: 1; min-width: 0; text-align: left; font: inherit; font-weight: 700; color: #6e1414; background: none; border: 0; padding: 4px 0; cursor: pointer; }
+.fn-sum::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 9px; border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-3px) rotate(45deg); transition: transform .15s ease; }
+.fn-sum[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+.fn-go { font-weight: 600; color: #8a1c1c; white-space: nowrap; }
+.fn-x { margin: 0; }
+.fn-list { margin: -2px 0 0; padding: 8px 14px 10px 42px; background: #fff5f4; border: 1px solid #f5aaa1; border-top: 0; border-radius: 0 0 10px 10px; font-size: 13.5px; color: #6e1414; display: grid; gap: 4px; }
+.fail-notes .fail-note:has(+ .fn-list:not([hidden])) { border-radius: 10px 10px 0 0; }
 
 /* Records (0.12.0) */
 .rec-search { overflow: visible; }
