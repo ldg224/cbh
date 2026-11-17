@@ -1055,7 +1055,7 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 #h-start:disabled, #h-break:disabled, #h-end:disabled { opacity: .6; cursor: progress; }
 @media (max-width: 560px) { .h-pick { flex: 1 1 100%; } .h-opt { flex: 1; justify-content: center; } .h-idle #h-start { flex: 1 1 100%; } }
 
-/* Roster labels: option A (solid section rank + muted other departments) and option B (rank column + "also" line). */
+/* Roster labels (owner chose: solid section rank + muted other departments). */
 .pg-roster .ro-chips2 { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .pg-roster .ro-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12.5px;
   font-weight: 600; line-height: 1.5; white-space: nowrap; }
@@ -1063,6 +1063,4 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .pg-roster .ro-chip.muted { background: #f4f7fb; border: 1px solid var(--line); color: var(--muted); font-weight: 500; font-size: 12px; }
 .pg-roster .ro-chip.muted.ex { color: var(--blue-deep); }
 .pg-roster .ro-cdot { width: 8px; height: 8px; border-radius: 50%; background: var(--dept); }
-.pg-roster .ro-rankcol { flex: none; min-width: 92px; text-align: right; font-size: 15px; font-weight: 800; color: color-mix(in srgb, var(--dept) 55%, #0b1e4a); }
-.pg-roster .ro-also { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 560px) { .pg-roster .ro-chips2 { justify-content: flex-start; } .pg-roster .ro-rankcol { min-width: 0; } }
+@media (max-width: 560px) { .pg-roster .ro-chips2 { justify-content: flex-start; } 

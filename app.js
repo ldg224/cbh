@@ -1562,8 +1562,7 @@ function personBadges(badges) {
 // everyone in a department as one row each, in department sections, with search, department filter and on-shift dots
 // (on_shift_now(), migration 0018). Never shows Records data; admins can open a person's record from their row.
 // Roster labels (owner: "which role belongs to this section?"). In a department section the person's rank THERE is
-// the main label; their other departments are secondary. Two designs while the owner chooses (ROSTER_LABELS).
-const ROSTER_LABELS = new URLSearchParams(location.search).get('ro') || 'a';
+// the main label; their other departments are secondary (owner chose this design, option A).
 function rosterLabels(p, here, deptColour) {
   const lead = p.roles.filter((r) => r.kind === 'leadership').sort((a, b) => b.position - a.position);
   const ranks = p.roles.filter((r) => r.kind === 'rank').sort((a, b) => b.rank_order - a.rank_order);
@@ -1573,15 +1572,7 @@ function rosterLabels(p, here, deptColour) {
   const others = depts.filter((d) => d !== here).map((d) => ({ d, rank: best(d) }));
   const exec = p.roles.some((r) => r.kind === 'executive');
   const col = (d) => deptColour(d) || '#3a82d0';
-  if (ROSTER_LABELS === 'b') {
-    // Option B: the section rank as a column on the right; everything else as one quiet line under the name.
-    const main = mainRank ? mainRank.rank_label : (here === 'Leadership' && lead[0] ? lead[0].name : (here !== 'Other' && depts.includes(here) ? 'Member' : ''));
-    const also = [...(here === 'Leadership' ? lead.slice(1) : lead).map((r) => r.name),
-      ...others.map((o) => o.rank ? `${o.d} ${o.rank.rank_label}` : o.d), ...(exec ? ['Executive'] : [])];
-    return { side: main ? `<span class="ro-rankcol" style="--dept:${col(here)}">${esc(main)}</span>` : '',
-      under: also.length ? `<span class="ro-also">${esc(also.join(' · '))}</span>` : '' };
-  }
-  // Option A: leadership + the section rank as solid chips; other departments as small muted chips with a colour dot.
+  // Leadership + the section rank as solid chips; other departments as small muted chips with a colour dot.
   const chips = [
     ...lead.map((r) => `<span class="ro-chip solid" style="--bg:${readableColour(hex(r.badge_color || 3834576))}">${esc(r.name)}</span>`),
     ...(mainRank ? [`<span class="ro-chip solid" style="--bg:${readableColour(col(here))}">${esc(mainRank.rank_label)}</span>`] : []),
