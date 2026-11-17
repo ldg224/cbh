@@ -40,3 +40,6 @@
   .ro-wrap { grid-template-columns: minmax(0, 1fr); }
   .ro-list { position: static; max-height: 300px; }
 }
+.ro-sw input:checked + .dp-sw { background: var(--teal); }
+.ro-sw input:checked + .dp-sw::after { transform: translateX(16px); }
+.ro-sw input:focus-visible + .dp-sw { outline: 2px solid var(--blue); outline-offset: 2px; }
