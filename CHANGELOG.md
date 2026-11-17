@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.21.2 (2026-11-18)
+
+**Fixed:**
+- Phones and Discord's browser now load the newest version of the site straight after an update, instead of an older saved copy for up to 10 minutes (this kept the 0.21.1 login fix from reaching some people).
+
+Bot: no change. Database change: no.
+
 ## 0.21.1 (2026-11-18)
 
 **Fixed:**
