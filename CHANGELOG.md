@@ -3,6 +3,20 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.19.2 (2026-11-18)
+
+**Added:**
+- **Rank permissions:** a new **See history** permission. A department's **History** (rank changes and their reasons) now needs it; **See this page** covers Overview and Members only. It starts ticked only for ranks that can already edit members.
+
+**Changed:**
+- **Rank permissions:** shorter names (See this page, See activity, Edit members, See history, Run meetings, Attendance, Review applications, Edit applications, Edit courses) with short hints.
+- Having **any** permission in a department opens its page, but you only see the tabs your permissions allow.
+
+**Bot:**
+- An accepted application may now give a **Leader** rank (never Director), for promotion applications.
+
+Database change: yes, migration 0033 (See history; already applied).
+
 ## 0.19.1 (2026-11-18)
 
 **Changed:**
