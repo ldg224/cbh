@@ -552,7 +552,9 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .hub-dir .tile:not(.wide) { aspect-ratio: 4 / 5; }
 .hub-dir .tile:not(.wide) .tile-title { font-size: 19px; }
 .hub-dir .tile:not(.wide) .tile-mark { height: 85%; right: -12%; bottom: -14%; }
-.tile[style*="--dept"] { --g1: #3d2a8f; --g2: color-mix(in srgb, #6a4fd6 55%, var(--dept)); --g3: var(--dept); }
+.tile[style*="--dept"] { --g1: #3d2a8f; --g2: color-mix(in srgb, #6a4fd6 30%, var(--dept)); --g3: var(--dept);
+  /* the department colour takes over from a third of the way across (0.10.2: more of the department, less violet) */
+  background: linear-gradient(150deg, #3d2a8f 0%, var(--g2) 32%, var(--dept) 68%, color-mix(in srgb, var(--dept) 80%, #fff) 100%); }
 .tile-flag.live { background: #16b364; color: #fff; }
 @media (max-width: 560px) {
   .hub-dir { grid-template-columns: repeat(2, minmax(0, 1fr)); }
