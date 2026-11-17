@@ -1472,7 +1472,7 @@ function renderSubmission(body, s, form) {
   });
 }
 
-// ----- Shifts (#shifts): started and ended in Discord only; the page shows who's on and your hours -----
+// ----- Shifts (#shifts) -----
 const shiftSecs = (s, now = Date.now()) => Math.max(0, ((s.ended_at ? new Date(s.ended_at) : now) - new Date(s.started_at)) / 1000
   - (s.break_seconds || 0) - (s.status === 'break' && s.break_started_at ? (now - new Date(s.break_started_at)) / 1000 : 0));
 const clock = (sec) => { sec = Math.floor(sec); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}`; };
@@ -1487,42 +1487,121 @@ function weekStartSydney() {
   return new Date(local - offsetMin * 60000).toISOString();
 }
 
+// Shifts page (0.15.x redesign, Bravo): your shift as one card (status, live timer, department, actions, this week /
+// last 30 days), who's on now grouped by department with photos, and your history grouped by week.
+// Back end: shift_start / shift_break / shift_end RPCs; the bot does the status roles, #shift-logs and auto-end.
+const deptOf = (name) => DEPARTMENTS.find((d) => d.name === name) || { name, color: '#3a82d0', icon: 'clock' };
+const shiftTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function weekLabel(startIso, thisWeek) {
+  const s = new Date(startIso), last = new Date(new Date(thisWeek) - 7 * 864e5);
+  if (s >= new Date(thisWeek)) return 'This week';
+  if (s >= last) return 'Last week';
+  return 'Week of ' + s.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+function weekStartOf(iso, thisWeek) {
+  // The Monday (Sydney) on or before this time, counting back from this week's Monday.
+  let w = new Date(thisWeek).getTime();
+  const t = new Date(iso).getTime();
+  while (t < w) w -= 7 * 864e5;
+  return new Date(w).toISOString();
+}
+
 async function renderShifts(body) {
-  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  if (!body.querySelector('.sh-card')) body.innerHTML = '<div class="card"><p class="muted small">Loading your shifts…</p></div>';
   const week = weekStartSydney();
-  const [on, mine] = await Promise.all([
+  const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
+  const [on, mine, ros] = await Promise.all([
     sb.from('shifts').select('*').neq('status', 'ended').order('started_at'),
-    sb.from('shifts').select('*').eq('discord_id', myDiscordId).order('started_at', { ascending: false }).limit(20),
+    sb.from('shifts').select('*').eq('discord_id', myDiscordId).gte('started_at', since30 < week ? since30 : week)
+      .order('started_at', { ascending: false }).limit(60),
+    sb.rpc('roster').then((r) => r, () => ({ data: [] })),
   ]);
-  if (on.error) { body.innerHTML = ''; return liveError(body, on.error); }
+  if (on.error || mine.error) { body.innerHTML = ''; return liveError(body, on.error || mine.error); }
+  const photo = Object.fromEntries((ros.data || []).map((p) => [p.discord_id, p.avatar_url]));
   const myNow = (on.data || []).find((s) => s.discord_id === myDiscordId);
-  const weekSecs = (mine.data || []).filter((s) => s.started_at >= week).reduce((a, s) => a + shiftSecs(s), 0);
-  body.innerHTML = `
-    <div class="card shift-me">
-      <span class="t-ico big" style="--c:${myNow ? '#16b364' : '#9aa9c4'};--icon:${iconUrl('clock')}" aria-hidden="true"></span>
-      <div class="case-main"><strong class="thread-subject">${myNow ? (myNow.status === 'break' ? 'On a break' : 'On shift') : 'Off shift'}</strong>
-        <span class="muted small-meta">${myNow ? `${esc(myNow.department)} · since ${new Date(myNow.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${myNow.status === 'break' ? ` · break <span data-tick="brk">${clock((Date.now() - new Date(myNow.break_started_at)) / 1000)}</span>` : ''}` : (myDepartments.length ? 'Ready when you are' : 'You need a department role to start a shift')}</span></div>
-      ${myNow ? `<div class="shift-timer${myNow.status === 'break' ? ' paused' : ''}" data-tick="me" aria-label="Time on shift">${clock(shiftSecs(myNow))}</div>` : ''}
-      <div class="stat-mini"><span class="muted small-meta">This week</span><strong data-tick="week">${hrs(weekSecs)}</strong></div>
-    </div>
-    <div class="shift-actions">${myNow
-      ? `<button class="ghost" id="sh-break">${myNow.status === 'break' ? 'End break' : 'Take a break'}</button><button class="refresh" id="sh-end">End shift</button>`
-      : (myDepartments.length ? `${myDepartments.length > 1 ? `<select id="sh-dept" class="sh-dept">${myDepartments.map((d) => `<option>${esc(d)}</option>`).join('')}</select>` : ''}<button class="refresh" id="sh-start">Start shift${myDepartments.length === 1 ? ' · ' + esc(myDepartments[0]) : ''}</button>` : '')}
-    </div>
-    <p class="error" id="sh-err" hidden></p>
-    <h2 class="menu-label aud-staff"><span class="aud-dot"></span>On now</h2>
-    <div class="card">${(on.data || []).length ? on.data.map((s) => `
-      <div class="row-item"><span class="dot-status ${s.status === 'break' ? 'brk' : 'on'}"></span>
-        <div class="case-main"><strong>${esc(s.name)}</strong><span class="muted small-meta">${esc(s.department)}${s.status === 'break' ? ' · on a break' : ''}</span></div>
-        <span class="muted small-meta" data-tick="on-${s.id}">${hrs(shiftSecs(s))}</span></div>`).join('') : '<p class="muted small">Nobody is on shift right now.</p>'}</div>
+  const past = (mine.data || []).filter((s) => s.status === 'ended');
+  const sumSince = (from) => past.filter((s) => s.started_at >= from).reduce((a, s) => a + shiftSecs(s), 0);
+  const pastWeek = sumSince(week), past30 = sumSince(since30);
+  const liveExtra = () => (myNow ? shiftSecs(myNow) : 0);
+  const state = myNow ? (myNow.status === 'break' ? 'break' : 'on') : 'off';
+  const d = myNow ? deptOf(myNow.department) : null;
+
+  const actions = myNow
+    ? `<button class="ghost" id="sh-break">${myNow.status === 'break' ? 'End break' : 'Take a break'}</button>
+       <button class="refresh" id="sh-end">End shift</button>`
+    : (myDepartments.length
+      ? `${myDepartments.length > 1 ? `<div class="sh-pick" role="radiogroup" aria-label="Department">${myDepartments.map((n, i) => `
+          <button type="button" role="radio" aria-checked="${i === 0}" class="sh-opt${i === 0 ? ' on' : ''}" data-dept="${esc(n)}" style="--dept:${deptOf(n).color}">
+            <span class="sh-swatch" aria-hidden="true"></span>${esc(n)}</button>`).join('')}</div>` : ''}
+         <button class="refresh sh-go" id="sh-start">Start shift${myDepartments.length === 1 ? ' in ' + esc(myDepartments[0]) : ''}</button>`
+      : '');
+
+  const groups = DEPARTMENTS.map((dep) => ({ dep, list: (on.data || []).filter((s) => s.department === dep.name) })).filter((g) => g.list.length);
+  const onCount = (on.data || []).length;
+  const breaks = (on.data || []).filter((s) => s.status === 'break').length;
+
+  const weeks = [];
+  for (const s of past) {
+    const k = weekStartOf(s.started_at, week);
+    let g = weeks.find((w) => w.k === k);
+    if (!g) weeks.push(g = { k, label: weekLabel(k, week), list: [], secs: 0 });
+    g.list.push(s); g.secs += shiftSecs(s);
+  }
+
+  body.innerHTML = `<div class="pg-shifts">
+    <section class="card sh-card sh-${state}"${d ? ` style="--dept:${d.color}"` : ''}>
+      <div class="sh-top">
+        <span class="sh-state"><span class="sh-led" aria-hidden="true"></span>${state === 'on' ? 'On shift' : state === 'break' ? 'On a break' : 'Off shift'}</span>
+        ${d ? `<span class="sh-dept-chip"><span class="sh-swatch" aria-hidden="true"></span>${esc(d.name)}</span>` : ''}
+      </div>
+      <div class="sh-main">
+        <div class="sh-clock">
+          ${myNow ? `<div class="sh-timer" data-tick="me" aria-label="Time on shift">${clock(shiftSecs(myNow))}</div>
+            <div class="sh-sub muted">Since ${shiftTime(myNow.started_at)}${myNow.status === 'break'
+              ? ` · break <span data-tick="brk">${clock((Date.now() - new Date(myNow.break_started_at)) / 1000)}</span>`
+              : (myNow.break_seconds ? ` · ${hrs(myNow.break_seconds)} on breaks` : '')}</div>`
+            : `<div class="sh-timer idle">0:00:00</div>
+               <div class="sh-sub muted">${myDepartments.length ? 'Not on shift' : 'You need a department role to start a shift.'}</div>`}
+        </div>
+        <dl class="sh-stats">
+          <div><dt>This week</dt><dd data-tick="week">${hrs(pastWeek + (myNow && myNow.started_at >= week ? liveExtra() : 0))}</dd></div>
+          <div><dt>Last 30 days</dt><dd data-tick="month">${hrs(past30 + liveExtra())}</dd></div>
+        </dl>
+      </div>
+      ${actions ? `<div class="sh-actions">${actions}</div>` : ''}
+      <p class="error" id="sh-err" hidden></p>
+    </section>
+
+    <h2 class="menu-label aud-staff"><span class="aud-dot"></span>On now${onCount ? ` <span class="sh-count">${onCount}${breaks ? ` · ${breaks} on a break` : ''}</span>` : ''}</h2>
+    ${groups.length ? `<div class="sh-board">${groups.map(({ dep, list }) => `
+      <div class="card sh-team" style="--dept:${dep.color}">
+        <div class="sh-team-head"><span class="sh-swatch" aria-hidden="true"></span><strong>${esc(dep.name)}</strong><span class="muted">${list.length}</span></div>
+        ${list.map((s) => `<div class="sh-person${s.discord_id === myDiscordId ? ' me' : ''}">
+          <span class="sh-face"><img class="avatar" src="${esc(sized(photo[s.discord_id] || '', 64))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+            <span class="sh-dot ${s.status === 'break' ? 'brk' : 'on'}" aria-hidden="true"></span></span>
+          <span class="sh-who"><strong>${esc(cleanName(s.name))}${s.discord_id === myDiscordId ? ' <span class="sh-you">You</span>' : ''}</strong>
+            <span class="muted">${s.status === 'break' ? 'On a break' : 'Since ' + shiftTime(s.started_at)}</span></span>
+          <span class="sh-len" data-tick="on-${s.id}">${hrs(shiftSecs(s))}</span>
+        </div>`).join('')}
+      </div>`).join('')}</div>`
+      : '<div class="card"><p class="muted small">Nobody is on shift right now.</p></div>'}
+
     <h2 class="menu-label aud-staff"><span class="aud-dot"></span>Your shifts</h2>
-    <div class="card">${(mine.data || []).length ? mine.data.map((s) => `
-      <div class="row-item"><div class="case-main"><strong>${new Date(s.started_at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</strong>
-        <span class="muted small-meta">${esc(s.department)} · ${new Date(s.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${s.ended_at ? '–' + new Date(s.ended_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ' · now'}${s.ended_by === 'auto' ? ' · ended automatically' : ''}</span></div>
-        <strong>${hrs(shiftSecs(s))}</strong></div>`).join('') : '<p class="muted small">No shifts yet.</p>'}</div>`;
+    ${weeks.length ? weeks.map((w) => `
+      <div class="card sh-week">
+        <div class="sh-week-head"><strong>${esc(w.label)}</strong><span>${hrs(w.secs)} · ${w.list.length} ${w.list.length === 1 ? 'shift' : 'shifts'}</span></div>
+        ${w.list.map((s) => { const dd = deptOf(s.department); return `<div class="sh-row" style="--dept:${dd.color}">
+          <span class="sh-day"><strong>${new Date(s.started_at).toLocaleDateString([], { weekday: 'short' })}</strong>
+            <span class="muted">${new Date(s.started_at).toLocaleDateString([], { day: 'numeric', month: 'short' })}</span></span>
+          <span class="sh-what"><span class="sh-dept-chip small"><span class="sh-swatch" aria-hidden="true"></span>${esc(dd.name)}</span>
+            <span class="muted">${shiftTime(s.started_at)}–${shiftTime(s.ended_at)}${s.break_seconds ? ` · ${hrs(s.break_seconds)} break` : ''}</span>
+            ${s.ended_by === 'auto' ? '<span class="st sh-auto">Ended automatically</span>' : ''}</span>
+          <strong class="sh-len">${hrs(shiftSecs(s))}</strong>
+        </div>`; }).join('')}
+      </div>`).join('') : '<div class="card"><p class="muted small">No shifts in the last 30 days.</p></div>'}</div>`;
+
   wireShiftButtons(body);
-  // Live timers: only these numbers update each second; nothing else on the page redraws.
-  const pastWeek = weekSecs - (myNow && myNow.started_at >= week ? shiftSecs(myNow) : 0);
+  // Live timers: only these numbers change each second; nothing else redraws.
   clearInterval(shiftTicker);
   shiftTicker = setInterval(() => {
     if (!body.isConnected || !body.querySelector('[data-tick]')) { clearInterval(shiftTicker); return; }
@@ -1530,26 +1609,39 @@ async function renderShifts(body) {
     if (myNow) {
       set('me', clock(shiftSecs(myNow)));
       if (myNow.status === 'break') set('brk', clock((Date.now() - new Date(myNow.break_started_at)) / 1000));
-      if (myNow.started_at >= week) set('week', hrs(pastWeek + shiftSecs(myNow)));
+      if (myNow.started_at >= week) set('week', hrs(pastWeek + liveExtra()));
+      set('month', hrs(past30 + liveExtra()));
     }
     for (const s of on.data || []) set('on-' + s.id, hrs(shiftSecs(s)));
   }, 1000);
 }
 let shiftTicker = null;
 
-// Shift buttons (back end: Bravo's shift_* RPCs; the bot does roles, #shift-logs and auto-end).
-async function shiftAction(body, fn, args) {
+async function shiftAction(body, btn, fn, args, busyText) {
+  const all = body.querySelectorAll('.sh-actions button');
+  all.forEach((b) => { b.disabled = true; });
+  const was = btn.textContent;
+  btn.textContent = busyText;
   const { error } = await sb.rpc(fn, args || {});
-  if (error) { const e = body.querySelector('#sh-err'); e.textContent = error.message; e.hidden = false; return; }
+  if (error) {
+    all.forEach((b) => { b.disabled = false; });
+    btn.textContent = was;
+    const e = body.querySelector('#sh-err'); e.textContent = error.message; e.hidden = false;
+    return;
+  }
   renderShifts(body);
 }
 function wireShiftButtons(body) {
-  body.querySelector('#sh-start')?.addEventListener('click', () =>
-    shiftAction(body, 'shift_start', { department: body.querySelector('#sh-dept')?.value || myDepartments[0] }));
-  body.querySelector('#sh-break')?.addEventListener('click', () => shiftAction(body, 'shift_break'));
-  body.querySelector('#sh-end')?.addEventListener('click', () => {
-    if (confirm('End your shift?')) shiftAction(body, 'shift_end');
-  });
+  body.querySelectorAll('.sh-opt').forEach((b) => b.addEventListener('click', () => {
+    body.querySelectorAll('.sh-opt').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+  }));
+  const start = body.querySelector('#sh-start');
+  start?.addEventListener('click', () => shiftAction(body, start, 'shift_start',
+    { department: body.querySelector('.sh-opt.on')?.dataset.dept || myDepartments[0] }, 'Starting…'));
+  const brk = body.querySelector('#sh-break');
+  brk?.addEventListener('click', () => shiftAction(body, brk, 'shift_break', null, 'Saving…'));
+  const end = body.querySelector('#sh-end');
+  end?.addEventListener('click', () => { if (confirm('End your shift?')) shiftAction(body, end, 'shift_end', null, 'Ending…'); });
 }
 
 // ----- Bot settings (#exec/settings) — execs; saved with set_setting(key, value); the bot applies them -----
