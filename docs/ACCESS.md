@@ -4,6 +4,22 @@ The rules for what each person can see and do on the CBH dashboard. **The databa
 security and the `security definer` functions in `supabase/migrations/` decide what anyone can read or write. The
 website (`app.js`, `home.js`) only hides what the database would refuse anyway, using `my_access()`.
 
+## How access is enforced
+1. **Who you are** comes only from your Discord login (Supabase Auth). `my_discord_id()` reads it from the login
+   itself, so nobody can claim to be someone else.
+2. **What roles you hold** come only from CareBeyond Helper's sync of the Discord server into `members` and `roles`.
+   Nobody can write those tables from the website (no insert/update/delete for logged-in users), so you can't give
+   yourself a year, rank or Director role on the site.
+3. **Every read and write is checked in the database**: row level security on each table, and `security definer`
+   functions (`has_perm()`, `directs_dept()`, `is_exec()`, the department change windows in `role_change_check()`)
+   for every action. A page you shouldn't see returns no rows even if you type its address.
+4. **The website hiding a page or button is only for convenience**, never the protection.
+5. **The way in is Discord itself**: anyone with Manage Roles in Discord could hand out Director or Executive, and
+   the sync would trust it. CareBeyond Helper watches for that (`role_watch` cog, migration 0031): when someone gains a
+   Director, Leader, leadership, office or Executive role that didn't come from a website change, it posts a red
+   alert in #server-logs and records it in `privileged_role_events` (executives only). It never undoes anything.
+   Keep Manage Roles limited to the people who should have it.
+
 ## Audiences
 
 Worked out from Discord roles (the bot's `cbh/roles.py` gives each role a kind). The SQL helpers live in migrations
