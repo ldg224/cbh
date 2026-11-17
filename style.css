@@ -64,14 +64,6 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .ghost { background: var(--panel); color: var(--muted); border: 1px solid var(--line); padding: 6px 12px; }
 .ghost:hover { color: var(--text); border-color: var(--blue); }
 
-.roles { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.role {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 4px 10px; border-radius: 6px; background: var(--raised); border: 1px solid var(--line); font-size: 13.5px; font-weight: 500;
-}
-/* Discord role colours are made for dark mode, so the dot gets a faint ring to show up on white. */
-.role .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--role, #99aab5); flex: none;
-  box-shadow: inset 0 0 0 1px rgba(11, 30, 74, .18); }
 /* Identity badges under the name. Each is tinted with its role's colour (--c); text stays navy so pale Discord
    colours are still readable. A department's year/rank badge is joined onto its department badge as one block. */
 .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px; }

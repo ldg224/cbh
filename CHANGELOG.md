@@ -3,6 +3,12 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.2.1 (2026-11-17)
+
+**Removed:** the "Your server roles" list. Your badges already show who you are.
+**Changed:** the "Things have changed" bar now only appears when your name or badges change.
+Database change: none.
+
 ## 0.2.0 (2026-11-17)
 
 **Added:** badges under your name that show who you are, each in its role's colour:

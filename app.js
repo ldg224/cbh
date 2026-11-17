@@ -34,10 +34,10 @@ async function fetchMine() {
 }
 
 // Only what the page shows, so timestamps from the bot's routine resync don't count as a change.
+// The page shows your name and badges, so only those count (a new ping role, say, changes nothing on screen).
 function fingerprint({ me, roles, departments }) {
   if (!me) return 'not-in-server';
-  const r = (x) => [x.id, x.name, x.color, x.position, x.kind, x.department, x.rank_label, x.rank_order, x.badge_color];
-  return JSON.stringify([me.display_name, roles.map(r), departments.map(r)]);
+  return JSON.stringify([me.display_name, buildBadges(roles, departments)]);
 }
 
 // ---------- badges ----------
@@ -90,8 +90,6 @@ function drawBadges(badges) {
 // ---------- drawing ----------
 
 function draw(data) {
-  const list = $('roles');
-  list.replaceChildren();
   $('changed').hidden = true;
   pending = null;
   shownSig = fingerprint(data);
@@ -105,32 +103,22 @@ function draw(data) {
   $('name').textContent = me.display_name;
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
-  for (const r of roles) {
-    const li = document.createElement('li');
-    li.className = 'role';
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    if (r.color) dot.style.setProperty('--role', '#' + r.color.toString(16).padStart(6, '0'));
-    li.append(dot, document.createTextNode(r.name));
-    list.append(li);
-  }
-  // No "how this page works" text: the note only appears for loading, errors and empty states.
-  note(roles.length ? '' : 'You have no roles in the server yet.');
+  // No "how this page works" text: the note only appears for loading and errors.
+  note('');
 }
 
 function note(text) {
-  $('roles-note').textContent = text;
-  $('roles-note').hidden = !text;
+  $('note').textContent = text;
+  $('note').hidden = !text;
 }
 
 async function loadAndDraw() {
-  $('roles').replaceChildren();
-  note('Loading your roles…');
+  note('Loading…');
   $('badges').hidden = true;
   try {
     draw(await fetchMine());
   } catch (err) {
-    note("Couldn't load your roles: " + (err.message || err));
+    note("Couldn't load your details: " + (err.message || err));
   }
 }
 
