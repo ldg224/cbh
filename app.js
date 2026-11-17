@@ -267,9 +267,9 @@ function draw(data) {
   myDiscordId = me.discord_id;
   myDepartments = (data.access && (data.access.shift_teams || data.access.teams)) || [...new Set(roles.filter((r) => r.department).map((r) => r.department))];
   setAccess(me, roles, data.access, data.reviewTeams);
+  buildSessionBanner(data.session);
   buildMenu();
   loadFailNotices();
-  buildSessionBanner(data.session);
   route();
   // No "how this page works" text: the note only appears for loading and errors.
   note('');
@@ -464,18 +464,40 @@ function tileEl(href, p, aud, extra = '') {
   return a;
 }
 
+// Home (0.13.0, owner): no hubs. One clearly separated block per audience, most important first, holding every tool
+// that person can use. Hub tools keep their routes (#admin/records); hub pages themselves just lead home.
+function menuItems(audId) {
+  const items = [];
+  for (const hub of PAGES.filter((p) => p.tools && p.aud === audId && canSee(p.aud))) {
+    for (const t of hub.tools.filter((x) => canSee(toolAud(hub, x)))) items.push({ href: `#${hub.id}/${t.id}`, def: t, aud: tileAud(hub, t), hub });
+  }
+  for (const p of PAGES.filter((x) => !x.tools && canSee(x.aud) && (x.aud === audId || (audId === 'staff' && ['leads', 'reviewer-lead'].includes(x.aud))))) {
+    items.push({ href: '#' + p.id, def: p, aud: audId });
+  }
+  return items;
+}
 function buildMenu() {
   const nav = $('menu');
   nav.replaceChildren();
   for (const aud of AUDIENCES) {
-    const pages = PAGES.filter((p) => (p.aud === aud.id && canSee(p.aud)) || (aud.id === 'staff' && ['leads', 'reviewer-lead'].includes(p.aud) && canSee(p.aud)));
-    if (!pages.length) continue;
+    const items = menuItems(aud.id);
+    if (!items.length) continue;
     const group = document.createElement('section');
-    group.className = `menu-group aud-${aud.id}`;
+    group.className = `menu-group sect aud-${aud.id}`;
     group.innerHTML = `<h2 class="menu-label"><span class="aud-dot"></span>${aud.label}</h2>`;
     const grid = document.createElement('div');
-    grid.className = 'menu-grid' + (pages.filter((p) => !p.wide).length === 2 ? ' n2' : '');
-    for (const p of pages) grid.append(tileEl('#' + p.id, p, aud.id));
+    const plain = items.filter((i) => !i.def.wide);
+    grid.className = aud.id === 'director' ? 'menu-grid hub-dir' : 'menu-grid' + (plain.length === 2 ? ' n2' : [3, 5, 6].includes(plain.length) ? ' n3' : '');
+    for (const it of items) {
+      const a = tileEl(it.href, it.def, it.aud, 'tool');
+      if (it.def.color) a.style.setProperty('--dept', it.def.color);
+      if (it.def.aud === 'reviewer') a.insertAdjacentHTML('beforeend', '<span class="tile-flag">Execs & team leads</span>');
+      if (it.def.layout === 'sessions' && currentSession && (currentSession.live || currentSession.next)) {
+        const live = currentSession.live;
+        a.insertAdjacentHTML('beforeend', `<span class="tile-flag${live ? ' live' : ''}">${live ? 'Live now' : esc('Next: ' + whenAhead(currentSession.next.scheduled_for))}</span>`);
+      }
+      grid.append(a);
+    }
     group.append(grid);
     nav.append(group);
   }
@@ -564,9 +586,10 @@ function route() {
   $('page').hidden = !r;
   if (!r) { document.title = 'CareBeyond Dashboard'; fitBadges(); return; }
   const { page, tool } = r;
+  if (page.tools && !tool) { location.replace('#'); return; }   // no hub pages any more (0.13.0)
   const back = $('page').querySelector('.back');
-  back.href = tool ? '#' + page.id : '#';
-  back.lastChild.textContent = tool ? page.title : 'Menu';
+  back.href = '#';
+  back.lastChild.textContent = 'Menu';
   const body = $('page-body');
   body.classList.remove('is-building');
   if (tool) {
@@ -919,6 +942,8 @@ async function showRecord(box, id) {
   const depts = all.filter((x) => x.kind === 'department');
   const cases = casesQ.data || [];
   const warns = cases.filter((c) => c.action === 'warn');
+  const activeWarns = warns.filter((c) => !c.revoked_at);
+  const exec = access.exec;   // executives get a settings button: Remove warning, Unban
   // Incidents: every other case (timeouts, kicks, bans, notes) plus what the Discord logs saw happen to them.
   const incidents = [...cases.filter((c) => c.action !== 'warn').map((c) => ({ kind: 'case', at: c.created_at, c })),
     ...(logsQ.data || []).filter((l) => !['message_delete', 'message_edit'].includes(l.type)).map((l) => ({ kind: 'log', at: l.at, l }))]
@@ -933,15 +958,22 @@ async function showRecord(box, id) {
         <span class="muted small-meta">${r.username ? '@' + esc(r.username) + ' · ' : ''}${esc(id)}${r.joined_at ? ' · joined ' + esc(shortDate(r.joined_at)) : ''}${r.account_created_at ? ' · account made ' + esc(shortDate(r.account_created_at)) : ''}</span>
         <div class="person-badges rec-badges">${roles.length ? personBadges(rosterBadges(roles, depts, null).concat(roles.some((x) => x.kind === 'verified') ? [{ label: 'Verified', color: roles.find((x) => x.kind === 'verified').badge_color, icon: 'verified' }] : [])) : '<span class="muted small">No roles</span>'}</div>
       </div>
+      ${exec && r.banned ? `<button class="gear" id="rec-gear" aria-label="Executive actions" aria-expanded="false" title="Executive actions"></button>` : ''}
     </div>
+    ${exec && r.banned ? `<form class="card exec-panel" id="rec-unban" hidden>
+      <strong>Unban ${esc(name)}</strong>
+      <label class="f"><span>Reason</span><input id="rec-unban-why" required maxlength="1000" placeholder="e.g. Appeal accepted"></label>
+      <p class="error" id="rec-unban-err" hidden></p>
+      <div class="f-actions"><button type="button" class="linkish" data-close>Cancel</button><button class="refresh" type="submit">Unban</button></div>
+    </form>` : ''}
     <div class="grid-4">
-      <div class="card tight stat${r.warnings ? ' stat-warn' : ''}"><span class="muted small-meta">Warnings</span><strong>${Number(r.warnings ?? warns.length)}</strong></div>
+      <div class="card tight stat${r.warnings ? ' stat-warn' : ''}"><span class="muted small-meta">Warnings</span><strong>${Number(r.warnings ?? activeWarns.length)}</strong></div>
       <div class="card tight stat"><span class="muted small-meta">Incidents</span><strong>${incidents.length}</strong></div>
       <div class="card tight stat"><span class="muted small-meta">Messages (90 days)</span><strong>${Number(r.messages_90d || 0)}</strong></div>
       <div class="card tight stat"><span class="muted small-meta">Shift hours (30 days)</span><strong>${Number(r.shift_hours_30d || 0).toFixed(1)}</strong></div>
     </div>
     <div class="toolbar"><div class="chips" id="rec-tabs">
-      <button class="chip on" data-t="warnings">Warnings <span class="count">${warns.length}</span></button>
+      <button class="chip on" data-t="warnings">Warnings <span class="count">${activeWarns.length}</span></button>
       <button class="chip" data-t="incidents">Incidents <span class="count">${incidents.length}</span></button>
       <button class="chip" data-t="messages">Messages</button>
       <button class="chip" data-t="details">Details</button></div></div>
@@ -953,8 +985,20 @@ async function showRecord(box, id) {
       <div class="case-main"><div class="case-reason">${esc(c.reason)}${c.duration_minutes ? ` <span class="muted">· ${c.duration_minutes} min</span>` : ''}</div>
         <div class="muted small-meta">by ${esc(c.moderator_name || 'unknown')} · ${esc(SOURCE_LABEL[c.source] || c.source)} · ${when(c.created_at)}</div></div>
       ${c.status === 'pending' ? '<span class="st sub-pending">Pending</span>' : ''}</div>`;
+  const warnRow = (c) => `<div class="row-item case${c.revoked_at ? ' is-revoked' : ''}" data-case="${c.id}">
+      <span class="act act-warn">Warn</span>
+      <div class="case-main"><div class="case-reason">${esc(c.reason)}</div>
+        <div class="muted small-meta">by ${esc(c.moderator_name || 'unknown')} · ${esc(SOURCE_LABEL[c.source] || c.source)} · ${when(c.created_at)}</div>
+        ${c.revoked_at ? `<div class="small-meta revoked-note">Removed by ${esc(c.revoked_by_name || 'an executive')} · ${when(c.revoked_at)}${c.revoked_reason ? ': ' + esc(c.revoked_reason) : ''}</div>` : ''}
+        ${exec && !c.revoked_at && c.status === 'done' ? `<form class="exec-inline" data-revoke="${c.id}" hidden>
+          <label class="f"><span>Why remove it?</span><input required maxlength="500" placeholder="e.g. Given by mistake"></label>
+          <p class="error" hidden></p>
+          <div class="f-actions"><button type="button" class="linkish" data-close>Cancel</button><button class="refresh" type="submit">Remove warning</button></div>
+        </form>` : ''}</div>
+      ${c.revoked_at ? '<span class="st">Removed</span>' : c.status === 'pending' ? '<span class="st sub-pending">Pending</span>' : ''}
+      ${exec && !c.revoked_at && c.status === 'done' ? `<button class="gear small" data-gear="${c.id}" aria-label="Remove this warning" title="Remove this warning"></button>` : ''}</div>`;
   const tabs = {
-    warnings: () => `<div class="card">${warns.length ? warns.map(caseRow).join('') : `<p class="muted small">${esc(name)} has no warnings.</p>`}</div>`,
+    warnings: () => `<div class="card">${warns.length ? warns.map(warnRow).join('') : `<p class="muted small">${esc(name)} has no warnings.</p>`}</div>`,
     incidents: () => `<div class="card">${incidents.length ? incidents.map((x) => x.kind === 'case' ? caseRow(x.c) : `
       <div class="row-item log"><span class="log-type t-${esc(x.l.type)}">${esc(LOG_LABEL[x.l.type] || x.l.type)}</span>
         <div class="case-main">${logDetail(x.l) || `<span class="muted">${x.l.channel_name ? 'in #' + esc(x.l.channel_name) : ''}</span>`}</div>
@@ -974,7 +1018,41 @@ async function showRecord(box, id) {
     box.querySelectorAll('#rec-tabs .chip').forEach((x) => x.classList.toggle('on', x.dataset.t === t));
     if (t === 'messages') return showMessages(tab, id);
     tab.innerHTML = tabs[t]();
+    if (t === 'warnings' && exec) wireRevoke();
   };
+  // Executives: Remove warning (revoke_warning, migration 0014).
+  function wireRevoke() {
+    tab.querySelectorAll('[data-gear]').forEach((g) => g.addEventListener('click', () => {
+      const f = tab.querySelector(`[data-revoke="${g.dataset.gear}"]`);
+      f.hidden = !f.hidden;
+      if (!f.hidden) f.querySelector('input').focus();
+    }));
+    tab.querySelectorAll('[data-revoke]').forEach((f) => {
+      f.querySelector('[data-close]').onclick = () => { f.hidden = true; };
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const { error } = await sb.rpc('revoke_warning', { case_id: +f.dataset.revoke, reason: f.querySelector('input').value.trim() });
+        if (error) { const er = f.querySelector('.error'); er.textContent = error.message; er.hidden = false; return; }
+        showRecord(box, id);
+      };
+    });
+  }
+  // Executives: Unban from the record (a pending unban the bot carries out, like Mod actions).
+  const ub = box.querySelector('#rec-unban');
+  if (ub) {
+    const gear = box.querySelector('#rec-gear');
+    gear.onclick = () => { ub.hidden = !ub.hidden; gear.setAttribute('aria-expanded', String(!ub.hidden)); if (!ub.hidden) ub.querySelector('input').focus(); };
+    ub.querySelector('[data-close]').onclick = () => { ub.hidden = true; gear.setAttribute('aria-expanded', 'false'); };
+    ub.onsubmit = async (e) => {
+      e.preventDefault();
+      const er = ub.querySelector('#rec-unban-err');
+      const { error } = await sb.from('mod_cases').insert({ action: 'unban', target_discord_id: id, target_name: r.display_name || id,
+        reason: ub.querySelector('input').value.trim(), source: 'website', status: 'pending',
+        moderator_discord_id: myDiscordId, moderator_name: $('name').textContent }).select().single();
+      if (error) { er.textContent = "Couldn't unban: " + error.message; er.hidden = false; return; }
+      ub.innerHTML = `<p class="small"><span class="st sub-pending">Pending</span> CareBeyond Helper is unbanning ${esc(name)}. It shows under Incidents once it's done.</p>`;
+    };
+  }
   box.querySelector('#rec-tabs').onclick = (e) => { const b = e.target.closest('.chip'); if (b) show(b.dataset.t); };
   show('warnings');
 }

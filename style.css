@@ -618,3 +618,34 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
   .rec-dl { grid-template-columns: 1fr; gap: 2px; }
   .rec-dl dd { margin-bottom: 8px; }
 }
+
+/* Home sections (0.13.0, owner): no hubs; one clearly separated block per audience, with a strip of its colour. */
+.sect { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px 20px 20px;
+  box-shadow: 0 1px 2px rgba(11, 30, 74, .04), 0 8px 24px rgba(11, 30, 74, .06); overflow: hidden; }
+.sect::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: linear-gradient(90deg, var(--g1), var(--g2), var(--g3)); }
+.sect > .menu-label { margin: 2px 0 14px; font-size: 12px; }
+.sect .aud-dot { width: 10px; height: 10px; }
+.menu-grid.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.menu-grid.n3 .tile { aspect-ratio: 16 / 10; }
+.menu .tile .tile-title { font-size: 19px; }
+.menu .hub-dir .tile.wide { height: 150px; }
+@media (max-width: 560px) {
+  .sect { padding: 16px 12px 12px; border-radius: 16px; }
+  .menu-grid.n3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .menu .menu-grid:not(.hub-dir) .tile { aspect-ratio: 4 / 3; }
+  .menu .tile .tile-title { font-size: 16px; }
+}
+
+/* Records: executive controls (0.13.0). A small settings button only executives see. */
+.gear { flex: none; width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; position: relative; align-self: flex-start; }
+.gear::after { content: ""; position: absolute; inset: 8px; background: var(--muted);
+  -webkit-mask: url('assets/icons/settings.png') center / contain no-repeat; mask: url('assets/icons/settings.png') center / contain no-repeat; }
+.gear:hover, .gear[aria-expanded="true"] { border-color: var(--blue); }
+.gear:hover::after { background: var(--blue-deep); }
+.gear.small { width: 30px; height: 30px; border-radius: 8px; }
+.gear.small::after { inset: 7px; }
+.exec-panel, .exec-inline { display: grid; gap: 12px; }
+.exec-panel { border-color: #f5aaa1; }
+.exec-inline { margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--page); }
+.case.is-revoked .case-reason { color: var(--muted); text-decoration: line-through; }
+.revoked-note { color: var(--teal-ink); font-weight: 600; }

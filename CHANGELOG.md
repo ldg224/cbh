@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.13.0 (2026-11-17)
+
+**Changed:** **no more hubs.** The home page is now one clearly separated block per group, most important first: **Executive**, **Directors**, **Admin**, **Staff** and **Everyone**. Each block holds every tool for that group, one tap away. You only see the blocks you can use: an admin sees Admin, Staff and Everyone, while executives see them all. **Back** on every page now goes straight to the menu.
+
+**Added:** executive controls in **Records**, behind a small settings button that only executives see:
+- **Remove warning**: on any warning, give a reason and remove it. It stays on the record struck through under **Removed** (who removed it, when and why) and no longer counts towards their warnings. CareBeyond Helper posts it to #server-logs and lets the member know by DM.
+- **Unban**: on the profile of someone who is banned, give a reason and CareBeyond Helper unbans them.
+
+Bot (by Bravo): posts removed warnings and DMs the member. **Needs the bot updated on Wispbyte.**
+Database change: yes, migration 0014 (by Bravo).
+
 ## 0.12.0 (2026-11-17)
 
 **Added:**
