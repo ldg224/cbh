@@ -430,6 +430,7 @@ const PAGES = [
     { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list', building: true },
     { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form', building: true },
     { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
+    { id: 'roles',    title: 'Roles',         icon: 'star',      layout: 'roles' },   // role editor (roles.js, R1)
   ] },
   // Directors hub: sessions, plus one page per department for its Director (execs see all four).
   { id: 'directors', aud: 'director', title: 'Directors hub', icon: 'org-chart', wide: true, tools: [
