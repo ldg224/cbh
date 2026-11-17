@@ -1844,6 +1844,8 @@ function sessionType(s) {
   }
   return t;
 }
+const sessPlace = (s) => (s.location_kind === 'in_game' && s.location_text ? s.location_text : 'Discord only');
+const sessHosts = (s, extra) => [cleanName(s.host_name || 'staff'), ...(extra[s.id] || []).map((h) => cleanName(h.name || ''))].filter(Boolean);
 const sessTag = (s) => { const t = sessionType(s); return `<span class="ss-tag" style="--t:${t.color}">${esc(t.label)}</span>`; };
 const sydDate = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(d);   // YYYY-MM-DD
 const sydTime = (d) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
@@ -1862,6 +1864,10 @@ async function renderSessions(body) {
   if (liveQ.error || upQ.error) { body.innerHTML = ''; return liveError(body, liveQ.error || upQ.error); }
   const live = (liveQ.data || [])[0] || null;
   const upcoming = upQ.data || [];
+  const ids = [...(live ? [live.id] : []), ...upcoming.map((u) => u.id)];
+  const hq = ids.length ? await sb.from('session_hosts').select('session_id, discord_id, name').in('session_id', ids).then((r) => r, () => ({ data: [] })) : { data: [] };
+  const coHosts = {};
+  for (const h of hq.data || []) (coHosts[h.session_id] ||= []).push(h);
   const code = (live && live.join_code) || (codeQ.data && codeQ.data.value) || joinCode;
   const people = Object.fromEntries((ros.data || []).map((p) => [p.discord_id, p]));
   const onNow = onq.data || [];
@@ -1874,10 +1880,10 @@ async function renderSessions(body) {
     const since = new Date(live.started_at);
     return `<section class="card ss-live" style="--t:${sessionType(live).color}">
       <div class="ss-live-top"><span class="ss-led" aria-hidden="true"></span><span class="ss-live-label">Live now</span>${sessTag(live)}
-        <span class="ss-live-host">Hosted by <strong>${esc(cleanName(live.host_name || 'staff'))}</strong></span></div>
+        <span class="ss-live-host">Hosted by <strong>${esc(sessHosts(live, coHosts).join(', '))}</strong></span></div>
       <div class="ss-live-main">
         <div><div class="ss-timer" data-tick="ss-live">${clock((Date.now() - since) / 1000)}</div>
-          <div class="muted ss-sub">Since ${since.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${live.note ? ' · ' + esc(live.note) : ''}</div></div>
+          <div class="muted ss-sub">Since ${since.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · <span class="ss-place">${esc(sessPlace(live))}</span>${live.note ? ' · ' + esc(live.note) : ''}</div></div>
         <div class="ss-code"><span class="ss-code-l">Join code</span><strong>${esc(code)}</strong><button class="ghost small-btn" id="ss-copy">Copy</button></div>
       </div>
       <div class="ss-crew"><span class="ss-crew-l">On shift <strong>${onNow.length}</strong></span>
@@ -1897,12 +1903,12 @@ async function renderSessions(body) {
     <div class="ss-week">${days.map((dd, i) => `<div class="ss-day${i === 0 ? ' today' : ''}">
       <div class="ss-day-h"><strong>${i === 0 ? 'Today' : dd.d.toLocaleDateString([], { weekday: 'short', timeZone: 'Australia/Sydney' })}</strong>
         <span>${dd.d.toLocaleDateString([], { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}</span></div>
-      ${byDay(dd.key).map((u) => `<button class="ss-slot" data-edit="${u.id}" style="--t:${sessionType(u).color}"><strong>${sydTime(new Date(u.scheduled_for))}</strong><span>${esc(sessionType(u).label)}</span></button>`).join('')}
+      ${byDay(dd.key).map((u) => `<button class="ss-slot" data-edit="${u.id}" style="--t:${sessionType(u).color}"><strong>${sydTime(new Date(u.scheduled_for))}</strong><span>${esc(sessionType(u).label)}</span><span class="ss-slot-loc">${esc(sessPlace(u))}</span></button>`).join('')}
       <button class="ss-add" data-day="${dd.key}" aria-label="Schedule on ${dd.d.toDateString()}">+</button></div>`).join('')}</div>
     <h2 class="menu-label aud-director"><span class="aud-dot"></span>Upcoming</h2>
     <div class="card ss-list">${upcoming.length ? upcoming.map((u) => `<div class="ss-row">
       <div class="ss-when"><strong>${esc(whenAhead(u.scheduled_for))}</strong>${sessTag(u)}</div>
-      <div class="ss-meta muted">With ${esc(cleanName(u.host_name || 'staff'))}${u.note ? ' · ' + esc(u.note) : ''}${u.ping === false ? ' · no ping' : ''}</div>
+      <div class="ss-meta muted">With ${esc(sessHosts(u, coHosts).join(', '))} · <span class="ss-place">${esc(sessPlace(u))}</span>${u.note ? ' · ' + esc(u.note) : ''}${u.ping === false ? ' · no ping' : ''}</div>
       <div class="ss-row-act"><button class="ghost small-btn" data-edit="${u.id}">Edit</button>${live ? '' : `<button class="ghost small-btn" data-golive="${u.id}">Start now</button>`}<button class="ghost small-btn danger" data-cancel="${u.id}">Cancel</button></div>
     </div>`).join('') : '<p class="muted small">No sessions scheduled. Use + on a day above to plan one.</p>'}</div>
     <p class="error" id="ss-err" hidden></p>
@@ -1911,7 +1917,8 @@ async function renderSessions(body) {
 
   const fail = (msg) => { const e = body.querySelector('#ss-err'); e.textContent = msg; e.hidden = false; e.scrollIntoView({ block: 'nearest' }); };
   const slot = body.querySelector('#ss-form-slot');
-  const openForm = (mode, opts = {}) => sessionForm(slot, mode, opts, { people: ros.data || [], done: () => renderSessions(body) });
+  const openForm = (mode, opts = {}) => sessionForm(slot, mode, { ...opts, coHosts: opts.row ? (coHosts[opts.row.id] || []).map((h) => h.discord_id) : [] },
+    { people: ros.data || [], done: () => renderSessions(body) });
   body.querySelector('#ss-new-live')?.addEventListener('click', () => openForm('live'));
   body.querySelector('#ss-new-sched')?.addEventListener('click', () => openForm('scheduled'));
   body.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => openForm('scheduled', { date: b.dataset.day })));
@@ -1968,10 +1975,17 @@ function sessionForm(slot, mode, opts, ctx) {
       <label class="f"><span>Time (Sydney)</span><input type="time" name="time" step="300" value="${when ? sydTime(when) : '19:00'}"></label></div>` : ''}
     ${mode === 'edit' ? `<label class="f"><span>Host</span><select name="host">${ctx.people.slice().sort((a, b) => cleanName(a.display_name).localeCompare(cleanName(b.display_name)))
       .map((p) => `<option value="${esc(p.discord_id)}"${p.discord_id === row.host_discord_id ? ' selected' : ''}>${esc(cleanName(p.display_name))}</option>`).join('')}</select></label>` : ''}
+    <div class="f"><span>Location</span><div class="ss-types ss-loc" role="radiogroup">
+      <button type="button" role="radio" class="ss-type${(row.location_kind || 'discord') === 'discord' ? ' on' : ''}" data-loc="discord" style="--t:#5865f2"><span class="ss-sw"></span>Discord only</button>
+      <button type="button" role="radio" class="ss-type${row.location_kind === 'in_game' ? ' on' : ''}" data-loc="in_game" style="--t:#0d9488"><span class="ss-sw"></span>In game</button></div>
+      <input name="location_text" maxlength="80" placeholder="Where in Maple Hospital? e.g. Main Hospital, Floor 2" value="${esc(row.location_text || '')}"${row.location_kind === 'in_game' ? '' : ' hidden'}></div>
+    <div class="f"><span>Co-hosts <em>(optional)</em></span><div class="ss-hosts" data-hosts></div>
+      <select name="addhost"><option value="">Add a co-host…</option>${ctx.people.slice().sort((a, b) => cleanName(a.display_name).localeCompare(cleanName(b.display_name)))
+        .map((p) => `<option value="${esc(p.discord_id)}">${esc(cleanName(p.display_name))}</option>`).join('')}</select></div>
     <label class="f"><span>Note <em>(optional, shown on the website)</em></span><input name="note" maxlength="200" value="${esc(row.note || '')}" placeholder="e.g. All departments welcome"></label>
     <label class="f"><span>Discord message <em>(optional)</em></span><textarea name="announcement" rows="2" maxlength="500" placeholder="Leave empty to use the note">${esc(row.announcement || '')}</textarea></label>
     <label class="ss-switch"><input type="checkbox" name="ping"${row.ping === false ? '' : ' checked'}><span class="ss-knob" aria-hidden="true"></span>
-      <span>Ping <strong>Session Ping</strong> ${mode === 'live' ? 'in the announcement' : 'in the 15-minute reminder and when it starts'}</span></label>
+      <span>Ping <strong>Session Ping</strong> ${mode === 'live' ? 'in the announcement' : 'in the 15-minute reminder and when it starts'}${mode === 'live' ? '' : ' (hosts are always pinged in the reminder)'}</span></label>
     <p class="error" data-err hidden></p>
     <div class="f-actions"><button type="button" class="linkish" data-close>Cancel</button>
       <button class="refresh" type="submit">${mode === 'live' ? 'Start session' : mode === 'edit' ? 'Save changes' : 'Schedule'}</button></div>
@@ -1985,6 +1999,31 @@ function sessionForm(slot, mode, opts, ctx) {
     f.querySelectorAll('.ss-type[data-kind]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
     f.querySelector('.ss-dept-f').hidden = k !== 'department';
   }));
+  let loc = row.location_kind || 'discord';
+  f.querySelectorAll('[data-loc]').forEach((b) => b.addEventListener('click', () => {
+    loc = b.dataset.loc;
+    f.querySelectorAll('[data-loc]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+    f.elements.location_text.hidden = loc !== 'in_game';
+    if (loc === 'in_game') f.elements.location_text.focus();
+  }));
+  const lead = () => (mode === 'edit' && f.elements.host ? f.elements.host.value : (row.host_discord_id || myDiscordId));
+  let cohosts = (opts.coHosts || []).slice();
+  const drawHosts = () => {
+    f.querySelector('[data-hosts]').innerHTML = cohosts.filter((id) => id !== lead()).map((id) => {
+      const p = ctx.people.find((x) => x.discord_id === id);
+      return `<span class="ss-host">${esc(cleanName(p ? p.display_name : id))}<button type="button" data-rm="${esc(id)}" aria-label="Remove">×</button></span>`;
+    }).join('');
+  };
+  f.elements.addhost.addEventListener('change', (e) => {
+    const id = e.target.value; e.target.value = '';
+    if (id && id !== lead() && !cohosts.includes(id) && cohosts.length < 8) { cohosts.push(id); drawHosts(); }
+  });
+  f.querySelector('[data-hosts]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rm]'); if (!b) return;
+    cohosts = cohosts.filter((x) => x !== b.dataset.rm); drawHosts();
+  });
+  f.elements.host?.addEventListener('change', drawHosts);
+  drawHosts();
   f.querySelectorAll('.ss-dpt').forEach((b) => b.addEventListener('click', () => {
     dept = b.dataset.dept; f.querySelectorAll('.ss-dpt').forEach((x) => x.classList.toggle('on', x === b));
   }));
@@ -1993,7 +2032,9 @@ function sessionForm(slot, mode, opts, ctx) {
     if (k === 'department' && !dept) return err('Pick the department.');
     const v = (n) => (f.elements[n] ? f.elements[n].value.trim() : '');
     const data = { kind: k, department: k === 'department' ? dept : null, note: v('note') || null,
-      announcement: v('announcement') || null, ping: f.elements.ping.checked };
+      announcement: v('announcement') || null, ping: f.elements.ping.checked,
+      location_kind: loc, location_text: loc === 'in_game' ? v('location_text') : null };
+    if (loc === 'in_game' && !data.location_text) return err('Type where in the game the session is.');
     if (mode !== 'live') {
       if (!v('date') || !v('time')) return err('Pick a date and a time.');
       data.scheduled_for = sydneyToIso(v('date'), v('time'));
@@ -2007,10 +2048,16 @@ function sessionForm(slot, mode, opts, ctx) {
     const q = mode === 'edit'
       ? sb.from('sessions').update(data).eq('id', row.id).eq('status', 'scheduled').select()
       : sb.from('sessions').insert({ ...data, status: mode, host_discord_id: myDiscordId, host_name: $('name').textContent }).select().single();
-    const { error } = await q;
+    const { data: saved, error } = await q;
     if (error) {
       btn.disabled = false; btn.textContent = was;
       return err(error.code === '23505' ? 'A session is already live.' : "Couldn't save: " + error.message);
+    }
+    const sid = mode === 'edit' ? row.id : (saved && saved.id);
+    const before = (opts.coHosts || []).slice().sort().join(), after = cohosts.filter((id) => id !== lead()).sort().join();
+    if (sid && before !== after) {
+      const { error: he } = await sb.rpc('set_session_hosts', { sid, host_ids: cohosts.filter((id) => id !== lead()) });
+      if (he) { btn.disabled = false; btn.textContent = was; return err('Saved, but the co-hosts weren\u2019t: ' + he.message); }
     }
     ctx.done();
   };

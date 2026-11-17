@@ -1150,3 +1150,14 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
   .pg-sess .ss-row { grid-template-columns: 1fr; }
   .pg-sess .ss-row-act { grid-column: 1; grid-row: auto; justify-content: flex-start; }
 }
+
+/* Sessions: location and co-hosts (owner, 17 Nov 2026). */
+.pg-sess .ss-loc + input { margin-top: 8px; }
+.pg-sess .ss-place { font-weight: 600; color: var(--text); }
+.pg-sess .ss-slot-loc { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-sess .ss-hosts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.pg-sess .ss-hosts:empty { display: none; }
+.pg-sess .ss-host { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 11px; border-radius: 999px; background: var(--raised);
+  border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.pg-sess .ss-host button { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 0; background: #dfe7f2; color: var(--muted); font-weight: 700; cursor: pointer; }
+.pg-sess .ss-host button:hover { background: #fde2e1; color: #b42318; }
