@@ -94,7 +94,8 @@ returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from public.roles r where r.id = role_id
       and r.id not in ('1464027453339992269', '1464028008909377686', '1472796097960480778')
-      and (r.kind in ('office', 'ping', 'status', 'community') or (r.kind in ('rank', 'department') and r.department = dept)))
+      and (r.kind in ('office', 'ping', 'status', 'community') or (r.kind in ('rank', 'department') and r.department = dept))
+      and coalesce(r.rank_label, '') not in ('Director', 'Leader'))
 $$;
 
 -- When this person may apply to this form again (null = now). One waiting application per department, and the
@@ -250,7 +251,7 @@ begin
   if (rk is distinct from x.accept_rank_role_id or extra is distinct from x.accept_role_ids)
      and not (public.is_exec() or coalesce(public.has_perm('applications.settings', dept), false)) then
     raise exception 'Only people who can change this department''s settings can choose different roles.'; end if;
-  if rk is not null and not exists (select 1 from public.roles where id = rk and kind = 'rank' and department = dept) then
+  if rk is not null and not exists (select 1 from public.roles where id = rk and kind = 'rank' and department = dept and rank_label not in ('Director', 'Leader')) then
     raise exception 'That starting rank isn''t a % rank.', dept; end if;
   foreach r in array extra loop
     if not public.app_role_allowed(r, dept) then raise exception 'One of the extra roles can''t be given from here.'; end if;
@@ -283,7 +284,7 @@ begin
       or exists (select 1 from jsonb_array_elements(patch->'stages') e where jsonb_typeof(e) <> 'string' or char_length(e #>> '{}') not between 1 and 40)) then
     raise exception 'Stages must be short names.'; end if;
   if patch ? 'accept_rank_role_id' and patch->>'accept_rank_role_id' is not null
-     and not exists (select 1 from public.roles where id = patch->>'accept_rank_role_id' and kind = 'rank' and department = dept) then
+     and not exists (select 1 from public.roles where id = patch->>'accept_rank_role_id' and kind = 'rank' and department = dept and rank_label not in ('Director', 'Leader')) then
     raise exception 'The starting rank must be a % rank.', dept; end if;
   if patch ? 'accept_role_ids' then
     for r in select jsonb_array_elements_text(patch->'accept_role_ids') loop
