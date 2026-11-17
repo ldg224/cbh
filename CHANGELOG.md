@@ -3,6 +3,31 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.16.0 (2026-11-17)
+
+**Added:**
+- **Sessions** is redesigned.
+  - A **live panel** for the running session, a **7-day calendar** and an **Upcoming** list with **Edit**, **Start** and **Cancel**.
+  - One form to start, schedule or edit a session: type, department, date and time, **location** (Discord only, or an in-game place), **lead host and co-hosts**, a note, the Discord message and a **ping** switch.
+  - Ended and cancelled sessions can no longer be edited.
+- **Past sessions** on the Sessions page: every ended session grouped by week (with the week's total), showing the date and time, a coloured type tag, where it ran, every host with the lead first, how long it ran (breaks not counted), how many staff were on shift (with photos and hours) and the note. **Show more** loads older ones.
+- **Records** is redesigned.
+  - **Start screen:** a big search, **Recently opened** (on this device), **Recently actioned** (last 7 days) and **Most warnings**.
+  - **A person's record:** their photo, badges and five numbers (Warnings, Actions, Incidents, Messages over 90 days, Shift hours over 30 days) beside one **Timeline** of warnings, mod actions (with supervisor review results) and incidents, grouped by day with filters, plus a **Messages** tab.
+  - **Quick actions:** **Warn**, **Time out**, **Kick** and **Ban** open the New action panel already filled in with that person (and **Unban** if they're banned).
+- **Incidents:** write up an incident against someone, with a title, what happened, when, and up to 10 evidence links (web links only). The writer or an executive can edit or remove it; removed incidents disappear from the record but executives can still see them.
+- **Photos** in Mod actions and Records: everyone's Discord photo (initials when there isn't one), the photo of whoever took each action, and the Roblox character for in-game records.
+
+**Changed:**
+- The shift buttons in the home page's **Session and shift** bar now match the Shifts page: department chips instead of a dropdown, and buttons that show they're working.
+- **Staff & roster** makes it clear which role belongs to the section someone is listed under: their rank in that section is a solid chip in the section's colour, and their roles in other departments are small grey chips (e.g. "Nursing · Year 1").
+
+**Bot:**
+- Scheduled sessions get a post in Discord that updates when the session is edited or cancelled.
+- A reminder 15 minutes before a session pings the Session Ping role and the hosts. It never posts twice, even after a restart.
+- The start announcement shows the session type, location and hosts, and only pings when the ping switch is on (never @everyone).
+
+Database change: yes, migrations 0019 (incidents), 0020 (sessions), 0021 (photos), 0022 (session fixes, location and co-hosts), and a new Roblox picture lookup.
 ## 0.15.3 (2026-11-17)
 
 **Changed:** the **Staff & roster** page is redesigned.
