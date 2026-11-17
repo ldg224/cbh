@@ -3,6 +3,23 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.12.0 (2026-11-17)
+
+**Added:**
+- **Records** (Admin hub): find anyone by name, username or Discord ID (people who have left can be found by their ID) and see:
+  - their photo, name, username, ID, when they joined the server and when their account was made, and all their role badges;
+  - **Warnings**, **Incidents**, **Messages (90 days)** and **Shift hours (30 days)** at a glance;
+  - **Warnings**: every warning with the reason, who gave it and when;
+  - **Incidents**: timeouts, kicks, bans and notes, plus joins, leaves, role and nickname changes from the Discord logs;
+  - **Messages**: every message they've sent, newest first, with the channel, **Edited** and **Deleted** tags, attachments, a search box and **Load older messages**;
+  - **Details**: shift totals, timeout/kick/ban counts, last message and the full list of roles.
+- **Warning counts** next to people's names when you search in Mod actions and Records.
+
+**Changed:** failed Mod actions no longer appear in the Mod actions list. Instead, only the admin who asked sees a red notice at the top of the site saying it didn't go through and why. Press **×** to close it for good.
+
+Bot (by Bravo): saves every message in the server from now on (kept 90 days; edits and deletes are marked), and records when each account was made. **Needs the bot updated on Wispbyte.**
+Database change: yes, migration 0013 (by Bravo).
+
 ## 0.11.0 (2026-11-17)
 
 **Added:** **Mod actions** (was Mod reports, in the Admin hub) now **carries out** what you choose in Discord, the same way the slash commands do.

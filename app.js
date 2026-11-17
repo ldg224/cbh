@@ -268,6 +268,7 @@ function draw(data) {
   myDepartments = (data.access && (data.access.shift_teams || data.access.teams)) || [...new Set(roles.filter((r) => r.department).map((r) => r.department))];
   setAccess(me, roles, data.access, data.reviewTeams);
   buildMenu();
+  loadFailNotices();
   buildSessionBanner(data.session);
   route();
   // No "how this page works" text: the note only appears for loading and errors.
@@ -296,6 +297,7 @@ async function checkForChanges() {
   checking = true;
   try {
     const data = await fetchMine();
+    loadFailNotices();
     if (fingerprint(data) !== shownSig) {
       pending = data;
       $('changed').hidden = false;
@@ -390,6 +392,7 @@ const PAGES = [
     { id: 'sessions',     title: 'Sessions',     icon: 'calendar', layout: 'sessions' },
     { id: 'cases',        title: 'Mod actions',  icon: 'law',     layout: 'cases' },
     { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'logs' },
+    { id: 'records',      title: 'Records',      icon: 'user-folder', layout: 'records' },
     { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'tickets' },
     { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'review', aud: 'reviewer' },
   ] },
@@ -713,7 +716,7 @@ async function renderCases(body) {
     sugg.innerHTML = results.map((m, i) => `<button type="button" role="option" class="sg${i === active ? ' on' : ''}" data-i="${i}">
         <img class="avatar" src="${esc(sized(m.avatar_url || '', 64))}" alt="" onerror="this.style.visibility='hidden'">
         <span class="pk-main"><strong>${esc(cleanName(m.display_name || m.username || m.discord_id))}</strong>
-        <span class="muted small-meta">${m.username ? '@' + esc(m.username) + ' · ' : ''}${esc(m.discord_id)}</span></span>
+        <span class="muted small-meta">${m.username ? '@' + esc(m.username) + ' · ' : ''}${esc(m.discord_id)}${warnText(m.warnings)}</span></span>
         ${m.banned ? '<span class="st sub-denied">Banned</span>' : ''}</button>`).join('')
       + (rawId ? `<button type="button" class="sg" data-raw="${esc(id)}"><span class="pk-main"><strong>Use ID ${esc(id)}</strong><span class="muted small-meta">Someone not in the server</span></span></button>` : '')
       + (!results.length && !rawId && id.length >= 2 ? '<p class="muted small sg-empty">Nobody found. Try their username or Discord ID.</p>' : '');
@@ -800,7 +803,7 @@ async function renderCases(body) {
 
   async function load() {
     const list = $b('#case-list');
-    let qy = sb.from('mod_cases').select('*').order('created_at', { ascending: false }).limit(100);
+    let qy = sb.from('mod_cases').select('*').neq('status', 'failed').order('created_at', { ascending: false }).limit(100);
     if (filter === 'timeout') qy = qy.in('action', ['timeout', 'untimeout']);
     else if (filter !== 'all') qy = qy.eq('action', filter);
     const { data, error } = await qy;
@@ -823,12 +826,189 @@ async function renderCases(body) {
     if (data.some((c) => c.status === 'pending')) {
       caseWatch = setInterval(() => {
         if (!body.isConnected || location.hash !== '#admin/cases') return clearInterval(caseWatch);
-        clearInterval(caseWatch); load();
+        clearInterval(caseWatch); load(); loadFailNotices();
       }, 3000);
     }
   }
   sync();
   load();
+}
+
+// ----- Failed Mod actions: a red notice at the top for the person who asked, closed with X (gone for good) -----
+const warnText = (n) => (n ? ` · ${n} warning${n == 1 ? '' : 's'}` : '');
+async function loadFailNotices() {
+  const box = $('fail-notes');
+  if (!myDiscordId || !access.admin) { box.hidden = true; return; }
+  const { data, error } = await sb.from('mod_cases').select('id, action, target_name, error')
+    .eq('status', 'failed').eq('moderator_discord_id', myDiscordId).is('dismissed_at', null).order('id').limit(5);
+  if (error) return;   // e.g. before the database has dismissed_at: show nothing rather than an error
+  const shown = [...box.querySelectorAll('[data-id]')].map((x) => x.dataset.id).join();
+  if (shown === (data || []).map((c) => String(c.id)).join()) return;   // nothing new: leave it alone
+  box.innerHTML = (data || []).map((c) => `<div class="fail-note" role="alert" data-id="${c.id}">
+      <span class="fn-ico" aria-hidden="true"></span>
+      <span class="fn-text"><strong>${esc(ACTION_LABEL[c.action] || c.action)} on ${esc(c.target_name)} didn't go through.</strong> ${esc(c.error || '')}</span>
+      <button class="fn-x" aria-label="Dismiss">&times;</button></div>`).join('');
+  box.hidden = !(data || []).length;
+  box.querySelectorAll('.fn-x').forEach((b) => b.addEventListener('click', async () => {
+    const row = b.closest('.fail-note');
+    row.remove();
+    box.hidden = !box.querySelector('.fail-note');
+    await sb.rpc('dismiss_failed', { case_id: +row.dataset.id });
+  }));
+}
+
+// ----- Records (#admin/records): search anyone; profile, stats, roles, warnings, incidents, messages (90 days) -----
+// Back end (Bravo, migration 0013): mod_member_search (with warnings), member_record, discord_messages.
+async function renderRecords(body) {
+  body.innerHTML = `
+    <div class="card picker rec-search">
+      <label class="f"><span>Find someone</span><input id="rec-q" placeholder="Name, username or Discord ID" autocomplete="off" aria-controls="rec-sugg"></label>
+      <div class="sugg" id="rec-sugg" role="listbox" hidden></div>
+    </div>
+    <div id="rec-body" class="page-body"></div>`;
+  const q = body.querySelector('#rec-q'), sugg = body.querySelector('#rec-sugg');
+  let timer = null, results = [], active = -1;
+  const draw = () => {
+    sugg.innerHTML = results.map((m, i) => `<button type="button" role="option" class="sg${i === active ? ' on' : ''}" data-i="${i}">
+        <img class="avatar" src="${esc(sized(m.avatar_url || '', 64))}" alt="" onerror="this.style.visibility='hidden'">
+        <span class="pk-main"><strong>${esc(cleanName(m.display_name || m.username || m.discord_id))}</strong>
+        <span class="muted small-meta">${m.username ? '@' + esc(m.username) + ' · ' : ''}${esc(m.discord_id)}${warnText(m.warnings)}</span></span>
+        ${m.banned ? '<span class="st sub-denied">Banned</span>' : ''}</button>`).join('')
+      + (/^\d{15,22}$/.test(q.value.trim()) && !results.some((m) => m.discord_id === q.value.trim())
+        ? `<button type="button" class="sg" data-raw="${esc(q.value.trim())}"><span class="pk-main"><strong>Open record for ID ${esc(q.value.trim())}</strong><span class="muted small-meta">For someone who has left the server</span></span></button>` : '');
+    if (!sugg.innerHTML && q.value.trim().length >= 2) sugg.innerHTML = '<p class="muted small sg-empty">Nobody found. Someone who has left can be found by their Discord ID.</p>';
+    sugg.hidden = !sugg.innerHTML;
+  };
+  const open = (m) => { sugg.hidden = true; q.value = ''; q.blur(); showRecord(body.querySelector('#rec-body'), m.discord_id); };
+  q.oninput = () => {
+    clearTimeout(timer);
+    const term = q.value.trim();
+    if (term.length < 2) { results = []; sugg.hidden = true; return; }
+    timer = setTimeout(async () => {
+      const { data, error } = await sb.rpc('mod_member_search', { q: term });
+      if (q.value.trim() !== term) return;
+      if (error) { sugg.hidden = false; sugg.innerHTML = `<p class="error sg-empty">${esc(error.message)}</p>`; return; }
+      results = data || []; active = results.length ? 0 : -1; draw();
+    }, 200);
+  };
+  q.onkeydown = (e) => {
+    if (sugg.hidden || !results.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); active = (active + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length; draw(); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); open(results[active]); }
+    else if (e.key === 'Escape') sugg.hidden = true;
+  };
+  sugg.onclick = (e) => { const b = e.target.closest('.sg'); if (b) open(b.dataset.raw ? { discord_id: b.dataset.raw } : results[+b.dataset.i]); };
+  document.addEventListener('click', (e) => { if (body.isConnected && !e.target.closest('.rec-search')) sugg.hidden = true; });
+  q.focus();
+}
+
+const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+async function showRecord(box, id) {
+  box.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const [rec, roleQ, casesQ, logsQ] = await Promise.all([
+    sb.rpc('member_record', { discord_id: id }),
+    sb.from('roles').select(ROLE_FIELDS),
+    sb.from('mod_cases').select('*').eq('target_discord_id', id).neq('status', 'failed').order('created_at', { ascending: false }).limit(200),
+    sb.from('discord_logs').select('*').eq('user_discord_id', id).order('at', { ascending: false }).limit(200),
+  ]);
+  if (rec.error) { box.innerHTML = ''; return liveError(box, rec.error); }
+  const r = rec.data || {};
+  const all = roleQ.data || [];
+  const mine = new Set(r.role_ids || []);
+  const roles = all.filter((x) => mine.has(x.id)).sort((a, b) => b.position - a.position);
+  const depts = all.filter((x) => x.kind === 'department');
+  const cases = casesQ.data || [];
+  const warns = cases.filter((c) => c.action === 'warn');
+  // Incidents: every other case (timeouts, kicks, bans, notes) plus what the Discord logs saw happen to them.
+  const incidents = [...cases.filter((c) => c.action !== 'warn').map((c) => ({ kind: 'case', at: c.created_at, c })),
+    ...(logsQ.data || []).filter((l) => !['message_delete', 'message_edit'].includes(l.type)).map((l) => ({ kind: 'log', at: l.at, l }))]
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
+  const name = cleanName(r.display_name || r.username || id);
+
+  box.innerHTML = `
+    <div class="card rec-head">
+      <img class="avatar big" src="${esc(sized(r.avatar_url || '', 128))}" alt="" onerror="this.style.visibility='hidden'">
+      <div class="rec-who">
+        <h2 class="rec-name">${esc(name)}${r.banned ? ' <span class="st sub-denied">Banned</span>' : r.in_server === false ? ' <span class="st">Not in the server</span>' : ''}</h2>
+        <span class="muted small-meta">${r.username ? '@' + esc(r.username) + ' · ' : ''}${esc(id)}${r.joined_at ? ' · joined ' + esc(shortDate(r.joined_at)) : ''}${r.account_created_at ? ' · account made ' + esc(shortDate(r.account_created_at)) : ''}</span>
+        <div class="person-badges rec-badges">${roles.length ? personBadges(rosterBadges(roles, depts, null).concat(roles.some((x) => x.kind === 'verified') ? [{ label: 'Verified', color: roles.find((x) => x.kind === 'verified').badge_color, icon: 'verified' }] : [])) : '<span class="muted small">No roles</span>'}</div>
+      </div>
+    </div>
+    <div class="grid-4">
+      <div class="card tight stat${r.warnings ? ' stat-warn' : ''}"><span class="muted small-meta">Warnings</span><strong>${Number(r.warnings ?? warns.length)}</strong></div>
+      <div class="card tight stat"><span class="muted small-meta">Incidents</span><strong>${incidents.length}</strong></div>
+      <div class="card tight stat"><span class="muted small-meta">Messages (90 days)</span><strong>${Number(r.messages_90d || 0)}</strong></div>
+      <div class="card tight stat"><span class="muted small-meta">Shift hours (30 days)</span><strong>${Number(r.shift_hours_30d || 0).toFixed(1)}</strong></div>
+    </div>
+    <div class="toolbar"><div class="chips" id="rec-tabs">
+      <button class="chip on" data-t="warnings">Warnings <span class="count">${warns.length}</span></button>
+      <button class="chip" data-t="incidents">Incidents <span class="count">${incidents.length}</span></button>
+      <button class="chip" data-t="messages">Messages</button>
+      <button class="chip" data-t="details">Details</button></div></div>
+    <div id="rec-tab"></div>`;
+
+  const tab = box.querySelector('#rec-tab');
+  const caseRow = (c) => `<div class="row-item case">
+      <span class="act act-${esc(c.action)}">${esc(ACTION_LABEL[c.action] || c.action)}</span>
+      <div class="case-main"><div class="case-reason">${esc(c.reason)}${c.duration_minutes ? ` <span class="muted">· ${c.duration_minutes} min</span>` : ''}</div>
+        <div class="muted small-meta">by ${esc(c.moderator_name || 'unknown')} · ${esc(SOURCE_LABEL[c.source] || c.source)} · ${when(c.created_at)}</div></div>
+      ${c.status === 'pending' ? '<span class="st sub-pending">Pending</span>' : ''}</div>`;
+  const tabs = {
+    warnings: () => `<div class="card">${warns.length ? warns.map(caseRow).join('') : `<p class="muted small">${esc(name)} has no warnings.</p>`}</div>`,
+    incidents: () => `<div class="card">${incidents.length ? incidents.map((x) => x.kind === 'case' ? caseRow(x.c) : `
+      <div class="row-item log"><span class="log-type t-${esc(x.l.type)}">${esc(LOG_LABEL[x.l.type] || x.l.type)}</span>
+        <div class="case-main">${logDetail(x.l) || `<span class="muted">${x.l.channel_name ? 'in #' + esc(x.l.channel_name) : ''}</span>`}</div>
+        <span class="muted small-meta when">${when(x.l.at)}</span></div>`).join('') : '<p class="muted small">No incidents.</p>'}</div>`,
+    details: () => `<div class="card"><dl class="rec-dl">
+      <dt>Discord ID</dt><dd>${esc(id)}</dd>
+      ${r.username ? `<dt>Username</dt><dd>@${esc(r.username)}</dd>` : ''}
+      ${r.joined_at ? `<dt>Joined the server</dt><dd>${esc(shortDate(r.joined_at))}</dd>` : ''}
+      ${r.account_created_at ? `<dt>Account made</dt><dd>${esc(shortDate(r.account_created_at))}</dd>` : ''}
+      <dt>Last message</dt><dd>${r.last_message_at ? esc(when(r.last_message_at)) : 'None in the last 90 days'}</dd>
+      <dt>Shifts</dt><dd>${Number(r.shifts_total || 0)} in total · ${Number(r.shift_hours_total || 0).toFixed(1)} hours${r.last_shift_at ? ' · last ' + esc(when(r.last_shift_at)) : ''}</dd>
+      <dt>Timeouts · kicks · bans</dt><dd>${Number(r.timeouts || 0)} · ${Number(r.kicks || 0)} · ${Number(r.bans || 0)}</dd>
+      <dt>Roles</dt><dd>${roles.length ? roles.filter((x) => x.kind !== 'bot').map((x) => esc(x.name)).join(', ') : 'None'}</dd>
+    </dl></div>`,
+  };
+  const show = (t) => {
+    box.querySelectorAll('#rec-tabs .chip').forEach((x) => x.classList.toggle('on', x.dataset.t === t));
+    if (t === 'messages') return showMessages(tab, id);
+    tab.innerHTML = tabs[t]();
+  };
+  box.querySelector('#rec-tabs').onclick = (e) => { const b = e.target.closest('.chip'); if (b) show(b.dataset.t); };
+  show('warnings');
+}
+
+// Messages they've sent (kept 90 days), newest first, 50 at a time, with a search.
+async function showMessages(tab, id) {
+  const PAGE = 50;
+  let cursor = null, term = '', timer = null;
+  tab.innerHTML = `<div class="toolbar"><input class="rmsg-search" id="msg-q" placeholder="Search their messages" autocomplete="off"></div>
+    <div class="card rmsg-list" id="msg-list"><p class="muted small">Loading…</p></div>
+    <div class="center"><button class="ghost" id="msg-more" hidden>Load older messages</button></div>
+    <p class="muted small center">Saved from 17 Nov 2026 and kept for 90 days. Gaps mean the bot was offline.</p>`;
+  const list = tab.querySelector('#msg-list'), more = tab.querySelector('#msg-more');
+  async function load(fresh) {
+    if (fresh) cursor = null;
+    let qy = sb.from('discord_messages').select('*').eq('author_id', id).order('created_at', { ascending: false }).limit(PAGE);
+    if (cursor) qy = qy.lt('created_at', cursor);
+    if (term) qy = qy.ilike('content', `%${term.replace(/[%_]/g, '\\$&')}%`);
+    const { data, error } = await qy;
+    if (fresh) list.innerHTML = '';
+    if (error) return liveError(list, error);
+    if (fresh && !data.length) list.innerHTML = `<p class="muted small">${term ? 'No messages match that.' : 'No messages in the last 90 days.'}</p>`;
+    list.insertAdjacentHTML('beforeend', data.map((m) => `<div class="rmsg${m.deleted_at ? ' is-deleted' : ''}">
+        <div class="rmsg-meta"><strong>#${esc(m.channel_name || m.channel_id)}</strong><span class="muted">${when(m.created_at)}</span>
+          ${m.edited_at ? '<span class="st">Edited</span>' : ''}${m.deleted_at ? '<span class="st sub-denied">Deleted</span>' : ''}</div>
+        ${m.content ? `<div class="rmsg-text">${esc(m.content)}</div>` : ''}
+        ${(m.attachments || []).length ? `<div class="rmsg-files">${m.attachments.map((a) => `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.name || 'Attachment')}</a>`).join('')}</div>` : ''}
+      </div>`).join(''));
+    if (data.length) cursor = data[data.length - 1].created_at;
+    more.hidden = data.length < PAGE;
+  }
+  tab.querySelector('#msg-q').oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { term = e.target.value.trim(); load(true); }, 300); };
+  more.onclick = () => load(false);
+  load(true);
 }
 
 // ----- Discord logs (#admin/logs) -----
@@ -895,7 +1075,7 @@ async function renderLogs(body) {
   load(true);
 }
 
-const LIVE = { cases: renderCases, logs: renderLogs };
+const LIVE = { cases: renderCases, logs: renderLogs, records: renderRecords };
 
 // ----- Contact a team (#contact) and team tickets (#admin/tickets, #tickets) -----
 // Back end by Bravo (migration 0005): a ticket opens a private thread in the team's Discord channel; replies flow

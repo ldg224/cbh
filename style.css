@@ -578,3 +578,43 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .field-note { font-size: 12.5px; font-weight: 500; color: var(--muted); }
 .field-note.ok { color: var(--teal-ink); font-weight: 600; }
 .field-note.bad { color: #8a1c1c; }
+
+/* Failed Mod actions notice (0.12.0): red, top of the page, only for the admin who asked; X closes it for good. */
+.fail-notes { display: grid; gap: 8px; margin-bottom: 14px; }
+.fail-note { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px 11px 14px; border-radius: 10px;
+  background: #ffe6e3; border: 1px solid #f5aaa1; color: #6e1414; font-size: 14px; line-height: 1.45; }
+.fn-ico { flex: none; width: 18px; height: 18px; margin-top: 1px; background: #c42b2b;
+  -webkit-mask: url('assets/icons/error.png') center / contain no-repeat; mask: url('assets/icons/error.png') center / contain no-repeat; }
+.fn-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fn-x { flex: none; font: inherit; font-size: 20px; line-height: 1; width: 28px; height: 28px; margin: -4px -4px 0 0; border: 0; border-radius: 7px;
+  background: none; color: #8a1c1c; cursor: pointer; }
+.fn-x:hover { background: rgba(196, 43, 43, .12); }
+
+/* Records (0.12.0) */
+.rec-search { overflow: visible; }
+.rec-head { display: flex; align-items: center; gap: 18px; }
+.rec-who { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.card .rec-name, .rec-name { margin: 0; color: var(--text); text-transform: none; font-size: 22px; font-weight: 800; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rec-badges { justify-content: flex-start; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.stat-warn { border-color: #f5d77a; background: #fffaf0; }
+.chip .count { margin-left: 4px; opacity: .7; }
+.rec-dl { display: grid; grid-template-columns: max-content 1fr; gap: 10px 20px; margin: 0; font-size: 14px; }
+.rec-dl dt { color: var(--muted); font-weight: 600; }
+.rec-dl dd { margin: 0; overflow-wrap: anywhere; }
+.rmsg-search { flex: 1; font: inherit; font-size: 14.5px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.rmsg-search:focus { outline: 2px solid rgba(58, 130, 208, .35); border-color: var(--blue); }
+.rmsg { padding: 12px 0; border-top: 1px solid var(--line); display: grid; gap: 5px; }
+.rmsg:first-child { border-top: 0; padding-top: 0; }
+.rmsg-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.rmsg-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; }
+.rmsg.is-deleted .rmsg-text { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(138, 28, 28, .4); }
+.rmsg-files { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+@media (max-width: 560px) {
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .rec-head { align-items: flex-start; gap: 14px; }
+  .rec-head .avatar.big { width: 56px; height: 56px; }
+  .rec-name { font-size: 19px; }
+  .rec-dl { grid-template-columns: 1fr; gap: 2px; }
+  .rec-dl dd { margin-bottom: 8px; }
+}

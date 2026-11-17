@@ -149,6 +149,11 @@
         "id": "10053",
         "commonName": "calendar",
         "use": "Sessions (Directors hub, Admin hub)"
+      },
+      "user-folder": {
+        "id": "57067",
+        "commonName": "user-folder--v2",
+        "use": "Records (Admin hub)"
       }
     }
   }
