@@ -135,7 +135,7 @@ async function renderApplications(body) {
   const st = { dept: 'all', done: false };
   body.innerHTML = `
     <div class="app-bar">
-      <div class="ma-chips" id="app-depts">${['all', ...depts].map((d) => `<button type="button" class="chip${d === 'all' ? ' on' : ''}" data-d="${esc(d)}">${d === 'all' ? 'All departments' : esc(d)}<span class="count"></span></button>`).join('')}</div>
+      <div class="ma-chips" id="app-depts"${depts.length > 1 ? '' : ' hidden'}>${['all', ...depts].map((d) => `<button type="button" class="chip${d === 'all' ? ' on' : ''}" data-d="${esc(d)}">${d === 'all' ? 'All departments' : esc(d)}<span class="count"></span></button>`).join('')}</div>
       <div class="app-bar-r">
         <div class="ma-seg" id="app-seg" role="group" aria-label="Show"><button type="button" data-done="0" aria-pressed="true">Waiting</button><button type="button" data-done="1" aria-pressed="false">Decided</button></div>
         <button type="button" class="gear" id="app-gear" aria-label="Application settings" hidden></button>

@@ -568,6 +568,10 @@ function commandsPage() {
 // #exec, #admin/logs, #shifts… Anything else = home. Only while logged in, and only pages this person may see.
 let homeReady = false;   // the new home (home.js) shows once your member row has loaded
 function findRoute() {
+  // The bot links every application to #admin/applications/<id>; reviewers outside Admin use #review/<id>.
+  if (location.hash.startsWith('#admin/applications') && !canSee('admin') && canSee('reviewer-lead')) {
+    location.replace('#review' + location.hash.slice('#admin/applications'.length)); return null;
+  }
   const [a, b] = location.hash.slice(1).split('/');
   if (a === 'f') {   // a folder opened as its own page (home.js)
     const folder = FOLDERS.find((f) => f.id === b);
