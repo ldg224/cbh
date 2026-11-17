@@ -1,0 +1,140 @@
+/* CareBeyond Desk (Bravo, phase 1 of the rebuild the owner approved on 18 Nov 2026).
+   One sidebar: logo, search, Home, My stuff, your departments as coloured folders that open into their pages,
+   Hospital tools, a live-session card and you (Clock in, Log out). Phones: the sidebar is a drawer, with a top bar
+   and bottom tabs. Loaded after style.css; every rule is scoped to body.desk so logged-out pages are unchanged. */
+
+:root { --desk-w: 272px; --desk-top: 56px; --desk-tabs: 62px; --desk-hover: #e9f0f9; --desk-active: #dfe8f5; --desk-faint: #8a9ab8; --desk-red: #e5484d; }
+
+/* ---------- layout ---------- */
+body.desk { padding-left: var(--desk-w); }
+body.desk > .bar { display: none; }
+body.desk main { padding-top: 28px; }
+body.desk .page-head .back { display: none; }
+.desk-side, .desk-top, .desk-tabs, .desk-scrim { display: none; }
+body.desk .desk-side { display: flex; }
+
+.desk-side { position: fixed; z-index: 60; inset: 0 auto 0 0; width: var(--desk-w); flex-direction: column;
+  background: #f7fafd; border-right: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); padding-left: env(safe-area-inset-left, 0px); }
+.ds-brand { height: 62px; display: flex; align-items: center; gap: 10px; padding: 0 18px; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--line); flex: none; }
+.ds-brand img { width: 32px; height: 32px; }
+.ds-brand .wm-care { font-weight: 500; } .ds-brand .wm-beyond { font-weight: 800; }
+.ds-brand .ds-wm { font-size: 18px; letter-spacing: -.015em; }
+.ds-search { margin: 14px 14px 6px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); background: var(--panel);
+  border-radius: 11px; padding: 10px 12px; color: var(--muted); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; text-align: left; flex: none; }
+.ds-search:hover { border-color: var(--blue); color: var(--text); }
+.ds-search kbd { margin-left: auto; font: 700 11px inherit; font-family: inherit; background: var(--raised); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; }
+.ds-nav { flex: 1; overflow-y: auto; padding: 6px 10px 12px; display: grid; gap: 1px; align-content: start; scrollbar-width: thin; }
+.ds-cat { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--desk-faint); padding: 16px 10px 5px; }
+.ds-link { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: 14px;
+  text-decoration: none; border: 0; background: none; width: 100%; text-align: left; font-family: inherit; cursor: pointer; min-width: 0; }
+.ds-link:hover { background: var(--desk-hover); color: var(--text); }
+.ds-link[aria-current="page"] { background: var(--desk-active); color: var(--text); }
+.ds-link .ds-i { width: 18px; height: 18px; flex: none; background: currentColor; opacity: .85;
+  -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.ds-link .ds-lab { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-link.soon { cursor: default; opacity: .7; }
+.ds-link.soon:hover { background: none; color: var(--muted); }
+.ds-tag { margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--blue-deep); background: #e8f0fb; border-radius: 6px; padding: 1px 6px; flex: none; }
+.ds-n { margin-left: auto; min-width: 19px; height: 19px; padding: 0 6px; border-radius: 999px; background: var(--desk-red); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; flex: none; }
+
+/* department folders */
+.ds-dept { display: flex; align-items: center; gap: 11px; padding: 7px 9px; border-radius: 11px; border: 0; background: none; width: 100%;
+  text-align: left; font-family: inherit; color: var(--text); cursor: pointer; min-width: 0; }
+.ds-dept:hover { background: var(--desk-hover); }
+.ds-dept.open { background: color-mix(in srgb, var(--c) 9%, #fff); }
+.ds-tile { width: 32px; height: 32px; border-radius: 10px; flex: none; position: relative;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 72%, #3d2a8f), var(--c)); box-shadow: 0 2px 8px color-mix(in srgb, var(--c) 30%, transparent); }
+.ds-tile::after { content: ""; position: absolute; inset: 7px; background: #fff; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.ds-dname { min-width: 0; display: grid; line-height: 1.25; }
+.ds-dname b { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-dname small { font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-chev { margin-left: auto; width: 14px; height: 14px; flex: none; color: var(--desk-faint); transition: transform .15s ease; }
+.ds-dept .ds-n + .ds-chev { margin-left: 6px; }
+.ds-dept.open .ds-chev { transform: rotate(90deg); }
+.ds-sub { margin: 2px 0 8px 25px; padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--c) 40%, #fff); display: grid; gap: 1px; }
+.ds-sub .ds-link { padding: 6px 10px; font-size: 13.5px; }
+.ds-sub .ds-link[aria-current="page"] { background: color-mix(in srgb, var(--c) 13%, #fff); box-shadow: inset 3px 0 0 var(--c); }
+
+/* live session card + you */
+.ds-session { margin: 0 12px 10px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; flex: none; }
+.ds-srow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ds-live { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 12.5px; color: var(--muted); }
+.ds-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--desk-faint); flex: none; }
+.ds-session.live .ds-live { color: #14803d; }
+.ds-session.live .ds-live::before { background: #16b364; box-shadow: 0 0 0 3px rgba(22, 179, 100, .18); }
+.ds-smeta { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-code { font-weight: 800; letter-spacing: .05em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ds-mini { margin-left: auto; border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 4px 9px; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; color: var(--text); }
+.ds-mini:hover { border-color: var(--blue); }
+.ds-me { display: grid; gap: 9px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: #eef3fa; flex: none; }
+.ds-merow { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ds-ini { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #fff; background: linear-gradient(135deg, var(--blue-deep), var(--teal)); }
+.ds-av { width: 36px; height: 36px; border-radius: 50%; flex: none; position: relative; background: var(--raised); }
+.ds-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.ds-av::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; border: 2.5px solid #eef3fa; background: var(--desk-faint); }
+.ds-av.on::after { background: #16b364; } .ds-av.brk::after { background: #e09a00; }
+.ds-who { min-width: 0; flex: 1; display: grid; line-height: 1.25; }
+.ds-who b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-who span { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-clock { border: 0; border-radius: 9px; padding: 9px 11px; width: 100%; font: inherit; font-weight: 800; font-size: 12px; background: var(--teal); color: var(--text); cursor: pointer; white-space: nowrap; flex: none; }
+.ds-clock.end { background: #fde3e4; color: #9b1c1f; }
+.ds-clock:disabled { opacity: .6; cursor: default; }
+.ds-out { width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: none; cursor: pointer; flex: none; display: grid; place-items: center; color: var(--muted); }
+.ds-out:hover { border-color: var(--line); background: var(--panel); color: #9b1c1f; }
+.ds-out span { width: 17px; height: 17px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+
+/* ---------- Desk Home (phase 2) ---------- */
+body.desk .h-sec { margin-top: 26px; }
+.hd-list { display: grid; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.hd-item { display: flex; align-items: center; gap: 13px; padding: 13px 16px; text-decoration: none; color: var(--text); min-width: 0; }
+.hd-item + .hd-item { border-top: 1px solid var(--line); }
+.hd-item:hover { background: #f7fafd; }
+.hd-ico { width: 38px; height: 38px; border-radius: 11px; flex: none; position: relative; background: color-mix(in srgb, var(--c) 13%, #fff); }
+.hd-ico::after { content: ""; position: absolute; inset: 10px; background: color-mix(in srgb, var(--c) 80%, #0b1e4a); -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.hd-txt { flex: 1; min-width: 0; display: grid; } .hd-txt b { font-weight: 700; overflow-wrap: anywhere; } .hd-txt span { font-size: 12.5px; color: var(--muted); }
+.hd-go { flex: none; font-weight: 800; font-size: 13px; background: var(--teal); color: var(--text); border-radius: 9px; padding: 7px 13px; }
+.hd-depts { display: grid; gap: 12px; }
+.hd-dept { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 16px; color: #fff; text-decoration: none; position: relative; overflow: hidden;
+  background: linear-gradient(120deg, #3d2a8f 0%, #6a4fd6 12%, var(--dept) 55%, color-mix(in srgb, var(--dept) 70%, #fff) 100%);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--dept) 22%, transparent); transition: transform .15s ease, box-shadow .15s ease; }
+.hd-dept:hover { transform: translateY(-1px); box-shadow: 0 10px 26px color-mix(in srgb, var(--dept) 30%, transparent); }
+.hd-dept:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+.hd-dept::after { content: ""; position: absolute; right: 70px; bottom: -26px; width: 110px; height: 110px; background: #fff; opacity: .12; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.hd-dtile { width: 46px; height: 46px; border-radius: 13px; flex: none; position: relative; background: rgba(255, 255, 255, .2); border: 1px solid rgba(255, 255, 255, .3); }
+.hd-dtile::after { content: ""; position: absolute; inset: 11px; background: #fff; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.hd-dname { display: grid; min-width: 0; flex: 1; position: relative; z-index: 1; } .hd-dname b { font-size: 19px; font-weight: 800; letter-spacing: -.01em; } .hd-dname span { font-size: 12.5px; opacity: .92; }
+.hd-arrow { width: 44px; height: 44px; flex: none; position: relative; z-index: 1; padding: 9px; border-radius: 50%; background: rgba(255, 255, 255, .2); border: 1px solid rgba(255, 255, 255, .35); }
+@media (prefers-reduced-motion: reduce) { .hd-dept { transition: none; } .hd-dept:hover { transform: none; } }
+.hd-apply { display: grid; gap: 6px; justify-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.hd-apply span { color: var(--muted); font-size: 13.5px; }
+.hd-apply a { text-decoration: none; margin-top: 4px; }
+
+/* department pages: the sidebar holds the tabs on computers */
+/* Department pages keep their own tab bar too (owner, 18 Nov 2026): the full view stays, the sidebar is a shortcut. */
+
+/* ---------- phones ---------- */
+@media (max-width: 860px) {
+  body.desk { padding-left: 0; padding-top: calc(var(--desk-top) + env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--desk-tabs) + env(safe-area-inset-bottom, 0px)); }
+  body.desk main { padding-top: 18px; }
+  body.desk .desk-top { display: flex; }
+  body.desk .desk-tabs { display: grid; }
+  .desk-side { width: min(320px, 86vw); transform: translateX(-102%); transition: transform .22s ease; box-shadow: 10px 0 30px rgba(11, 30, 74, .14); }
+  body.desk-open .desk-side { transform: none; }
+  body.desk-open .desk-scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(11, 30, 74, .28); }
+  .desk-top { position: fixed; z-index: 50; inset: 0 0 auto 0; height: calc(var(--desk-top) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
+    align-items: center; gap: 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .desk-top .ds-brand { border: 0; height: auto; padding: 0 4px; }
+  .desk-top .ds-brand img { width: 28px; height: 28px; }
+  .dt-btn { width: 40px; height: 40px; border-radius: 10px; border: 0; background: none; display: grid; place-items: center; color: var(--text); cursor: pointer; flex: none; }
+  .dt-btn:hover { background: var(--raised); }
+  .dt-btn span { width: 22px; height: 22px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+  .desk-top .dt-search { margin-left: auto; }
+  .desk-tabs { position: fixed; z-index: 50; inset: auto 0 0 0; height: calc(var(--desk-tabs) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--panel); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); }
+  .desk-tabs a, .desk-tabs button { display: grid; justify-items: center; align-content: center; gap: 3px; border: 0; background: none; font: inherit; font-size: 11px; font-weight: 700;
+    color: var(--muted); text-decoration: none; cursor: pointer; position: relative; }
+  .desk-tabs [aria-current="page"] { color: var(--text); }
+  .desk-tabs .dt-i { width: 23px; height: 23px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+  .desk-tabs .ds-n { position: absolute; top: 6px; left: 54%; margin: 0; height: 17px; min-width: 17px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .desk-side, .ds-chev { transition: none; } }

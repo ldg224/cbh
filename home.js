@@ -137,8 +137,11 @@ function homeShell() {
       <div class="h-sugg" id="h-sugg"></div>
     </div>
     <div id="h-live"></div>
-    <section class="h-sec" id="h-pins-sec"></section>
-    <section class="h-sec"><h2 class="h-label">Everything you can use</h2><div class="h-folders" id="h-folders"></div></section>`;
+    ${document.body.classList.contains('desk')
+      // Desk (phase 2): what needs you, then your departments; the sidebar replaces the folders.
+      ? `<section class="h-sec" id="h-need-sec"></section><section class="h-sec" id="h-dept-sec"></section><section class="h-sec" id="h-pins-sec"></section>`
+      : `<section class="h-sec" id="h-pins-sec"></section>
+    <section class="h-sec"><h2 class="h-label">Everything you can use</h2><div class="h-folders" id="h-folders"></div></section>`}`;
 }
 
 async function renderHome() {
@@ -155,8 +158,54 @@ function drawHome() {
   drawSuggestions(tools);
   drawLive();
   drawPins(tools);
-  $('h-folders').innerHTML = FOLDERS.map((f) => folderCard(f, tools.filter((t) => t.folder === f.id))).join('');
+  if ($('h-folders')) $('h-folders').innerHTML = FOLDERS.map((f) => folderCard(f, tools.filter((t) => t.folder === f.id))).join('');
+  if ($('h-need-sec')) { drawNeeds(); drawDeptCards(); }
   tickHome();
+}
+
+// ---------- Desk Home (phase 2) ----------
+// "Needs you": the things waiting on this person that home_counts already knows (applications, failed actions,
+// tickets), each with a button that goes straight to it. Phase 3 adds each department's To do (promotions,
+// observations, attendance, inactive members) from a database summary.
+function drawNeeds() {
+  const h = HC || {}, out = [];
+  // Per department, from my_todo() (desk.js, migration 0045): only what this person may act on.
+  const todo = window.deskTodo || {};
+  for (const d of DEPARTMENTS) {
+    const t = todo[d.name]; if (!t) continue;
+    const base = `#directors/${d.id}`, c = d.color;
+    if (n0(t.apps)) out.push({ ico: 'resume', c, t: `${plural(n0(t.apps), 'application')} to review`, s: d.name + (t.apps_oldest ? ' \u00b7 oldest ' + when(t.apps_oldest) : ''), b: 'Review', href: base + '/applications' });
+    for (const m of (t.attendance_list || []).slice(0, 2)) out.push({ ico: 'calendar', c, t: `Take attendance for ${m.title}`, s: d.name + ' \u00b7 ' + when(m.at), b: 'Take attendance', href: base + '/meetings' });
+    if (n0(t.attendance) > 2) out.push({ ico: 'calendar', c, t: `${n0(t.attendance) - 2} more meetings need attendance`, s: d.name, b: 'Open', href: base + '/meetings' });
+    if (n0(t.inactive)) { const names = (t.inactive_list || []).slice(0, 3).map((x) => cleanName(x.name)).join(', ');
+      out.push({ ico: 'clock', c, t: `${plural(n0(t.inactive), 'member')} inactive for 14 days`, s: d.name + (names ? ' \u00b7 ' + names + (n0(t.inactive) > 3 ? '\u2026' : '') : ''), b: 'See who', href: base + '/members' }); }
+    if (n0(t.failed)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(t.failed), 'rank change')} didn\u2019t go through`, s: d.name, b: 'See why', href: base + '/history' });
+  }
+  if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: '#admin/cases' });
+  const tk = canSee('admin') ? '#admin/tickets' : canSee('leads') ? '#tickets' : '';
+  if (n0(h.tickets_open) && tk) out.push({ ico: 'inbox', c: '#3a82d0', t: `${plural(n0(h.tickets_open), 'ticket')} open`,
+    s: h.tickets_latest && h.tickets_latest.name ? `Latest from ${cleanName(h.tickets_latest.name)}${h.tickets_latest.team ? ' · ' + h.tickets_latest.team : ''}` : 'Waiting for a reply', b: 'Reply', href: tk });
+  const sec = $('h-need-sec');
+  sec.innerHTML = out.length ? `<h2 class="h-label">Needs you</h2><div class="hd-list">${out.map((x) => `<a class="hd-item" href="${x.href}" style="--c:${x.c}">
+      <span class="hd-ico" style="--icon:${iconUrl(x.ico)}" aria-hidden="true"></span><span class="hd-txt"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></span>
+      <span class="hd-go">${esc(x.b)}</span></a>`).join('')}</div>` : '';
+}
+function drawDeptCards() {
+  const h = HC || {};
+  const mine = DEPARTMENTS.filter((d) => canSee('dir:' + d.name));
+  const sec = $('h-dept-sec');
+  if (!mine.length) {
+    sec.innerHTML = myDepartments.length ? '' : `<div class="hd-apply"><b>Join a department</b><span>Apply to Nursing, Paramedicine, Administration or Community Engagement.</span><a class="refresh" href="#apply">Apply</a></div>`;
+    return;
+  }
+  // Owner (18 Nov 2026): "Departments", one row each with a big arrow that opens the full department page.
+  sec.innerHTML = `<h2 class="h-label">Departments</h2><div class="hd-depts">${mine.map((d) => {
+    const mem = n0(h.dept_members && h.dept_members[d.name]), on = n0(h.dept_on_now && h.dept_on_now[d.name]);
+    const line = [mem && `${mem} member${mem === 1 ? '' : 's'}`, on && `${on} on shift now`].filter(Boolean).join(' \u00b7 ');
+    return `<a class="hd-dept" href="#directors/${d.id}" style="--dept:${d.color};--icon:${iconUrl(d.icon)}" aria-label="Open ${esc(d.name)}">
+      <span class="hd-dtile" aria-hidden="true"></span><span class="hd-dname"><b>${esc(d.name)}</b>${line ? `<span>${esc(line)}</span>` : ''}</span>
+      <svg class="hd-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></a>`;
+  }).join('')}</div>`;
 }
 
 function cardHtml(t, big) {

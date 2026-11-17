@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.21.0 (2026-11-18)
+
+**Added:**
+- **CareBeyond Desk**, a new layout. One sidebar with search, **Home**, **My stuff** (My shift, Sessions, My courses, Contact a team, Apply, Staff directory), **Departments** as coloured folders that open into their pages, **Hospital tools** and **Help**. The live session card with the join code and **Copy**, and **Clock in**, **Clock out** and **Log out** by your name. On phones: a drawer, a top bar and bottom tabs.
+- **New Home:** greeting and search, the session and shift bar, **Needs you**, **Departments** (one row each, opening the full department page) and your pins.
+- **To do:** red badges on your departments, and **Needs you** lists what's waiting on you there: applications to review, meetings needing attendance, members inactive for 14 days, and rank changes that didn't go through. Each has a button that goes straight to it, and only what you're allowed to act on is shown.
+
+Bot: no change.
+Database change: yes, migration 0045 (the To do summary; already applied).
+
 ## 0.20.0 (2026-11-18)
 
 **Added:**

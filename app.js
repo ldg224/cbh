@@ -286,6 +286,7 @@ function draw(data) {
   setAccess(me, roles, data.access);
   buildSessionBanner(data.session);
   buildMenu();
+  window.deskDraw?.(data);   // the Desk sidebar (desk.js)
   loadFailNotices();
   route();
   // No "how this page works" text: the note only appears for loading and errors.
@@ -355,7 +356,7 @@ function onSession(session) {
   $('session-admin').hidden = true;
   stopCodeLogin();
   showLoginView('main');
-  if (!user) { drawLastAccount(); return; }
+  if (!user) { window.deskOff?.(); drawLastAccount(); return; }
   const meta = user.user_metadata || {};
   const name = meta.full_name || meta.custom_claims?.global_name || meta.name || 'staff member';
   $('name').textContent = cleanName(name);
@@ -1583,6 +1584,7 @@ function buildSessionBanner(sess) {
     status.textContent = '';
   }
   status.hidden = !status.textContent;
+  window.deskRefresh?.();
 }
 $('copy-join').addEventListener('click', async () => {
   try {
