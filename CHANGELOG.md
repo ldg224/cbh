@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.17.0 (2026-11-18)
+
+**Added:**
+- **Department pages** (Administration, Community Engagement, Nursing, Paramedicine) are redesigned.
+  - A new banner and tabs: **Overview**, **Members** and **History** (**Courses** and **Meetings** are coming).
+  - The member list has search, filters, each person's hours over the last 4 weeks and a flag for inactive members.
+  - Every year or rank change, add and removal can take an optional **reason**, shown in History.
+
+Bot: no change.
+Database change: yes, migration 0023 (reasons on rank changes, weekly hours per department).
+
 ## 0.16.2 (2026-11-18)
 
 **Changed:**
