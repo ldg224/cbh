@@ -1,77 +1,56 @@
-/* Discord logs (#admin/logs), 0.16.x redesign. Loaded after cases.css: reuses .ma-search, .ma-chips, .ma-section,
-   .ma-day, .ma-name, .ma-len, .ma-empty and the .face pictures. */
+/* Discord logs (#admin/logs): one compact line per entry, a small Find bar. 0.16.2 (owner: "a full list of logs"). */
 
-.lg-tools { display: grid; gap: 10px; margin-bottom: 18px; }
-#lg-list { display: grid; gap: 18px; }
-.lg-group { padding: 4px 18px; }
-.lg-loading { margin: 14px 0; }
+.lg-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.lg-find { display: flex; align-items: center; gap: 8px; width: min(300px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; }
+.lg-find:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(58, 130, 208, .15); }
+.lg-find input { flex: 1; min-width: 0; border: 0; outline: 0; font: inherit; font-size: 14px; color: var(--text); background: transparent; }
+.lg-find .h-glass { width: 13px; height: 13px; border-width: 2px; }
+.lg-find .h-glass::after { width: 5px; height: 2px; right: -4px; bottom: -2px; }
+.lg-count { font-size: 12.5px; color: var(--muted); }
 
-/* "N new entries" (only shown when asked) */
-.lg-new { display: flex; align-items: center; gap: 10px; width: 100%; margin: -4px 0 16px; padding: 10px 14px; font: inherit; font-size: 14px; font-weight: 600;
-  color: var(--text); background: var(--teal-wash); border: 1px solid rgba(46, 211, 198, .6); border-radius: 10px; cursor: pointer; text-align: left; }
-.lg-new[hidden] { display: none; }
-.lg-new:hover { border-color: var(--teal); }
-.lg-new-go { margin-left: auto; color: var(--teal-ink); }
-.lg-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 4px rgba(46, 211, 198, .25); }
+.lg-list { padding: 0; overflow: hidden; }
+.lg-msg { margin: 0; padding: 14px 18px; font-size: 14px; color: var(--muted); }
+.lg-line { display: grid; grid-template-columns: 124px 146px minmax(0, 1fr); gap: 14px; align-items: baseline; padding: 8px 18px;
+  border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.5; }
+.lg-line:first-child { border-top: 0; }
+.lg-line:hover { background: var(--page); }
+.lg-t { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* ---------- rows ---------- */
-.lg-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
-.lg-row:first-child { border-top: 0; }
-.lg-main { flex: 1; min-width: 0; display: grid; gap: 6px; }
-.lg-line1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ma-name.unknown { color: var(--muted); font-weight: 600; }
-.lg-meta { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+/* what happened: coloured text with a small dot, no pill */
+.lg-ev { display: inline-flex; align-items: baseline; gap: 7px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--muted); }
+.lg-ev::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; transform: translateY(-1px); }
+.t-message_delete, .t-member_ban { color: #b42318; }
+.t-message_edit, .t-timeout { color: #a5560a; }
+.t-member_join, .t-member_unban { color: var(--teal-ink); }
+.t-roles_change, .t-nickname_change { color: var(--blue-deep); }
 
-/* type tags: one quiet colour per kind */
-.lg-tag { flex: none; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap;
-  background: var(--raised); border: 1px solid var(--line); color: var(--text); }
-.t-message_delete, .t-member_ban { background: #ffe9e6; border-color: #f5b8b0; color: #8a1c1c; }
-.t-message_edit, .t-timeout { background: #fff3e2; border-color: #f6cf9a; color: #7a4206; }
-.t-member_join, .t-member_unban { background: var(--teal-wash); border-color: rgba(46, 211, 198, .6); color: var(--teal-ink); }
-.t-roles_change, .t-nickname_change { background: #e8f1fb; border-color: #b9d3ef; color: var(--blue-deep); }
+.lg-body { min-width: 0; overflow-wrap: anywhere; }
+.lg-head { margin-right: 8px; }
+.lg-who { font: inherit; font-weight: 700; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.lg-who:hover { color: var(--blue-deep); text-decoration: underline; }
+.lg-who.plain { cursor: default; color: var(--muted); font-weight: 600; }
+.lg-ch { margin-left: 6px; color: var(--muted); }
+.lg-txt { white-space: pre-wrap; }
+.lg-txt.was { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(85, 104, 140, .5); }
+.lg-txt.none, .lg-txt.dim { color: var(--muted); }
+.lg-txt.none { font-style: italic; }
+.lg-to { margin: 0 6px; color: var(--muted); }
+.lg-files { margin-left: 8px; font-size: 12.5px; color: var(--muted); }
+.lg-files::before { content: "Files: "; }
+.lg-jump { margin-left: 6px; font-size: 12.5px; font-weight: 600; color: var(--blue-deep); }
+.lg-roles { display: inline; }
+.lg-r { margin-right: 10px; font-weight: 600; white-space: nowrap; }
+.lg-r.add { color: var(--teal-ink); }
+.lg-r.rem { color: #b42318; }
+.lg-flag { margin-left: 8px; font-size: 11.5px; font-weight: 600; padding: 0 7px; border-radius: 999px; background: #fff3e2; border: 1px solid #f6cf9a; color: #7a4206; }
 
-/* message text */
-.lg-quote { padding: 7px 11px; border-left: 3px solid var(--line); background: var(--raised); border-radius: 0 8px 8px 0;
-  font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
-.lg-quote.was { color: var(--muted); }
-.lg-edit { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: start; }
-.lg-lbl { padding-top: 8px; font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-.lg-note { font-size: 13.5px; color: var(--muted); font-style: italic; }
-.lg-files { display: flex; flex-wrap: wrap; gap: 6px; }
-.lg-file { font-size: 12.5px; padding: 2px 8px; border-radius: 6px; background: var(--raised); border: 1px solid var(--line); overflow-wrap: anywhere; }
-.lg-link { justify-self: start; font-size: 13px; font-weight: 600; color: var(--blue-deep); }
-.lg-sub { font-size: 13.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.lg-flag { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #fff3e2; border: 1px solid #f6cf9a; color: #7a4206; }
-
-/* role changes: a chip per role with its Discord colour */
-.lg-roles { display: flex; flex-wrap: wrap; gap: 6px; }
-.lg-role { --rc: #99aac4; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 10px 3px 4px; border-radius: 999px;
-  font-size: 13px; font-weight: 500; background: var(--panel); border: 1px solid var(--line); overflow-wrap: anywhere; }
-.lg-sign { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; line-height: 1; }
-.lg-role.add .lg-sign { background: var(--teal-wash); color: var(--teal-ink); }
-.lg-role.rem .lg-sign { background: #ffe9e6; color: #a52323; }
-.lg-role.rem { color: var(--muted); }
-.lg-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--rc); box-shadow: inset 0 0 0 1px rgba(11, 30, 74, .18); }
-
-/* nickname */
-.lg-nick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; overflow-wrap: anywhere; }
-.lg-nick .was { color: var(--muted); }
-.lg-arrow { color: var(--muted); }
-
-/* several changes in one row */
-.lg-steps { display: grid; gap: 8px; }
-.lg-step { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: start; }
-.lg-step-t { padding-top: 4px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.lg-more-steps { justify-self: start; font: inherit; font-size: 13px; font-weight: 600; color: var(--blue-deep); background: none; border: 0; padding: 0; cursor: pointer; }
-.lg-more-steps:hover { text-decoration: underline; }
-
+@media (max-width: 760px) {
+  .lg-line { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ev t" "body body"; gap: 2px 10px; padding: 9px 14px; }
+  .lg-ev { grid-area: ev; }
+  .lg-t { grid-area: t; text-align: right; }
+  .lg-body { grid-area: body; }
+}
 @media (max-width: 560px) {
-  .lg-group { padding: 2px 14px; }
-  .lg-row { gap: 10px; }
-  .lg-row .face-m { width: 32px; height: 32px; font-size: 13px; }
-  .lg-edit { grid-template-columns: 1fr; gap: 4px; }
-  .lg-lbl { padding-top: 0; }
-  .lg-step { grid-template-columns: 1fr; gap: 2px; }
-  .lg-step-t { padding-top: 0; }
+  .lg-find { width: 100%; }
+  .lg-bar { flex-wrap: wrap; gap: 6px; }
 }
