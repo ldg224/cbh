@@ -720,71 +720,9 @@ async function loadFailNotices() {
 
 // Records (#admin/records) lives in records.js since the 0.15.x redesign.
 
-// ----- Discord logs (#admin/logs) -----
-const LOG_GROUPS = [
-  { id: 'all', label: 'All', types: null },
-  { id: 'messages', label: 'Messages', types: ['message_delete', 'message_edit'] },
-  { id: 'members', label: 'Joins & leaves', types: ['member_join', 'member_leave'] },
-  { id: 'roles', label: 'Roles & names', types: ['roles_change', 'nickname_change'] },
-  { id: 'mod', label: 'Moderation', types: ['member_ban', 'member_unban', 'timeout'] },
-];
-const LOG_LABEL = {
-  message_delete: 'Message deleted', message_edit: 'Message edited', member_join: 'Joined', member_leave: 'Left',
-  member_ban: 'Banned', member_unban: 'Unbanned', roles_change: 'Roles changed', nickname_change: 'Nickname changed', timeout: 'Timed out',
-};
-function logDetail(l) {
-  const d = l.details || {};
-  switch (l.type) {
-    case 'message_delete': return `<div class="log-quote">${esc(d.content || '(no text)')}</div>${d.attachments?.length ? `<div class="muted small-meta">${d.attachments.length} attachment(s)</div>` : ''}`;
-    case 'message_edit': return `<div class="log-quote was">${esc(d.before || '')}</div><div class="log-quote">${esc(d.after || '')}</div>`;
-    case 'roles_change': return `<div class="small-meta">${(d.added || []).map((r) => `<span class="rchip add">+ ${esc(r)}</span>`).join('')}${(d.removed || []).map((r) => `<span class="rchip rem">− ${esc(r)}</span>`).join('')}</div>`;
-    case 'nickname_change': return `<div class="small-meta">${esc(d.before || '(none)')} → ${esc(d.after || '(none)')}</div>`;
-    case 'member_join': return d.account_age_days != null ? `<div class="muted small-meta">Account ${d.account_age_days} days old${d.account_age_days < 7 ? ' · <strong class="warn-text">new account</strong>' : ''}</div>` : '';
-    default: return '';
-  }
-}
+// Discord logs (#admin/logs) lives in logs.js since the 0.16.x redesign.
 
-async function renderLogs(body) {
-  const PAGE = 50;
-  let group = 'all', offset = 0;
-  body.innerHTML = `
-    <div class="toolbar"><div class="chips" id="log-filter">${LOG_GROUPS.map((g) =>
-      `<button class="chip${g.id === 'all' ? ' on' : ''}" data-g="${g.id}">${g.label}</button>`).join('')}</div></div>
-    <div class="card" id="log-list"><p class="muted small">Loading…</p></div>
-    <div class="center"><button class="ghost" id="log-more" hidden>Load more</button></div>
-    <p class="muted small center">Gaps mean the bot was offline: Discord events from that time can't be recorded.</p>`;
-  const list = body.querySelector('#log-list');
-  body.querySelector('#log-filter').onclick = (e) => {
-    const b = e.target.closest('.chip'); if (!b) return;
-    group = b.dataset.g; offset = 0;
-    body.querySelectorAll('#log-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
-    load(true);
-  };
-  body.querySelector('#log-more').onclick = () => load(false);
-  async function load(fresh) {
-    let q = sb.from('discord_logs').select('*').order('at', { ascending: false }).range(offset, offset + PAGE - 1);
-    const g = LOG_GROUPS.find((x) => x.id === group);
-    if (g.types) q = q.in('type', g.types);
-    const { data, error } = await q;
-    if (fresh) list.innerHTML = '';
-    if (error) return liveError(list, error);
-    if (fresh && !data.length) list.innerHTML = '<p class="muted small">Nothing logged yet.</p>';
-    list.insertAdjacentHTML('beforeend', data.map((l) => `
-      <div class="row-item log">
-        <span class="log-type t-${esc(l.type)}">${esc(LOG_LABEL[l.type] || l.type)}</span>
-        <div class="case-main">
-          <div><strong>${esc(l.user_name || l.user_discord_id || 'Unknown')}</strong>${l.channel_name ? ` <span class="muted">in #${esc(l.channel_name)}</span>` : ''}</div>
-          ${logDetail(l)}
-        </div>
-        <span class="muted small-meta when">${when(l.at)}</span>
-      </div>`).join(''));
-    offset += data.length;
-    body.querySelector('#log-more').hidden = data.length < PAGE;
-  }
-  load(true);
-}
-
-const LIVE = { logs: renderLogs };   // cases and records: added by cases.js and records.js
+const LIVE = {};   // logs, cases and records: added by logs.js, cases.js and records.js
 
 // ----- Contact a team (#contact) and team tickets (#admin/tickets, #tickets) -----
 // Back end by Bravo (migration 0005): a ticket opens a private thread in the team's Discord channel; replies flow

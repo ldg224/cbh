@@ -367,30 +367,20 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .f textarea { resize: vertical; }
 .f-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
-.case, .log { align-items: flex-start; }
+.case { align-items: flex-start; }
 .case-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .case-reason { overflow-wrap: anywhere; }
 .small-meta { font-size: 12.5px; }
-.act, .log-type { flex: none; min-width: 84px; text-align: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700;
+.act { flex: none; min-width: 84px; text-align: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700;
   background: var(--raised); color: var(--text); border: 1px solid var(--line); }
 .act-warn { background: #fff6dc; border-color: #f5d77a; }
 .act-timeout, .act-untimeout { background: #ffeedd; border-color: #f8bf8a; }
 .act-kick { background: #ffe6e3; border-color: #f5aaa1; }
 .act-ban { background: #fbdcdc; border-color: #e88b8b; color: #8a1c1c; }
 .act-unban, .act-note { background: var(--teal-wash); border-color: rgba(46, 211, 198, .6); }
-.log-type { min-width: 118px; font-weight: 600; }
-.log .when { flex: none; padding-top: 2px; white-space: nowrap; }
-.log-quote { padding: 6px 10px; border-left: 3px solid var(--line); background: var(--raised); border-radius: 0 8px 8px 0;
-  font-size: 13.5px; overflow-wrap: anywhere; white-space: pre-wrap; }
-.log-quote.was { opacity: .7; text-decoration: line-through; text-decoration-color: rgba(11, 30, 74, .3); }
-.rchip { display: inline-block; margin: 2px 4px 0 0; padding: 1px 8px; border-radius: 999px; font-weight: 600; }
-.rchip.add { background: var(--teal-wash); } .rchip.rem { background: #ffe6e3; }
-.warn-text { color: #b4530b; }
 @media (max-width: 560px) {
   .f-row { grid-template-columns: 1fr; }
-  .log { flex-wrap: wrap; }
-  .log .when { order: -1; width: 100%; padding: 0; }
-  .act, .log-type { min-width: 0; }
+  .act { min-width: 0; }
 }
 
 /* ---------- Contact a team / tickets ---------- */
