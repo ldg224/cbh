@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.21.3 (2026-11-18)
+
+**Changed:**
+- **To do badges:** open a department and the count moves onto the page that needs you (Members, Meetings, Applications, History).
+- **Red** means it needs doing now; **orange** is a note: members quiet for 14 to 59 days (red from 60 days).
+- **Home** splits **Needs you** from **Notes**.
+
+Bot: no change.
+Database change: yes, migration 0046 (badge severities; already applied).
+
 ## 0.21.2 (2026-11-18)
 
 **Fixed:**
