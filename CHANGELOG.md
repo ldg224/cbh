@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.10.1 (2026-11-17)
+
+**Changed:** the **Directors hub** has a new layout. **Sessions** is a big block pinned across the top, showing **Live now** or when the next session is. Under it, **Administration**, **Nursing**, **Paramedicine** and **Community Engagement** sit four across (two by two on phones), each fading from the Directors violet into that department's own colour.
+
+Bot: no change.
+Database change: none.
+
 ## 0.10.0 (2026-11-17)
 
 **Added:**

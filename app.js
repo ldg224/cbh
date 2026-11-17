@@ -369,10 +369,10 @@ const AUDIENCES = [
 ];
 // id = route (#id); hubs hold tools (#hub/tool). `photo`: a Roblox screenshot in assets/photos/ (tinted by CSS).
 const DEPARTMENTS = [
-  { id: 'administration', name: 'Administration', icon: 'clipboard' },
-  { id: 'nursing', name: 'Nursing', icon: 'nurse' },
-  { id: 'paramedicine', name: 'Paramedicine', icon: 'ambulance' },
-  { id: 'community', name: 'Community Engagement', icon: 'handshake' },
+  { id: 'administration', name: 'Administration', icon: 'clipboard', color: '#5c72ff' },
+  { id: 'nursing', name: 'Nursing', icon: 'nurse', color: '#ff3d7e' },
+  { id: 'paramedicine', name: 'Paramedicine', icon: 'ambulance', color: '#ff5533' },
+  { id: 'community', name: 'Community Engagement', icon: 'handshake', color: '#ffaa00' },
 ];
 const PAGES = [
   { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
@@ -383,8 +383,8 @@ const PAGES = [
   ] },
   // Directors hub: sessions, plus one page per department for its Director (execs see all four).
   { id: 'directors', aud: 'director', title: 'Directors hub', icon: 'org-chart', wide: true, tools: [
-    { id: 'sessions', title: 'Sessions', icon: 'calendar', layout: 'sessions' },
-    ...DEPARTMENTS.map((d) => ({ id: d.id, title: d.name, icon: d.icon, layout: 'dept', dept: d.name, aud: 'dir:' + d.name })),
+    { id: 'sessions', title: 'Sessions', icon: 'calendar', layout: 'sessions', wide: true },   // pinned on top
+    ...DEPARTMENTS.map((d) => ({ id: d.id, title: d.name, icon: d.icon, layout: 'dept', dept: d.name, aud: 'dir:' + d.name, color: d.color })),
   ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
     { id: 'sessions',     title: 'Sessions',     icon: 'calendar', layout: 'sessions' },
@@ -573,9 +573,14 @@ function route() {
   } else if (page.tools) {
     setPageTitle(page.icon, page.title, page.aud);
     const grid = document.createElement('div');
-    grid.className = 'hub-grid';
+    grid.className = 'hub-grid' + (page.id === 'directors' ? ' hub-dir' : '');
     for (const t of page.tools.filter((x) => canSee(toolAud(page, x)))) {
       const a = tileEl(`#${page.id}/${t.id}`, t, tileAud(page, t), 'tool');
+      if (t.color) a.style.setProperty('--dept', t.color);   // department tiles: Directors violet into the department's colour
+      if (t.layout === 'sessions' && currentSession) {
+        const live = currentSession.live, next = currentSession.next;
+        if (live || next) a.insertAdjacentHTML('beforeend', `<span class="tile-flag${live ? ' live' : ''}">${live ? 'Live now' : esc('Next: ' + whenAhead(next.scheduled_for))}</span>`);
+      }
       if (t.aud && t.aud !== page.aud && AUDIENCES.some((x) => x.id === t.aud) || t.aud === 'reviewer') {
         a.insertAdjacentHTML('beforeend', `<span class="tile-flag">${t.aud === 'reviewer' ? 'Execs & team leads' : AUDIENCES.find((x) => x.id === t.aud).label + ' only'}</span>`);
       }
@@ -1502,7 +1507,9 @@ function buildSessionAdmin(sess, box) {
 // Under the Welcome card: the Maple Hospital custom server and its join code (pinned; the owner will say if it
 // changes). Live / next-session status comes once the sessions back end is ready.
 let joinCode = '4920-4087';   // fallback; the live value comes from settings or the session
+let currentSession = null;   // what the home banner shows; the Sessions tile repeats it
 function buildSessionBanner(sess) {
+  currentSession = sess;
   const live = sess && sess.live, next = sess && sess.next;
   joinCode = (live && live.join_code) || (sess && sess.code) || joinCode;
   $('join-code').textContent = joinCode;

@@ -544,3 +544,19 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
   .dept-ctl { width: 100%; justify-content: flex-start; padding-left: 50px; }
   .dept-bar .refresh { flex: 1; }
 }
+
+/* Directors hub layout (0.10.1): Sessions pinned full width on top, then the four departments in one row,
+   each running from Directors violet into its department colour. */
+.hub-dir { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hub-dir .tile.wide { height: 168px; aspect-ratio: auto; grid-column: 1 / -1; }
+.hub-dir .tile:not(.wide) { aspect-ratio: 4 / 5; }
+.hub-dir .tile:not(.wide) .tile-title { font-size: 19px; }
+.hub-dir .tile:not(.wide) .tile-mark { height: 85%; right: -12%; bottom: -14%; }
+.tile[style*="--dept"] { --g1: #3d2a8f; --g2: color-mix(in srgb, #6a4fd6 55%, var(--dept)); --g3: var(--dept); }
+.tile-flag.live { background: #16b364; color: #fff; }
+@media (max-width: 560px) {
+  .hub-dir { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-dir .tile.wide { height: 140px; }
+  .hub-dir .tile:not(.wide) { aspect-ratio: 1 / 1; grid-column: auto; }
+  .hub-dir .tile:not(.wide) .tile-title { font-size: 16px; }
+}
