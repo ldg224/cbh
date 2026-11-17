@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.14.2 (2026-11-17)
+
+**Changed:** three home headings were reworded to sound calmer and more professional: "What would you like to review, …?", "Which record do you need, …?" and "What can I open for you, …?". There are still 50 in total.
+
+Bot: no change.
+Database change: none.
+
 ## 0.14.1 (2026-11-17)
 
 **Fixed:** picking a person in the home search (with Enter, a click or **Record**) now opens **their record**. Before, it landed on the empty Records search page. The "Open …'s record" suggestion had the same problem and is fixed too.
