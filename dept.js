@@ -124,7 +124,7 @@ async function renderDept(body, tool) {
   function drawOverview() {
     const attention = [
       ...hist.filter((c) => c.status === 'failed').slice(0, 3).map((c) => ({ id: c.target_discord_id, name: nameOf(c.target_discord_id, c.target_name), why: 'Change failed: ' + (c.error || 'try again'), flag: ['bad', 'Failed'] })),
-      ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: p.last_shift_at ? 'No shifts since ' + when(p.last_shift_at) : 'No shifts yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
+      ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: p.last_shift_at ? 'No shifts since ' + new Date(p.last_shift_at).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'No shifts yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
     ];
     const max = Math.max(1, ...deptWeeks);
     const weekLabel = (i) => {
