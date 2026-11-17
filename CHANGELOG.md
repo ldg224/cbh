@@ -3,6 +3,25 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.24.0 (2026-11-18)
+
+**Added:**
+- **Roles** now works like Discord's role editor (executives). Pick any role and use four tabs:
+  - **Display:** name, colour, show separately, @mentionable, and move it up or down.
+  - **Permissions:** website tools, department powers, which **bot commands** it can use, and **every Discord permission**, grouped as Discord shows them.
+  - **Members:** give the role to someone or take it away.
+  - **History:** every change, who made it and whether it worked.
+- CareBeyond Helper makes the Discord changes within seconds and logs each one in **#server-logs**. Dangerous permissions (e.g. Administrator, Ban) need the role's name typed first. Roles above the bot's own role are locked, with a note saying why.
+
+**Changed:**
+- Who can use **/warn**, **/timeout**, **/kick**, **/ban** and the rest (in Discord and on the website) is now set per role on the Roles page. Nothing changed today: the same Administration ranks and executives as before.
+
+**Bot:**
+- Applies role edits from the website, posts role changes to #server-logs, and checks moderation commands against each role's permissions.
+- Course DMs (from 0.23.0) go live with this update.
+
+Database change: yes, migrations 0053 (role editor) and 0054 (command permissions on website mod actions); already applied.
+
 ## 0.23.0 (2026-11-18)
 
 **Added:**
