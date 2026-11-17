@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.15.3 (2026-11-17)
+
+**Changed:** the **Staff & roster** page is redesigned.
+- One neat row per person instead of big cards, so many more people fit on screen. Rows sit in sections (Leadership, then each department with its colour), and each section says how many people it has and how many are on shift.
+- A **search box** to find someone by name, buttons to show one department, and an **On shift** button to see only who's working now.
+- A green dot (or amber for a break) on the photo of everyone on shift, in every department. People without a photo get their initials.
+- Names are coloured by the person's highest Discord role, darkened just enough to stay easy to read.
+- Admins and executives can tap a person to open their record. Everyone else sees only the roster, never record details.
+
+Database change: yes, `on_shift_now()` (migration 0018), which tells staff who is on shift in every department.
+
 ## 0.15.2 (2026-11-17)
 
 **Changed:** **Mod actions** is redesigned.
