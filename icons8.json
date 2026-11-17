@@ -154,6 +154,16 @@
         "id": "57067",
         "commonName": "user-folder--v2",
         "use": "Records (Admin hub)"
+      },
+      "thumb-up": {
+        "id": "10271",
+        "commonName": "thumb-up",
+        "use": "Applications: reviewer thumbs up"
+      },
+      "thumb-down": {
+        "id": "10267",
+        "commonName": "thumbs-down",
+        "use": "Applications: reviewer thumbs down"
       }
     }
   }
