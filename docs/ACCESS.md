@@ -37,8 +37,8 @@ A visibility audit (`docs/visibility-audit.json`, local only) found that staff c
 departments in three places. The owner reviewed this and **chose to keep them hospital-wide for all staff**:
 
 1. **Staff & roster** (`roster()`): everyone in a department, with name, photo and role IDs.
-2. **On shift now** on the home page (`home_counts().on_shift`, `dept_members`, `dept_on_now`): who's on shift in
-   every department, and member counts per department.
+2. **On shift now** on the home page (`home_counts().on_shift`, `dept_members`, `dept_on_now`) and the roster's on-shift
+   dots (`on_shift_now()`, migration 0018): who's on shift in every department, and member counts per department.
 3. **People search** (`people_search()`): finds anyone in the server.
 
 Conditions that must stay true:

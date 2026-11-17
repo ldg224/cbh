@@ -1558,48 +1558,111 @@ function rosterBadges(roles, depts, here) {
 function personBadges(badges) {
   return badges.map((b) => `<span class="rbadge" style="--c:${b.color ? hex(b.color) : '#9aa9c4'}">${b.icon ? `<span class="ri" style="--icon:${iconUrl(b.icon)}"></span>` : ''}<span class="rl">${esc(b.label)}</span></span>`).join('');
 }
+// Staff & roster (0.15.x redesign, Bravo; owner chose "compact rows"). Hospital-wide for staff (docs/ACCESS.md):
+// everyone in a department as one row each, in department sections, with search, department filter and on-shift dots
+// (on_shift_now(), migration 0018). Never shows Records data; admins can open a person's record from their row.
+// A role colour darkened toward navy only as far as needed to reach 4.5:1 contrast on white (WCAG AA for text).
+function readableColour(hexStr) {
+  const n = parseInt(hexStr.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255], navy = [11, 30, 74];
+  const lum = (rgb) => rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+    .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+  for (let k = 1; k >= 0; k -= 0.02) {
+    const m = c.map((v, i) => Math.round(v * k + navy[i] * (1 - k)));
+    if (1.05 / (lum(m) + 0.05) >= 4.5) return `rgb(${m.join(',')})`;
+  }
+  return '#0b1e4a';
+}
+const initials = (n) => cleanName(n).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 async function renderRoster(body) {
-  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
-  const [{ data: people, error }, { data: allRoles }] = await Promise.all([
+  body.innerHTML = '<div class="card"><p class="muted small">Loading the roster…</p></div>';
+  const [{ data: people, error }, { data: allRoles }, onq] = await Promise.all([
     sb.rpc('roster'), sb.from('roles').select('id, name, color, position, kind, department, rank_label, rank_order, badge_color'),
+    sb.rpc('on_shift_now').then((r) => r, () => ({ data: [] })),
   ]);
   if (error) { body.innerHTML = ''; return liveError(body, error); }
   const byId = Object.fromEntries((allRoles || []).map((r) => [r.id, r]));
   const depts = (allRoles || []).filter((r) => r.kind === 'department');
-  const groups = {}, everyone = [];
-  for (const p of people || []) {
+  const onNow = Object.fromEntries((onq.data || []).map((s) => [s.discord_id, s]));
+  const colour = (name) => (DEPARTMENTS.find((d) => d.name === name) || {}).color;
+  const SECTIONS = ['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'];
+  const everyone = (people || []).map((p) => {
     const roles = (p.role_ids || []).map((id) => byId[id]).filter(Boolean);
-    const lead = roles.some((r) => r.kind === 'leadership');
+    const lead = roles.filter((r) => r.kind === 'leadership');
     const ranks = roles.filter((r) => r.kind === 'rank').sort((a, b) => b.rank_order - a.rank_order);
-    const dept = lead ? 'Leadership' : (ranks[0]?.department || roles.find((r) => r.kind === 'department')?.department || 'Other');
-    everyone.push({ ...p, roles });
-    (groups[dept] ||= []).push({ ...p, roles, order: lead ? Math.max(...roles.filter((r) => r.kind === 'leadership').map((r) => r.position)) : (ranks[0]?.rank_order || 0) });
-  }
-  const order = ['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'].filter((d) => groups[d]);
-  let pick = 'all';
-  const draw = () => {
-    // Everyone: each person once, in their main section. One department picked: everyone in it, whatever their main section.
-    const sections = pick === 'all' ? order.map((d) => [d, groups[d]])
-      : [[pick, pick === 'Leadership' || pick === 'Other' ? groups[pick] : everyone.filter((p) => p.roles.some((r) => r.department === pick))
-          .map((p) => ({ ...p, order: Math.max(0, ...p.roles.filter((r) => r.kind === 'rank' && r.department === pick).map((r) => r.rank_order)) }))]];
-    body.querySelector('#ro-list').innerHTML = sections.map(([d, list]) => `
-      <h2 class="menu-label aud-staff"><span class="aud-dot"></span>${esc(d)} <span class="muted count">${list.length}</span></h2>
-      <div class="grid-people">${list.sort((a, b) => b.order - a.order || a.display_name.localeCompare(b.display_name)).map((p) => {
-        const badges = rosterBadges(p.roles, depts, d);
-        return `<div class="card person">
-          <img class="avatar big" src="${esc(sized(p.avatar_url || '', 128))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-          <strong class="person-name">${esc(cleanName(p.display_name))}</strong>
-          <div class="person-badges">${personBadges(badges)}</div>
-        </div>`;
-      }).join('')}</div>`).join('') || '<div class="card"><p class="muted small">Nobody to show.</p></div>';
+    const main = lead.length ? 'Leadership' : (ranks[0]?.department || roles.find((r) => r.kind === 'department')?.department || 'Other');
+    const name = cleanName(p.display_name);
+    // Name colour = their highest coloured role, like Discord shows it (darkened in CSS so it reads on white).
+    const top = roles.filter((r) => r.color).sort((a, b) => b.position - a.position)[0];
+    return { ...p, roles, main, name, key: name.toLowerCase(), nameColour: top ? hex(top.color) : null,
+      leadPos: lead.length ? Math.max(...lead.map((r) => r.position)) : 0 };
+  });
+  const inDept = (p, d) => d === 'Leadership' ? p.main === 'Leadership' : d === 'Other' ? p.main === 'Other' : p.roles.some((r) => r.department === d);
+  const rankIn = (p, d) => d === 'Leadership' ? p.leadPos
+    : Math.max(0, ...p.roles.filter((r) => r.kind === 'rank' && r.department === d).map((r) => r.rank_order));
+  const present = SECTIONS.filter((d) => everyone.some((p) => inDept(p, d)));
+  const state = { dept: 'all', q: '', onOnly: false };
+
+  body.innerHTML = `<div class="pg-roster">
+    <div class="ro-bar">
+      <label class="ro-search">
+        <input id="ro-q" type="search" placeholder="Search ${everyone.length} staff" autocomplete="off" aria-label="Search staff"></label>
+      <div class="chips ro-chips" id="ro-filter">
+        <button class="chip on" data-d="all">Everyone <span class="count">${everyone.length}</span></button>
+        ${present.map((d) => `<button class="chip" data-d="${esc(d)}"${colour(d) ? ` style="--dept:${colour(d)}"` : ''}>${colour(d) ? '<span class="ro-sw" aria-hidden="true"></span>' : ''}${esc(d)} <span class="count">${everyone.filter((p) => inDept(p, d)).length}</span></button>`).join('')}
+        <button class="chip ro-onchip" data-on="1"><span class="ro-led" aria-hidden="true"></span>On shift <span class="count">${Object.keys(onNow).length}</span></button>
+      </div>
+    </div>
+    <div id="ro-list"></div></div>`;
+
+  const row = (p, d) => {
+    const s = onNow[p.discord_id];
+    const me = p.discord_id === myDiscordId;
+    const tag = access.admin ? 'button' : 'div';
+    return `<${tag} class="ro-row${me ? ' me' : ''}"${access.admin ? ` type="button" data-rec="${esc(p.discord_id)}" title="Open record"` : ''}>
+      <span class="ro-face" style="--dept:${colour(p.main) || '#3a82d0'}">
+        <span class="ro-init" aria-hidden="true">${esc(initials(p.display_name))}</span>
+        ${p.avatar_url ? `<img src="${esc(sized(p.avatar_url, 64))}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+        ${s ? `<span class="ro-dot ${s.status === 'break' ? 'brk' : 'on'}" title="${s.status === 'break' ? 'On a break' : 'On shift'}"></span>` : ''}
+      </span>
+      <span class="ro-name"><span class="ro-line"><strong${p.nameColour ? ` style="color:${readableColour(p.nameColour)}"` : ''}>${esc(p.name)}</strong>${me ? '<span class="ro-you">You</span>' : ''}</span>
+        ${s ? `<span class="ro-status ${s.status === 'break' ? 'brk' : 'on'}">${s.status === 'break' ? 'On a break' : 'On shift'}${s.department !== d ? ' · ' + esc(s.department) : ''}</span>` : ''}</span>
+      <span class="ro-badges">${personBadges(rosterBadges(p.roles, depts, d))}</span>
+    </${tag}>`;
   };
-  body.innerHTML = `<div class="toolbar"><div class="chips" id="ro-filter"><button class="chip on" data-d="all">Everyone</button>${['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'].filter((d) => groups[d] || everyone.some((p) => p.roles.some((r) => r.department === d))).map((d) => `<button class="chip" data-d="${esc(d)}">${esc(d)}</button>`).join('')}</div></div><div id="ro-list" class="page-body"></div>`;
+
+  const draw = () => {
+    const q = state.q.trim().toLowerCase();
+    const match = (p) => (!q || p.key.includes(q) || (p.username || '').toLowerCase().includes(q)) && (!state.onOnly || onNow[p.discord_id]);
+    // Everyone: each person once, in their main section. A department picked: everyone in it.
+    const sections = (state.dept === 'all' ? present.map((d) => [d, everyone.filter((p) => p.main === d)])
+      : [[state.dept, everyone.filter((p) => inDept(p, state.dept))]])
+      .map(([d, list]) => [d, list.filter(match).sort((a, b) => rankIn(b, d) - rankIn(a, d) || a.name.localeCompare(b.name))])
+      .filter(([, list]) => list.length);
+    body.querySelector('#ro-list').innerHTML = sections.map(([d, list]) => {
+      const on = list.filter((p) => onNow[p.discord_id]).length;
+      return `<section class="ro-sec"${colour(d) ? ` style="--dept:${colour(d)}"` : ''}>
+        <h2 class="ro-head">${colour(d) ? '<span class="ro-sw" aria-hidden="true"></span>' : ''}<span>${esc(d)}</span>
+          <span class="ro-n">${list.length}${on ? ` · <span class="ro-on">${on} on shift</span>` : ''}</span></h2>
+        <div class="card ro-card">${list.map((p) => row(p, d)).join('')}</div></section>`;
+    }).join('') || `<div class="card"><p class="muted small">${q ? `Nobody matches “${esc(state.q.trim())}”.` : (state.onOnly ? 'Nobody is on shift right now.' : 'Nobody to show.')}</p></div>`;
+  };
+
   body.querySelector('#ro-filter').onclick = (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
-    pick = b.dataset.d;
-    body.querySelectorAll('#ro-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
+    if (b.dataset.on) { state.onOnly = !state.onOnly; b.classList.toggle('on', state.onOnly); }
+    else {
+      state.dept = b.dataset.d;
+      body.querySelectorAll('#ro-filter .chip[data-d]').forEach((x) => x.classList.toggle('on', x === b));
+    }
     draw();
   };
+  body.querySelector('#ro-q').addEventListener('input', (e) => { state.q = e.target.value; draw(); });
+  body.querySelector('#ro-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rec]'); if (!b || !access.admin) return;
+    const p = everyone.find((x) => x.discord_id === b.dataset.rec);
+    if (typeof rememberRecord === 'function') rememberRecord(p.discord_id, p.name);
+    if (typeof openRecord === 'function') openRecord(p.discord_id);
+  });
   draw();
 }
 
