@@ -1,0 +1,41 @@
+:root {
+  --bg: #0f1419;
+  --panel: #171e26;
+  --line: #26303b;
+  --text: #e6edf3;
+  --muted: #8b98a6;
+  --brand: #2ed3c6;
+  --discord: #5865f2;
+  --error: #ff6b6b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.brand b { color: var(--brand); font-weight: 600; }
+.who { display: flex; align-items: center; gap: 10px; }
+.who img { border-radius: 50%; }
+main { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; }
+.center { text-align: center; }
+h1 { margin: 0 0 8px; font-size: 22px; }
+p { margin: 0 0 16px; }
+.muted { color: var(--muted); }
+.error { color: var(--error); margin: 12px 0 0; }
+button { font: inherit; cursor: pointer; border-radius: 6px; border: 0; padding: 10px 18px; }
+button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.discord { background: var(--discord); color: #fff; font-weight: 600; }
+.discord:hover { filter: brightness(1.1); }
+.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 6px 12px; }
+.ghost:hover { color: var(--text); }
+[hidden] { display: none !important; }
+@media (max-width: 480px) { #name { display: none; } }
