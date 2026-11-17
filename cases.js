@@ -369,19 +369,22 @@ function openCasePanel(preset, onDone) {
 
   async function loadHistory() {
     s.history = null;
-    const who = s.where === 'discord' ? s.person?.discord_id : s.roblox?.name;   // ignore an answer for someone else
+    const where = s.where, who = where === 'discord' ? s.person?.discord_id : s.roblox?.name;   // ignore an answer for someone else
+    let h = null;
     if (s.where === 'discord' && s.person) {
       const [rec, lastWarn] = await Promise.all([
         sb.rpc('member_record', { discord_id: s.person.discord_id }).then((r) => r.data || null, () => null),
         sb.from('mod_cases').select('created_at').eq('target_discord_id', s.person.discord_id).eq('action', 'warn').eq('status', 'done').is('revoked_at', null).order('created_at', { ascending: false }).limit(1).then((r) => r.data?.[0] || null, () => null),
       ]);
-      s.history = rec ? { warnings: +rec.warnings || 0, timeouts: +rec.timeouts || 0, kicks: +rec.kicks || 0, bans: +rec.bans || 0, banned: !!rec.banned, lastWarn: lastWarn?.created_at } : null;
+      h = rec ? { warnings: +rec.warnings || 0, timeouts: +rec.timeouts || 0, kicks: +rec.kicks || 0, bans: +rec.bans || 0, banned: !!rec.banned, lastWarn: lastWarn?.created_at } : null;
     } else if (s.where === 'in_game' && s.roblox) {
       const { data } = await sb.from('mod_cases').select('action').eq('source', 'in_game').ilike('target_name', s.roblox.name);
       const n = (a) => (data || []).filter((x) => x.action === a).length;
-      s.history = { warnings: n('warn'), kicks: n('kick'), bans: n('ban'), timeouts: 0 };
+      h = { warnings: n('warn'), kicks: n('kick'), bans: n('ban'), timeouts: 0 };
     }
-    if (!wrap.isConnected || who !== (s.where === 'discord' ? s.person?.discord_id : s.roblox?.name)) return;
+    // A slower answer for someone else (or a closed panel) is dropped before it can replace the current history.
+    if (!wrap.isConnected || where !== s.where || who !== (s.where === 'discord' ? s.person?.discord_id : s.roblox?.name)) return;
+    s.history = h;
     // Step 1 redraws; on steps 2 and 3 only the history card and hint change, so a reason being typed isn't touched.
     if (s.step === 1) draw();
     else if (s.step === 2 || s.step === 3) refreshHistory();
