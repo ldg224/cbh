@@ -180,6 +180,7 @@ async function renderCases(body) {
       groups[groups.length - 1].rows.push(c);
     }
     list.innerHTML = groups.map((g) => `<section class="ma-section"><h2 class="ma-day">${esc(g.label)}</h2><div class="card ma-group">${g.rows.map(rowHtml).join('')}</div></section>`).join('');
+    loadFaces(list);
   }
   function clearFilters() {
     Object.assign(st, { type: 'all', source: 'all', mine: false, q: '', pendingOnly: false, review: false });
@@ -196,11 +197,11 @@ async function renderCases(body) {
     const review = c.review_status === 'requested' ? '<span class="ma-flag review">Waiting for review</span>'
       : c.review_status === 'reviewed' ? `<span class="ma-flag ${c.review_outcome}">${MA_OUTCOME[c.review_outcome] || 'Reviewed'}</span>` : '';
     return `<div class="ma-row" data-id="${c.id}">
-      <span class="ma-av" aria-hidden="true">${esc(initialOf(name))}</span>
+      ${face({ name, discordId: c.target_discord_id, robloxId: c.target_roblox_id, size: 'm' })}
       <div class="ma-main">
         <div class="ma-line1">${nameEl}<span class="ma-act act act-${esc(c.action)}">${esc(ACTION_LABEL[c.action] || c.action)}</span>${c.duration_minutes ? `<span class="ma-len">${esc(lenText(c.duration_minutes))}</span>` : ''}${review}</div>
         <div class="ma-reason">${esc(c.reason || '')}</div>
-        <div class="ma-meta">by ${esc(cleanName(c.moderator_name || 'unknown'))} · ${esc(MA_SOURCE[c.source] || c.source)} · ${timeOf(c.created_at)}</div>
+        <div class="ma-meta">${face({ name: c.moderator_name, discordId: c.moderator_discord_id, size: 'xs' })}by ${esc(cleanName(c.moderator_name || 'unknown'))} · ${esc(MA_SOURCE[c.source] || c.source)} · ${timeOf(c.created_at)}</div>
         ${c.review_status === 'requested' ? `<div class="ma-rnote"><strong>${esc(cleanName(c.review_requested_by_name || 'An admin'))} asked for a review:</strong> ${esc(c.review_note || '')}</div>` : ''}
         ${c.review_status === 'reviewed' ? `<div class="ma-rnote done"><strong>${MA_OUTCOME[c.review_outcome] || 'Reviewed'} by ${esc(cleanName(c.reviewed_by_name || 'a supervisor'))}:</strong> ${esc(c.review_result_note || '')}</div>` : ''}
         <div class="ma-inline" hidden></div>
@@ -327,7 +328,7 @@ async function renderCases(body) {
         const i = st.rows.findIndex((x) => x.id === c.id);
         const el = list.querySelector(`.ma-row[data-id="${c.id}"]`);
         if (c.status === 'failed') { st.rows.splice(i, 1); el?.remove(); }
-        else { st.rows[i] = c; if (el) el.outerHTML = rowHtml(c); }
+        else { st.rows[i] = c; if (el) { el.outerHTML = rowHtml(c); paintFaces(list); } }
       }
       if (changed) { loadFailed(); loadFailNotices(); watchPending(); }
     }, 3000);
@@ -385,8 +386,8 @@ function openCasePanel(preset, onDone) {
     if (!s.person && !s.roblox) return '';
     const h = s.history;
     const who = s.where === 'discord'
-      ? `<span class="ma-av big" aria-hidden="true">${esc(initialOf(nameOf()))}</span><span class="ma-hwho"><strong>${esc(nameOf())}</strong><span>${s.person.username ? '@' + esc(s.person.username) + ' · ' : ''}${esc(s.person.discord_id)}${s.person.banned ? ' · banned' : ''}</span></span>`
-      : `<span class="ma-av big" aria-hidden="true">${esc(initialOf(nameOf()))}</span><span class="ma-hwho"><strong>${esc(s.roblox.displayName || s.roblox.name)}</strong><span>@${esc(s.roblox.name)} · Roblox</span></span>`;
+      ? `${face({ name: nameOf(), discordId: s.person.discord_id, avatarUrl: s.person.avatar_url, size: 'l' })}<span class="ma-hwho"><strong>${esc(nameOf())}</strong><span>${s.person.username ? '@' + esc(s.person.username) + ' · ' : ''}${esc(s.person.discord_id)}${s.person.banned ? ' · banned' : ''}</span></span>`
+      : `${face({ name: nameOf(), robloxId: s.roblox.id ? String(s.roblox.id) : '', size: 'l' })}<span class="ma-hwho"><strong>${esc(s.roblox.displayName || s.roblox.name)}</strong><span>@${esc(s.roblox.name)} · Roblox</span></span>`;
     const facts = !h ? '<span class="muted small">Checking their history…</span>'
       : [h.warnings ? `${plural(h.warnings, 'warning')}${h.lastWarn ? ` (last ${when(h.lastWarn)})` : ''}` : 'No warnings',
         h.timeouts ? plural(h.timeouts, 'timeout') : '', h.kicks ? plural(h.kicks, 'kick') : '', h.bans ? plural(h.bans, 'ban') : ''].filter(Boolean).join(' · ');
@@ -453,6 +454,7 @@ function openCasePanel(preset, onDone) {
       foot.querySelector('#map-again').onclick = () => { Object.assign(s, { step: 1, action: null, person: null, roblox: null, history: null, reason: '', gameLen: '' }); draw(); };
       foot.querySelector('#map-done').focus();
     }
+    loadFaces(bodyEl);
     foot.querySelector('#map-back')?.addEventListener('click', () => { s.step -= 1; draw(); });
     foot.querySelector('#map-next')?.addEventListener('click', () => { s.step += 1; draw(); });
   }
@@ -478,12 +480,13 @@ function openCasePanel(preset, onDone) {
     const show = () => {
       const id = q.value.trim(), raw = /^\d{15,22}$/.test(id) && !results.some((m) => m.discord_id === id);
       sugg.innerHTML = results.map((m, i) => `<button type="button" role="option" class="sg${i === active ? ' on' : ''}" data-i="${i}">
-          <span class="ma-av" aria-hidden="true">${esc(initialOf(m.display_name || m.username || m.discord_id))}</span>
+          ${face({ name: m.display_name || m.username || m.discord_id, discordId: m.discord_id, avatarUrl: m.avatar_url, size: 's' })}
           <span class="pk-main"><strong>${esc(cleanName(m.display_name || m.username || m.discord_id))}</strong><span class="muted small-meta">${m.username ? '@' + esc(m.username) + ' · ' : ''}${esc(m.discord_id)}${warnText(m.warnings)}</span></span>
           ${m.banned ? '<span class="st sub-denied">Banned</span>' : ''}</button>`).join('')
         + (raw ? `<button type="button" class="sg" data-raw="${esc(id)}"><span class="pk-main"><strong>Use ID ${esc(id)}</strong><span class="muted small-meta">Someone not in the server</span></span></button>` : '')
         + (!results.length && !raw && id.length >= 2 ? '<p class="muted small sg-empty">Nobody found. Try their username or Discord ID.</p>' : '');
       sugg.hidden = !sugg.innerHTML.trim();
+      paintFaces(sugg);
     };
     q.oninput = () => {
       clearTimeout(timer);

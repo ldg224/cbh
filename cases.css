@@ -167,3 +167,19 @@
   .ma-phead, .ma-pbody, .ma-pfoot { padding-left: 16px; padding-right: 16px; }
   .ma-steps { padding-left: 16px; padding-right: 16px; }
 }
+
+/* ---------- faces (shared: Mod actions, Records; faces.js) ---------- */
+.face { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--raised); border: 1px solid var(--line); color: var(--blue-deep); font-weight: 800; }
+.face-img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.face.has-img .face-i { visibility: hidden; }
+.face-rb { position: absolute; right: -4px; bottom: -4px; width: 46%; height: 46%; border-radius: 50%; border: 2px solid var(--panel);
+  background: #e9eef5; object-fit: cover; box-shadow: 0 1px 3px rgba(11, 30, 74, .25); }
+.face-xs { width: 20px; height: 20px; font-size: 9.5px; border-width: 0; }
+.face-xs .face-rb { display: none; }
+.face-s { width: 30px; height: 30px; font-size: 13px; }
+.face-m { width: 38px; height: 38px; font-size: 15px; }
+.face-l { width: 56px; height: 56px; font-size: 20px; border: 2px solid var(--teal); }
+.face-xl { width: 88px; height: 88px; font-size: 30px; border: 3px solid var(--teal); box-shadow: 0 0 0 3px #fff, 0 0 14px 4px rgba(46, 211, 198, .35); }
+.ma-meta .face-xs { margin-right: -2px; }
+@media (max-width: 560px) { .ma-row .face-m { width: 32px; height: 32px; font-size: 13px; } }
