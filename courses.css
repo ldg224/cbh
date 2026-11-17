@@ -173,6 +173,12 @@
 .ce-mod .bd-btns button.confirm { background: #ffe9e6; color: #a52323; }
 
 @media (max-width: 560px) {
+  .cr-rubric { min-width: 0; }
+  .cr-rubric thead { display: none; }
+  .cr-rubric, .cr-rubric tbody { display: block; }
+  .cr-rubric tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .cr-rubric td { border: 0; padding: 0; min-width: 0; }
+  .cr-rubric td:first-child { grid-column: 1 / -1; }
   .cr-hero { padding: 18px; }
   .cr-hero h2 { font-size: 20px; }
   .cr-item { padding: 10px 12px; }

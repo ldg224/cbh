@@ -118,7 +118,7 @@ async function crGrid(el, dept) {
             : lock === 'prereq' ? `<span class="cr-pill soon">Finish ${esc(c.prereq || 'another course')} first</span>`
               : c.mine ? '<span class="cr-pill open">Open</span>' : ''}${due ? `<span class="cr-pill ${late ? 'late' : soon ? 'due' : 'soon'}">${late ? 'Overdue' : 'Due ' + esc(crDate(c.due_at))}</span>` : ''}</span>
         <strong class="cr-title">${esc(c.title)}</strong>
-        ${c.mine && !lock ? `<span class="bar cr-progress"><i style="width:${pct}%"></i></span>` : ''}
+        ${c.mine && !lock ? `<span class="cr-progress"><i style="width:${pct}%"></i></span>` : ''}
         <span class="cr-foot"><span>${c.mine ? `${c.counts?.done || 0} of ${c.counts?.total || 0} steps` : `${c.counts?.total || 0} steps`}</span><span>${lock ? 'Locked' : c.complete ? 'Review' : c.mine ? 'Continue ›' : 'Open ›'}</span></span>
       </span>
     </button>`;
