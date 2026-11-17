@@ -1040,3 +1040,17 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
   .pg-roster .ro-name { flex: 1 1 0; }
   .pg-roster .ro-badges { flex: 1 1 100%; justify-content: flex-start; padding-left: 52px; }
 }
+
+/* ===== Home shift controls: department chips (Bravo, matches the Shifts page). ===== */
+.h-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+.h-opt { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 9px; font: inherit; font-size: 13px;
+  font-weight: 600; cursor: pointer; background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+.h-opt:hover { border-color: var(--blue); }
+.h-opt.on { border-color: var(--dept); background: color-mix(in srgb, var(--dept) 10%, #fff); box-shadow: inset 0 0 0 1px var(--dept); }
+.h-sw { flex: none; width: 9px; height: 9px; border-radius: 3px; background: var(--dept); }
+.h-live .h-pick { margin: 2px 0 4px; }
+.h-live .h-opt { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .28); color: #fff; }
+.h-live .h-opt:hover { border-color: rgba(255, 255, 255, .6); }
+.h-live .h-opt.on { background: #fff; color: var(--text); border-color: #fff; box-shadow: none; }
+#h-start:disabled, #h-break:disabled, #h-end:disabled { opacity: .6; cursor: progress; }
+@media (max-width: 560px) { .h-pick { flex: 1 1 100%; } .h-opt { flex: 1; justify-content: center; } .h-idle #h-start { flex: 1 1 100%; } }

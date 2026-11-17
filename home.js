@@ -343,17 +343,39 @@ function drawLive() {
       ${canSee('staff') ? `<div class="h-panel"><span class="h-plabel">${me ? 'YOUR SHIFT · ' + esc(me.department).toUpperCase() : 'YOUR SHIFT'}</span>
         ${me ? `<strong class="h-big" data-tick="live-clock">${clock(shiftSecs(me))}</strong>
           <div class="h-row"><button class="h-glassbtn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button><button class="h-teal" id="h-end">End shift</button></div>`
-        : myDepartments.length ? `<strong class="h-big muted-w">Off shift</strong><div class="h-row">${myDepartments.length > 1 ? `<select id="h-dept" class="h-sel">${myDepartments.map((d) => `<option>${esc(d)}</option>`).join('')}</select>` : ''}<button class="h-teal" id="h-start">Start shift${myDepartments.length === 1 ? ' · ' + esc(myDepartments[0]) : ''}</button></div>`
+        : myDepartments.length ? `<strong class="h-big muted-w">Off shift</strong><div class="h-row">${homeDeptPicker()}<button class="h-teal" id="h-start">Start shift</button></div>`
         : '<span class="h-small">You need a department role to start a shift.</span>'}</div>` : ''}
       ${on.total != null ? `<div class="h-panel"><span class="h-plabel">ON SHIFT NOW</span>
         <div class="h-row"><strong class="h-big">${n0(on.total)}</strong><span class="h-faces">${(on.people || []).slice(0, 4).map((p) => `<span class="h-face" title="${esc(p.name)}" style="${p.avatar_url ? `background-image:url('${esc(sized(p.avatar_url, 64))}')` : ''}">${p.avatar_url ? '' : esc((cleanName(p.name || '?')[0] || '?').toUpperCase())}</span>`).join('')}${n0(on.total) > 4 ? `<span>+${n0(on.total) - 4}</span>` : ''}</span></div>
         <span class="h-small">${esc(byDept || 'Nobody yet')}${n0(on.on_break) ? ` · ${n0(on.on_break)} on a break` : ''}</span></div>` : ''}
     </div></section>`;
   el.querySelector('#h-copy').onclick = async (e) => { try { await navigator.clipboard.writeText(live.join_code || s.code || joinCode); e.target.textContent = 'Copied'; } catch { /* on screen */ } };
-  const act = async (fn, args) => { const { error } = await sb.rpc(fn, args || {}); if (error) alert(error.message); else renderHome(); };
-  el.querySelector('#h-break')?.addEventListener('click', () => act('shift_break'));
-  el.querySelector('#h-end')?.addEventListener('click', () => { if (confirm('End your shift?')) act('shift_end'); });
-  el.querySelector('#h-start')?.addEventListener('click', () => act('shift_start', { department: el.querySelector('#h-dept')?.value || myDepartments[0] }));
+  wireHomeShift(el);
+}
+// Department picker + busy buttons for the home shift controls (Bravo, matches the 0.15.1 Shifts page).
+// One department: no picker, just "Start shift". Several: a chip per department, the first picked.
+function homeDeptPicker() {
+  if (myDepartments.length < 2) return '';
+  return `<div class="h-pick" role="radiogroup" aria-label="Department">${myDepartments.map((d, i) => `<button type="button" role="radio" aria-checked="${i === 0}" class="h-opt${i === 0 ? ' on' : ''}" data-dept="${esc(d)}" style="--dept:${(DEPARTMENTS.find((x) => x.name === d) || {}).color || '#3a82d0'}"><span class="h-sw" aria-hidden="true"></span>${esc(d)}</button>`).join('')}</div>`;
+}
+function wireHomeShift(el) {
+  el.querySelectorAll('.h-opt').forEach((b) => b.addEventListener('click', () => {
+    el.querySelectorAll('.h-opt').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+  }));
+  const act = async (btn, fn, args, busy) => {
+    const all = el.querySelectorAll('#h-start, #h-break, #h-end');
+    all.forEach((b) => { b.disabled = true; });
+    const was = btn.textContent;
+    btn.textContent = busy;
+    const { error } = await sb.rpc(fn, args || {});
+    if (error) { all.forEach((b) => { b.disabled = false; }); btn.textContent = was; alert(error.message); return; }
+    renderHome();
+  };
+  const brk = el.querySelector('#h-break'), end = el.querySelector('#h-end'), start = el.querySelector('#h-start');
+  brk?.addEventListener('click', () => act(brk, 'shift_break', null, 'Saving…'));
+  end?.addEventListener('click', () => { if (confirm('End your shift?')) act(end, 'shift_end', null, 'Ending…'); });
+  start?.addEventListener('click', () => act(start, 'shift_start',
+    { department: el.querySelector('.h-opt.on')?.dataset.dept || myDepartments[0] }, 'Starting…'));
 }
 // No session running (0.14.6): a quiet light bar in the same place, so your shift and the session are always one
 // glance away. The bold Session active block above takes over while a session is live.
@@ -368,8 +390,7 @@ function drawIdle(el, h, s) {
         <button class="ghost small-btn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button><button class="refresh small-btn" id="h-end">End shift</button></div></div>`
     : myDepartments.length
       ? `<div class="h-idle-part"><span class="h-plabel-d">YOUR SHIFT</span><div class="h-row"><span class="h-idle-off">Off shift</span>
-          ${myDepartments.length > 1 ? `<select id="h-dept" class="h-sel h-sel-l" aria-label="Department">${myDepartments.map((d) => `<option>${esc(d)}</option>`).join('')}</select>` : ''}
-          <button class="refresh small-btn" id="h-start">Start shift${myDepartments.length === 1 ? ' \u00b7 ' + esc(myDepartments[0]) : ''}</button></div></div>`
+          ${homeDeptPicker()}<button class="refresh small-btn" id="h-start">Start shift</button></div></div>`
       : '';
   el.innerHTML = `<section class="h-idle" aria-label="Session and shift">
       <div class="h-idle-part"><span class="h-plabel-d"><span class="h-idle-dot${s.next ? ' next' : ''}"></span>SESSION</span>
@@ -377,10 +398,7 @@ function drawIdle(el, h, s) {
         ${sessHref ? `<a class="ghost small-btn h-idle-link" href="${sessHref}">${s.next ? 'Sessions' : 'Start a session'}</a>` : ''}</div></div>
       ${shiftPart}
     </section>`;
-  const act = async (fn, args) => { const { error } = await sb.rpc(fn, args || {}); if (error) alert(error.message); else renderHome(); };
-  el.querySelector('#h-break')?.addEventListener('click', () => act('shift_break'));
-  el.querySelector('#h-end')?.addEventListener('click', () => { if (confirm('End your shift?')) act('shift_end'); });
-  el.querySelector('#h-start')?.addEventListener('click', () => act('shift_start', { department: el.querySelector('#h-dept')?.value || myDepartments[0] }));
+  wireHomeShift(el);
 }
 function tickHome() {
   clearInterval(homeTimer);
