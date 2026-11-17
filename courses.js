@@ -78,7 +78,7 @@ function crTab(el, dept, sub) {
 async function crGrid(el, dept) {
   crSetHash(crRoute(dept));
   el.innerHTML = '<div class="card"><p class="muted small">Loading courses…</p></div>';
-  const [{ data, error }, marking] = await Promise.all([sb.rpc('course_list', { dept }),
+  const [{ data, error }, marking] = await Promise.all([sb.rpc('course_list', { dept }).then(async (r) => { await crLoadRanks(dept); return r; }),
     crCanAssess(dept) ? sb.rpc('course_marking', { dept }).then((r) => r.data || [], () => []) : Promise.resolve([])]);
   if (error) { el.innerHTML = ''; return liveError(el, error); }
   const list = data || [];
