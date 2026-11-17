@@ -20,7 +20,7 @@
 .dp-loading .dp-name { opacity: .9; }
 
 /* Tabs */
-.dp-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 18px 0 16px; overflow-x: auto; scrollbar-width: none; }
+.dp-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 18px 0 16px; overflow-x: auto; position: relative; scrollbar-width: none; }
 .dp-tabs::-webkit-scrollbar { display: none; }
 .dp-tabs button { font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent;
   padding: 10px 13px 9px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
@@ -146,6 +146,7 @@
 .dp-mrow + .dp-mrow { border-top: 1px solid var(--line); }
 .dp-mrow-main { display: flex; align-items: center; gap: 12px; padding: 12px 0; flex-wrap: wrap; }
 .dp-meet { display: flex; align-items: center; gap: 14px; flex: 1 1 300px; min-width: 0; }
+.dp-meet .dp-m strong { white-space: normal; overflow-wrap: anywhere; }
 .dp-meet.off { opacity: .6; }
 .dp-meet.off strong { text-decoration: line-through; }
 .dp-date { width: 50px; flex: none; text-align: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
@@ -169,7 +170,7 @@
 .dp-switch em { font-style: normal; font-weight: 500; }
 .dp-att-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; }
 .dp-allp { justify-self: start; padding: 2px 0; color: var(--blue); font-weight: 600; }
-.dp-att-list { display: grid; gap: 2px; max-height: 420px; overflow-y: auto; }
+.dp-att-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; max-height: 420px; overflow-y: auto; }
 .dp-att-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .dp-att-row + .dp-att-row { border-top: 1px solid var(--line); }
 .dp-att-name { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -187,6 +188,6 @@
   .dp-macts { width: 100%; justify-content: flex-start; padding-left: 64px; }
   .dp-agenda, .dp-minline { margin-left: 0; padding-left: 0; }
   .dp-att-row { flex-wrap: wrap; }
-  .dp-att-seg { width: 100%; padding-left: 42px; }
-  .dp-att-seg button { flex: 1; padding: 6px 4px; }
+  .dp-att-seg { width: 100%; padding-left: 0; }
+  .dp-att-seg button { flex: 1 1 0; min-width: 0; padding: 7px 2px; font-size: 12px; }
 }
