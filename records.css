@@ -79,7 +79,7 @@
 .rc-note { text-align: center; }
 
 @media (max-width: 860px) {
-  .rc-layout { grid-template-columns: 1fr; }
+  .rc-layout { grid-template-columns: minmax(0, 1fr); }
   .rc-profile { position: static; }
   .rc-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rc-stat:last-child:nth-child(odd) { grid-column: auto; }
@@ -91,7 +91,8 @@
   .rc-acts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rc-profile { padding: 20px 16px; }
 }
-.rc-filter { margin-bottom: 12px; }
+.rc-filter { margin-bottom: 12px; flex-wrap: wrap; overflow-x: visible; }
+.rc-layout > * { min-width: 0; }
 .rc-ilinks { gap: 14px; margin-top: 2px; }
 .rc-ilinks button { font: inherit; font-size: 13px; font-weight: 600; color: var(--blue-deep); background: none; border: 0; padding: 2px 0; cursor: pointer; }
 .rc-ilinks button:hover { text-decoration: underline; }

@@ -369,18 +369,33 @@ function openCasePanel(preset, onDone) {
 
   async function loadHistory() {
     s.history = null;
+    const where = s.where, who = where === 'discord' ? s.person?.discord_id : s.roblox?.name;   // ignore an answer for someone else
+    let h = null;
     if (s.where === 'discord' && s.person) {
       const [rec, lastWarn] = await Promise.all([
         sb.rpc('member_record', { discord_id: s.person.discord_id }).then((r) => r.data || null, () => null),
         sb.from('mod_cases').select('created_at').eq('target_discord_id', s.person.discord_id).eq('action', 'warn').eq('status', 'done').is('revoked_at', null).order('created_at', { ascending: false }).limit(1).then((r) => r.data?.[0] || null, () => null),
       ]);
-      s.history = rec ? { warnings: +rec.warnings || 0, timeouts: +rec.timeouts || 0, kicks: +rec.kicks || 0, bans: +rec.bans || 0, banned: !!rec.banned, lastWarn: lastWarn?.created_at } : null;
+      h = rec ? { warnings: +rec.warnings || 0, timeouts: +rec.timeouts || 0, kicks: +rec.kicks || 0, bans: +rec.bans || 0, banned: !!rec.banned, lastWarn: lastWarn?.created_at } : null;
     } else if (s.where === 'in_game' && s.roblox) {
       const { data } = await sb.from('mod_cases').select('action').eq('source', 'in_game').ilike('target_name', s.roblox.name);
       const n = (a) => (data || []).filter((x) => x.action === a).length;
-      s.history = { warnings: n('warn'), kicks: n('kick'), bans: n('ban'), timeouts: 0 };
+      h = { warnings: n('warn'), kicks: n('kick'), bans: n('ban'), timeouts: 0 };
     }
+    // A slower answer for someone else (or a closed panel) is dropped before it can replace the current history.
+    if (!wrap.isConnected || where !== s.where || who !== (s.where === 'discord' ? s.person?.discord_id : s.roblox?.name)) return;
+    s.history = h;
+    // Step 1 redraws; on steps 2 and 3 only the history card and hint change, so a reason being typed isn't touched.
     if (s.step === 1) draw();
+    else if (s.step === 2 || s.step === 3) refreshHistory();
+  }
+  function refreshHistory() {
+    const card = bodyEl.querySelector('#map-hcard'), hintEl = bodyEl.querySelector('#map-hint');
+    if (card) { card.innerHTML = historyCard(); wireChange(); loadFaces(card); }
+    if (hintEl) hintEl.innerHTML = hint();
+  }
+  function wireChange() {
+    bodyEl.querySelector('#map-change')?.addEventListener('click', () => { s.step = 1; s.person = null; s.roblox = null; s.history = null; draw(); });
   }
   const historyCard = () => {
     if (!s.person && !s.roblox) return '';
@@ -418,23 +433,24 @@ function openCasePanel(preset, onDone) {
     } else if (s.step === 2) {
       const acts = s.where === 'discord' ? ['warn', 'timeout', 'untimeout', 'kick', 'ban', ...(s.person?.banned ? ['unban'] : [])] : ['warn', 'kick', 'ban', 'note'];
       if (s.person?.banned && s.where === 'discord' && !s.action) s.action = 'unban';
-      bodyEl.innerHTML = `${historyCard()}
+      bodyEl.innerHTML = `<div id="map-hcard">${historyCard()}</div>
         <div class="ma-tiles" role="radiogroup" aria-label="Action">${acts.map((a) => `<button type="button" role="radio" aria-checked="${s.action === a}" class="ma-tile${MA_ACTION_INFO[a].strong ? ' strong' : ''}" data-a="${a}">
           <strong>${MA_ACTION_INFO[a].label}</strong><span>${esc(s.where === 'in_game' ? MA_GAME_INFO[a] : MA_ACTION_INFO[a].blurb)}</span></button>`).join('')}</div>
         ${s.action === 'timeout' && s.where === 'discord' ? `<div class="f"><span>How long</span><div class="ma-lens">${TIMEOUT_LENGTHS.map(([v, l]) => `<button type="button" class="chip${s.len === v ? ' on' : ''}" data-len="${v}" aria-pressed="${s.len === v}">${l}</button>`).join('')}</div></div>` : ''}
         ${s.action === 'ban' && s.where === 'in_game' ? `<label class="f"><span>Length in minutes <em>(optional)</em></span><input id="map-glen" type="number" min="1" max="525600" value="${esc(s.gameLen)}" placeholder="Leave empty for permanent"></label>` : ''}
-        ${hint()}`;
+        <div id="map-hint">${hint()}</div>`;
       foot.innerHTML = `<button type="button" class="linkish" id="map-back">Back</button><button type="button" class="refresh" id="map-next" ${s.action ? '' : 'disabled'}>Next</button>`;
       bodyEl.querySelectorAll('[data-a]').forEach((b) => { b.onclick = () => { s.action = b.dataset.a; draw(); bodyEl.querySelector(`[data-a="${s.action}"]`)?.focus(); }; });
       bodyEl.querySelectorAll('[data-len]').forEach((b) => { b.onclick = () => { s.len = +b.dataset.len; draw(); }; });
       bodyEl.querySelector('#map-glen')?.addEventListener('input', (e) => { s.gameLen = e.target.value; });
-      bodyEl.querySelector('#map-change')?.addEventListener('click', () => { s.step = 1; s.person = null; s.roblox = null; s.history = null; draw(); });
+      wireChange();
     } else if (s.step === 3) {
       const nm = esc(nameOf());
       const summary = s.where === 'discord'
         ? { warn: `Warn ${nm} by DM and record it.`, timeout: `Time out ${nm} for ${esc(lenText(s.len))}.`, untimeout: `End ${nm}’s timeout.`, kick: `Kick ${nm} from the Discord server.`, ban: `Ban ${nm} from the Discord server.`, unban: `Unban ${nm}.` }[s.action]
         : `Record: ${MA_ACTION_INFO[s.action].label.toLowerCase()} ${nm} in Maple Hospital${s.action === 'ban' && +s.gameLen > 0 ? ` for ${esc(s.gameLen)} minutes` : ''}.`;
-      bodyEl.innerHTML = `${historyCard()}
+      bodyEl.innerHTML = `<div id="map-hcard">${historyCard()}</div>
+        <div id="map-hint">${hint()}</div>
         <div class="f"><span>Quick reasons</span><div class="ma-lens">${MA_REASONS.map((r) => `<button type="button" class="chip" data-r="${esc(r)}">${esc(r)}</button>`).join('')}</div></div>
         <label class="f"><span>Reason</span><textarea id="map-why" rows="4" maxlength="1000" placeholder="What happened? This is shown to staff${s.where === 'discord' && ['warn', 'timeout', 'kick', 'ban'].includes(s.action) ? ' and sent to them by DM' : ''}.">${esc(s.reason)}</textarea><span class="field-note" id="map-count">${s.reason.length} / 1000</span></label>
         <div class="ma-review${MA_ACTION_INFO[s.action].strong ? ' strong' : ''}"><span class="ma-plabel">Review</span><strong>${summary}</strong></div>
@@ -445,6 +461,7 @@ function openCasePanel(preset, onDone) {
       ta.oninput = () => { s.reason = ta.value; bodyEl.querySelector('#map-count').textContent = `${ta.value.length} / 1000`; };
       bodyEl.querySelectorAll('[data-r]').forEach((b) => { b.onclick = () => { ta.value = ta.value.trim() ? `${ta.value.trim()} · ${b.dataset.r}` : b.dataset.r; ta.dispatchEvent(new Event('input')); ta.focus(); }; });
       foot.querySelector('#map-go').onclick = submit;
+      wireChange();
       ta.focus();
     } else {
       bodyEl.innerHTML = `<div class="ma-sent"><span class="ma-sent-ico" aria-hidden="true"></span><strong>${s.where === 'discord' ? 'Sent' : 'Saved'}</strong>
@@ -531,7 +548,7 @@ function openCasePanel(preset, onDone) {
     inp.focus();
   }
 
-  if (preset.person) { s.person = preset.person; s.step = s.action ? 3 : 2; loadHistory(); }
+  if (preset.person) { s.person = preset.person; s.step = s.action ? 3 : 2; }
   draw();
   if (s.step > 1) loadHistory();
 }
