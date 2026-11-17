@@ -33,6 +33,11 @@ const dpH = (h) => { const s = Math.round(Number(h || 0) * 3600); return s ? hrs
 
 async function renderDept(body, tool) {
   const dept = tool.dept, exec = access.exec;
+  // Rank permissions (0027/0029): the Director and execs can do everything; other ranks only what they're given.
+  const director = exec || myDirects.includes(dept);
+  const can = (perm) => hasPerm(perm, dept);
+  const seeAct = can('activity.view'), editM = can('members.edit'), manageMt = can('meetings.manage');
+  const attMt = manageMt || can('meetings.attendance');
   const dep = DEPARTMENTS.find((d) => d.name === dept) || { name: dept, color: '#3a82d0', icon: 'clock' };
   const route = `#directors/${tool.id}`;
   $('page-title').hidden = true;
@@ -40,7 +45,7 @@ async function renderDept(body, tool) {
   body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
     <div class="card"><p class="muted small">Loading…</p></div>`;
 
-  const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ] = await Promise.all([
+  const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ] = await Promise.all([
     sb.rpc('dept_roster', { department: dept }),
     sb.from('roles').select('id, name, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept).order('rank_order', { ascending: false }),
     sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100),
@@ -48,13 +53,18 @@ async function renderDept(body, tool) {
     sb.from('meetings').select('*').eq('department', dept).order('scheduled_for', { ascending: false }).limit(60),
     sb.rpc('dept_last_meeting', { department: dept }),
     sb.from('discord_channels').select('id, name, kind, category, position').order('position'),
+    director || !editM ? Promise.resolve({ data: null }) : sb.rpc('my_members_window', { department: dept }),
+    director ? sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi') : Promise.resolve({ data: [] }),
   ]);
   if (!body.isConnected || location.hash !== route) return;
   if (roster.error) { body.innerHTML = ''; return liveError(body, roster.error); }
 
   const ranks = (ranksQ.data || []).sort((a, b) => b.rank_order - a.rank_order);
   const rankById = Object.fromEntries(ranks.map((r) => [r.id, r]));
-  const canGive = ranks.filter((r) => exec || r.rank_label !== 'Director');
+  // Change window (0029): a non-Director with Change members may only move people, and give ranks, inside it.
+  const win = director ? null : ((winQ.data || [])[0] || null);
+  const inWin = (order) => director || !!(win && win.lo != null && order != null && order >= win.lo && order <= win.hi);
+  const canGive = ranks.filter((r) => (exec || r.rank_label !== 'Director') && (director || inWin(r.rank_order)));
   const word = ranks.some((r) => /^Year/.test(r.rank_label)) ? 'year' : 'rank';
   const Word = word === 'year' ? 'Year' : 'Rank';
   const people = (roster.data || []).sort((a, b) => (b.rank_order || 0) - (a.rank_order || 0) || cleanName(a.display_name).localeCompare(cleanName(b.display_name)));
@@ -73,9 +83,10 @@ async function renderDept(body, tool) {
   const weeks = Object.fromEntries((weekly.data || []).map((w) => [w.discord_id, (w.weeks || []).map(Number)]));
   const deptWeeks = [0, 1, 2, 3].map((i) => people.reduce((a, p) => a + ((weeks[p.discord_id] || [])[i] || 0), 0));
   // A Director can't change themselves or another Director (execs can); the database checks this too.
-  const locked = (p) => !exec && (p.discord_id === myDiscordId || p.rank_label === 'Director');
+  const locked = (p) => !editM || (!exec && (p.discord_id === myDiscordId || p.rank_label === 'Director'))
+    || (!director && p.rank_order != null && !inWin(p.rank_order));
   const onNow = people.filter((p) => p.on_shift);
-  const inactive = people.filter(dpInactive);
+  const inactive = seeAct ? people.filter(dpInactive) : [];
   const weekTotal = people.reduce((a, p) => a + Number(p.week_hours || 0), 0);
 
   const rankBadge = (p) => {
@@ -106,18 +117,20 @@ async function renderDept(body, tool) {
     { id: 'courses', label: 'Courses', soon: true },
     { id: 'meetings', label: 'Meetings', n: upcoming.length || null },
     { id: 'history', label: 'History', n: hist.length || null },
+    ...(director ? [{ id: 'ranks', label: 'Ranks & permissions' }] : []),
   ];
   let tab = dpTab[dept] || 'overview';
+  if (!TABS.some((t) => t.id === tab)) tab = 'overview';
   body.innerHTML = `
     <section class="dp-banner" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}">
       <span class="dp-big" aria-hidden="true"></span>
       <div class="dp-b-row"><span class="dp-sq" aria-hidden="true"></span>
         <div><h1 class="dp-name">${esc(dept)}</h1>
-          <span class="dp-pill">${exec ? 'Executive view' : 'You direct this department'}</span></div></div>
+          <span class="dp-pill">${exec ? 'Executive view' : director ? 'You direct this department' : 'Team view'}</span></div></div>
       <div class="dp-stats">
         <div class="dp-stat"><b>${people.length}</b><span>Members</span></div>
         <div class="dp-stat"><b>${onNow.length}</b><span>On shift now</span></div>
-        <div class="dp-stat"><b>${dpHours(weekTotal)}</b><span>Hours this week</span></div>
+        ${seeAct ? `<div class="dp-stat"><b>${dpHours(weekTotal)}</b><span>Hours this week</span></div>` : `<div class="dp-stat"><b>${upcoming.length}</b><span>Meetings planned</span></div>`}
         <div class="dp-stat"><b>${nextMeet ? (nextMeet.status === 'live' ? 'Now' : esc(dpDayShort(nextMeet.scheduled_for))) : 'None'}</b><span>${nextMeet && nextMeet.status === 'live' ? 'Meeting on' : 'Next meeting'}</span></div>
       </div>
     </section>
@@ -134,7 +147,7 @@ async function renderDept(body, tool) {
     if (cur && (cur.offsetLeft < tabsEl.scrollLeft || cur.offsetLeft + cur.offsetWidth > tabsEl.scrollLeft + tabsEl.clientWidth)) tabsEl.scrollLeft = cur.offsetLeft - 12;
     pane.setAttribute('aria-labelledby', 'dpt-' + id);
     fail('');
-    ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory })[id]();
+    ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory, ranks: drawRanks })[id]();
     loadFaces(pane);
   }
   tabsEl.onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) show(b.dataset.tab); };
@@ -160,46 +173,46 @@ async function renderDept(body, tool) {
     };
     pane.innerHTML = `<div class="dp-ov">
       <div class="dp-col">
-        <section class="card dp-card"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
+        ${seeAct || editM ? `<section class="card dp-card"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
           ${attention.length ? `<div class="dp-list">${attention.map((a) => `<div class="dp-mini">${face({ name: a.name, discordId: a.id, avatarUrl: a.av || byId[a.id]?.avatar_url || '', size: 'm' })}
               <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div><span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span></div>`).join('')}</div>`
-            : `<p class="muted small">Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.</p>`}
-        </section>
+            : `<p class="muted small">${seeAct ? `Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.` : 'Nothing needs you right now.'}</p>`}
+        </section>` : ''}
         <section class="card dp-card"><div class="dp-head"><h2>Recent changes</h2>${hist.length > 5 ? '<button class="linkish" data-go="history">See all</button>' : ''}</div>
           ${hist.length ? `<div class="dp-list">${hist.slice(0, 5).map((c) => changeRow(c, false)).join('')}</div>` : `<p class="muted small">No changes yet.</p>`}
         </section>
       </div>
       <div class="dp-col">
-        <section class="card dp-card"><div class="dp-head"><h2>Next meeting</h2><button class="linkish" data-go="meetings">${nextMeet ? 'Meetings' : 'Schedule one'}</button></div>
+        <section class="card dp-card"><div class="dp-head"><h2>Next meeting</h2>${nextMeet || manageMt ? `<button class="linkish" data-go="meetings">${nextMeet ? 'Meetings' : 'Schedule one'}</button>` : ''}</div>
           ${nextMeet ? meetLine(nextMeet) : `<p class="muted small">No meeting planned.</p>`}
         </section>
         <section class="card dp-card"><div class="dp-head"><h2>On shift now</h2></div>
           ${onNow.length ? `<div class="dp-list">${onNow.map((p) => `<div class="dp-mini">${face({ name: p.display_name, discordId: p.discord_id, avatarUrl: p.avatar_url, size: 'm' })}
-              <div class="dp-m"><strong>${esc(cleanName(p.display_name))}</strong><span>${esc(dpH(p.week_hours))} this week</span></div>${rankBadge(p)}</div>`).join('')}</div>`
+              <div class="dp-m"><strong>${esc(cleanName(p.display_name))}</strong><span>${seeAct ? esc(dpH(p.week_hours)) + ' this week' : 'On shift'}</span></div>${rankBadge(p)}</div>`).join('')}</div>`
             : `<p class="muted small">Nobody from ${esc(dept)} is on shift.</p>`}
         </section>
-        <section class="card dp-card"><div class="dp-head"><h2>Hours, last 4 weeks</h2></div>
+        ${seeAct ? `<section class="card dp-card"><div class="dp-head"><h2>Hours, last 4 weeks</h2></div>
           <div class="dp-chart" role="img" aria-label="Department hours: ${deptWeeks.map((h, i) => weekLabel(i) + ' ' + dpHours(h)).join(', ')}">
             ${deptWeeks.map((h, i) => `<div class="dp-bar${i === 3 ? ' now' : ''}"><span class="dp-bar-v">${dpHours(h)}</span><i style="height:${Math.max(3, Math.round((h / max) * 100))}%"></i><span class="dp-bar-l">${esc(weekLabel(i))}</span></div>`).join('')}
           </div>
-        </section>
+        </section>` : ''}
       </div></div>`;
-    pane.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; if (b.dataset.go === 'meetings' && !nextMeet) meetState.open = 'new'; show(b.dataset.go); });
+    pane.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; if (b.dataset.go === 'meetings' && !nextMeet && manageMt) meetState.open = 'new'; show(b.dataset.go); });
   }
 
   // ---------- Members ----------
   const memState = { q: '', filter: 'all', sort: 'rank' };
-  const SORTS = { rank: 'Year', hours: 'Hours', recent: 'Last shift', name: 'Name' };
+  const SORTS = seeAct ? { rank: 'Year', hours: 'Hours', recent: 'Last shift', name: 'Name' } : { rank: 'Year', name: 'Name' };
   if (word === 'rank') SORTS.rank = 'Rank';
   function drawMembers() {
     pane.innerHTML = `
       <div class="dp-mtools">
         <label class="ma-search dp-q"><span class="h-glass" aria-hidden="true"></span><input type="search" id="dp-q" placeholder="Find a member" autocomplete="off" aria-label="Find a member" value="${esc(memState.q)}"></label>
         <div class="chips dp-filters" role="group" aria-label="Show">
-          ${[['all', 'All', people.length], ['on', 'On shift', onNow.length], ['inactive', 'Inactive', inactive.length]].map(([k, l, n]) => `<button type="button" class="chip${memState.filter === k ? ' on' : ''}" data-f="${k}" aria-pressed="${memState.filter === k}">${l} <span class="count">${n}</span></button>`).join('')}
+          ${[['all', 'All', people.length], ['on', 'On shift', onNow.length], ...(seeAct ? [['inactive', 'Inactive', inactive.length]] : [])].map(([k, l, n]) => `<button type="button" class="chip${memState.filter === k ? ' on' : ''}" data-f="${k}" aria-pressed="${memState.filter === k}">${l} <span class="count">${n}</span></button>`).join('')}
         </div>
         <label class="dp-sort"><span>Sort</span><select id="dp-sort">${Object.entries(SORTS).map(([k, l]) => `<option value="${k}"${memState.sort === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        <button class="refresh dp-addbtn" id="dp-add-open" type="button">Add someone</button>
+        ${editM ? '<button class="refresh dp-addbtn" id="dp-add-open" type="button">Add someone</button>' : ''}
       </div>
       <div id="dp-add-box"></div>
       <div class="card dp-members" id="dp-list"></div>`;
@@ -212,7 +225,7 @@ async function renderDept(body, tool) {
       drawRows();
     };
     pane.querySelector('#dp-sort').onchange = (e) => { memState.sort = e.target.value; drawRows(); };
-    pane.querySelector('#dp-add-open').onclick = openAdd;
+    if (editM) pane.querySelector('#dp-add-open').onclick = openAdd;
     drawRows();
   }
   function drawRows() {
@@ -232,9 +245,9 @@ async function renderDept(body, tool) {
         <div class="dp-row-main">
           <span class="dp-face${p.on_shift ? ' on' : ''}">${face({ name: p.display_name, discordId: p.discord_id, avatarUrl: p.avatar_url, size: 'm' })}</span>
           <div class="dp-m"><strong>${esc(name)}</strong>
-            <span>${esc(dpH(p.week_hours))} this week · ${Number(p.shifts_30d || 0)} shift${p.shifts_30d == 1 ? '' : 's'} in 30 days · ${esc(lastSeen(p))}${p.last_meeting_at ? ' · last meeting ' + esc(dpDayShort(p.last_meeting_at)) : ''}</span></div>
-          ${spark(p.discord_id)}
-          <span class="dp-tags">${pend ? `<span class="st sub-pending">Pending</span>` : dpInactive(p) ? '<span class="dp-flag warn">Inactive</span>' : ''}${rankBadge(p)}</span>
+            <span>${seeAct ? `${esc(dpH(p.week_hours))} this week · ${Number(p.shifts_30d || 0)} shift${p.shifts_30d == 1 ? '' : 's'} in 30 days · ${esc(lastSeen(p))}${p.last_meeting_at ? ' · last meeting ' + esc(dpDayShort(p.last_meeting_at)) : ''}` : (p.on_shift ? 'On shift now' : '')}</span></div>
+          ${seeAct ? spark(p.discord_id) : ''}
+          <span class="dp-tags">${pend ? `<span class="st sub-pending">Pending</span>` : seeAct && dpInactive(p) ? '<span class="dp-flag warn">Inactive</span>' : ''}${rankBadge(p)}</span>
           <div class="ma-side dp-side">${locked(p) || pend ? '<span class="dp-dots-gap"></span>' : `<button type="button" class="ma-dots" aria-label="More for ${esc(name)}" aria-haspopup="menu" aria-expanded="false" data-menu="${esc(p.discord_id)}"><span></span></button>`}</div>
         </div>
         <div class="dp-inline" hidden></div></div>`;
@@ -415,24 +428,25 @@ async function renderDept(body, tool) {
       <span class="dp-date" aria-hidden="true"><b>${esc(d.toLocaleDateString([], { month: 'short' }).toUpperCase())}</b><span>${d.getDate()}</span></span>
       <div class="dp-m"><strong>${esc(m.title)}</strong>
         <span>${esc(d.toLocaleDateString([], { weekday: 'short' }))} ${esc(d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))} · ${esc(meetWhere(m))} · ${m.duration_minutes || 60} min</span>
-        ${m.status === 'scheduled' && chanGone(m) ? '<span class="dp-moved dp-gone">Channel deleted, pick another</span>' : ''}
+        ${m.status === 'scheduled' && chanGone(m) ? `<span class="dp-moved dp-gone">${manageMt ? 'Channel deleted, pick another' : 'Channel deleted'}</span>` : ''}
         ${m.moved_at && m.status === 'scheduled' ? `<span class="dp-moved">Moved${m.moved_from_at ? ' from ' + esc(dpWhenShort(m.moved_from_at)) : ''}${m.moved_from_channel_id && m.moved_from_channel_id !== m.voice_channel_id ? (m.moved_from_at ? ', ' : ' from ') + esc(chanName(m.moved_from_channel_id) || 'another channel') : ''}</span>` : ''}</div>${st}</div>`;
   }
   function drawMeetings() {
     pane.innerHTML = `
-      <div class="dp-head dp-mhead"><h2>Upcoming</h2><button class="refresh" type="button" id="dp-new-meet">Schedule a meeting</button></div>
+      <div class="dp-head dp-mhead"><h2>Upcoming</h2>${manageMt ? '<button class="refresh" type="button" id="dp-new-meet">Schedule a meeting</button>' : ''}</div>
       <div id="dp-mt-form"></div>
       <div class="card dp-mlist">${upcoming.length ? upcoming.map((m) => meetRow(m)).join('') : `<p class="muted small">No meetings planned. Schedule one and CareBeyond Helper posts it in the ${esc(dept)} channel.</p>`}</div>
       ${past.length ? `<div class="dp-head dp-mhead"><h2>Past</h2></div><div class="card dp-mlist">${past.map((m) => meetRow(m)).join('')}</div>` : ''}`;
-    pane.querySelector('#dp-new-meet').onclick = () => { meetState.open = meetState.open === 'new' ? null : 'new'; drawMeetForm(); };
+    if (manageMt) pane.querySelector('#dp-new-meet').onclick = () => { meetState.open = meetState.open === 'new' ? null : 'new'; drawMeetForm(); };
     pane.querySelectorAll('[data-mact]').forEach((b) => b.onclick = () => meetAct(b.dataset.mact, meetings.find((x) => x.id === +b.dataset.mid)));
     if (meetState.open === 'new') drawMeetForm();
     else if (meetState.open) { const [k, id] = meetState.open.split(':'); const m = meetings.find((x) => x.id === +id); meetState.open = null; if (m) meetAct(k, m); }
   }
   function meetRow(m) {
-    const acts = m.status === 'scheduled' ? [['start', 'Start now'], ['move', 'Reschedule or move'], ['edit', 'Edit'], ['cancel', 'Cancel']]
+    const acts = (m.status === 'scheduled' ? [['start', 'Start now'], ['move', 'Reschedule or move'], ['edit', 'Edit'], ['cancel', 'Cancel']]
       : m.status === 'live' ? [['end', 'End meeting'], ['att', 'Attendance'], ['notes', 'Notes']]
-      : m.status === 'ended' ? [['att', 'Attendance'], ['notes', m.notes ? 'Notes' : 'Add notes']] : [];
+      : m.status === 'ended' ? [['att', 'Attendance'], ['notes', m.notes ? 'Notes' : 'Add notes']] : [])
+      .filter(([k]) => (['att', 'notes'].includes(k) ? attMt : manageMt));
     return `<div class="dp-mrow" data-mrow="${m.id}">
       <div class="dp-mrow-main">${meetLine(m)}
         <div class="dp-macts">${acts.map(([k, l]) => `<button type="button" class="${k === 'start' || k === 'end' ? 'refresh' : 'ghost'} small-btn${k === 'cancel' ? ' danger' : ''}" data-mact="${k}" data-mid="${m.id}">${l}</button>`).join('')}</div></div>
@@ -629,6 +643,58 @@ async function renderDept(body, tool) {
       };
       gq.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); gres.querySelector('.dp-pick')?.click(); } };
     }
+  }
+
+  // ---------- Ranks & permissions (Director and execs; 0027/0029) ----------
+  // Ranks down the side, permissions across. "Change members" also has a change window: the lowest and highest rank
+  // that rank may manage. Each tick saves straight away (set_rank_perm / set_rank_window).
+  const PERMS = [
+    ['dept.view', 'See this page', 'Open the department page'],
+    ['activity.view', 'See hours and activity', 'Hours, shifts and Inactive flags'],
+    ['members.edit', 'Change members', 'Change years, add and remove people, inside their window'],
+    ['meetings.manage', 'Run meetings', 'Schedule, move, start, end and cancel'],
+    ['meetings.attendance', 'Attendance and notes', 'Mark attendance and write notes'],
+    ['applications.review', 'Review applications', 'Review this department’s applications'],
+    ['applications.settings', 'Application settings', 'Change this department’s application form'],
+    ['courses.manage', 'Manage courses', 'Create and edit courses (coming soon)'],
+  ];
+  function drawRanks() {
+    const rows = ranks.filter((r) => r.rank_label !== 'Director');
+    const held = {};
+    (permQ.data || []).forEach((x) => { if (rankById[x.role_id]) held[x.role_id + '|' + x.perm] = x; });
+    const low = rows.slice().sort((a, b) => a.rank_order - b.rank_order);
+    const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
+    pane.innerHTML = `<div class="card dp-perms-card">
+      <div class="dp-head"><h2>Who can do what</h2><span class="muted small-meta">The Director and executives can always do everything.</span></div>
+      <p class="error" id="dp-perm-err" hidden></p>
+      <div class="dp-pgrid" role="table" aria-label="Rank permissions">
+        <div class="dp-prow dp-phead" role="row"><span role="columnheader">${Word}</span>${PERMS.map(([k, l, h]) => `<span role="columnheader" title="${esc(h)}">${esc(l)}</span>`).join('')}</div>
+        ${rows.map((r) => `<div class="dp-prow" role="row" style="--c:${r.badge_color ? hex(r.badge_color) : '#9aa9c4'}">
+          <span role="rowheader" class="dp-prank"><span class="rbadge"><span class="rl">${esc(r.rank_label)}</span></span></span>
+          ${PERMS.map(([k, l]) => { const on = !!held[r.id + '|' + k]; const w = held[r.id + '|members.edit'];
+            return `<span role="cell" class="dp-pcell" data-label="${esc(l)}">
+              <label class="dp-tick"><input type="checkbox" data-role="${esc(r.id)}" data-perm="${k}"${on ? ' checked' : ''} aria-label="${esc(r.rank_label)}: ${esc(l)}"><span aria-hidden="true"></span></label>
+              ${k === 'members.edit' && on && w ? `<span class="dp-win">${winSel(r, 'lo', w.window_lo)}<em>to</em>${winSel(r, 'hi', w.window_hi)}</span>` : ''}</span>`; }).join('')}
+        </div>`).join('')}
+      </div></div>`;
+    const err = pane.querySelector('#dp-perm-err');
+    const reload = async () => { const { data } = await sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi'); permQ.data = data || []; drawRanks(); };
+    pane.querySelectorAll('[data-perm]').forEach((cb) => cb.onchange = async () => {
+      cb.disabled = true; err.hidden = true;
+      const { error } = await sb.rpc('set_rank_perm', { role_id: cb.dataset.role, perm: cb.dataset.perm, allow: cb.checked });
+      if (error) { cb.checked = !cb.checked; cb.disabled = false; err.textContent = error.message; err.hidden = false; return; }
+      await reload();
+      pane.querySelector(`[data-role="${CSS.escape(cb.dataset.role)}"][data-perm="${cb.dataset.perm}"]`)?.focus();
+    });
+    pane.querySelectorAll('[data-win]').forEach((sel) => sel.onchange = async () => {
+      const row = sel.closest('.dp-pcell');
+      const lo = +row.querySelector('[data-win="lo"]').value, hi = +row.querySelector('[data-win="hi"]').value;
+      err.hidden = true;
+      if (lo > hi) { err.textContent = 'The lowest rank must be at or below the highest.'; err.hidden = false; return; }
+      const { error } = await sb.rpc('set_rank_window', { role_id: sel.dataset.role, lo, hi });
+      if (error) { err.textContent = error.message; err.hidden = false; return; }
+      await reload();
+    });
   }
 
   // ---------- History ----------

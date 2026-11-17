@@ -30,13 +30,15 @@ async function fetchMine() {
   const mine = new Set(me.role_ids);
   const roles = rows.filter((r) => mine.has(r.id)).sort((a, b) => b.position - a.position);
   const departments = rows.filter((r) => r.kind === 'department');
-  const [acc, sess, reviewTeams] = await Promise.all([
+  const [acc, sess, reviewTeams, perms] = await Promise.all([
     sb.rpc('my_access').then((r) => r.data || null, () => null),
     fetchSession(),
     // Teams that review a form (forms.review_team): their leads may review submissions. null = execs only.
     sb.from('forms').select('review_team').then((r) => [...new Set((r.data || []).map((f) => f.review_team).filter(Boolean))], () => []),
+    // Rank permissions per department (migration 0027): {"Nursing": ["dept.view", ...]}. Directors and execs have all.
+    sb.rpc('my_perms').then((r) => r.data || {}, () => ({})),
   ]);
-  return { me, roles, departments, access: acc, session: sess, reviewTeams };
+  return { me, roles, departments, access: acc, session: sess, reviewTeams, perms };
 }
 
 // The banner: a live session, else the next scheduled one, plus the join code (from the session or settings).
@@ -267,6 +269,7 @@ function draw(data) {
   drawBadges(buildBadges(roles, departments));
   myDiscordId = me.discord_id;
   myDepartments = (data.access && (data.access.shift_teams || data.access.teams)) || [...new Set(roles.filter((r) => r.department).map((r) => r.department))];
+  myPerms = data.perms || {};
   setAccess(me, roles, data.access, data.reviewTeams);
   buildSessionBanner(data.session);
   buildMenu();
@@ -429,11 +432,13 @@ function setAccess(me, roles, acc, reviewTeams = []) {
 }
 // Directors hub: departments I direct (my_access().directs; worked out from my roles until the database says).
 let myDirects = [];
+let myPerms = {};   // rank permissions per department (my_perms(), 0027); a department page opens with 'dept.view'
+const hasPerm = (perm, dept) => !!access.exec || myDirects.includes(dept) || (myPerms[dept] || []).includes(perm);
 function setDirectorAccess(directs, roles, exec, runSessions) {
   myDirects = directs || (exec ? DEPARTMENTS.map((d) => d.name)
     : roles.filter((r) => r.kind === 'rank' && r.rank_label === 'Director').map((r) => r.department));
-  access.director = exec || myDirects.length > 0;
-  for (const d of DEPARTMENTS) access['dir:' + d.name] = myDirects.includes(d.name);
+  for (const d of DEPARTMENTS) access['dir:' + d.name] = myDirects.includes(d.name) || (myPerms[d.name] || []).includes('dept.view');
+  access.director = exec || DEPARTMENTS.some((d) => access['dir:' + d.name]);
   access.sessions = runSessions ?? (access.director || access.admin);
   // Sessions sit in both hubs; show them once, in the Directors hub, to people who can see it.
   access['sessions-admin'] = access.sessions && !access.director;
