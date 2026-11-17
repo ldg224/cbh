@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.10.3 (2026-11-17)
+
+**Fixed:** department pages in the **Directors hub** no longer need reloading after you change someone's year or rank, add someone or remove someone. While a change is **Pending**, the page checks every few seconds. Once CareBeyond Helper has made the change, the page shows **Done** (or **Failed** with the reason) and the member's new year or rank, usually within about 10 seconds.
+
+Bot: no change.
+Database change: none.
+
 ## 0.10.2 (2026-11-17)
 
 **Changed:** the department tiles in the **Directors hub** show their department colour much more strongly. The Directors violet now only tints the top corner, and the rest of each tile is the department's own colour.

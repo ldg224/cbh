@@ -1300,6 +1300,7 @@ async function renderRoster(body) {
 // Back end (Bravo, migration 0011): dept_roster, member_search, dept_set_rank / dept_add / dept_remove, which queue
 // role_changes rows that CareBeyond Helper carries out in Discord (pending, then done or failed).
 const CHANGE_LABEL = { pending: 'Pending', done: 'Done', failed: 'Failed' };
+let deptWatch = null;
 async function renderDept(body, tool) {
   const dept = tool.dept, exec = access.exec;
   body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
@@ -1355,6 +1356,21 @@ async function renderDept(body, tool) {
         <strong>${esc(nameOf[c.target_discord_id] || c.target_name || 'Someone')}: ${esc(c.action === 'remove' ? 'removed' : (c.action === 'add' ? 'added as ' : 'now ') + (c.rank_label || rankById[c.rank_role_id]?.rank_label || ''))}</strong>
         <span class="muted small-meta">${esc(when(c.created_at))}${c.status === 'failed' && c.error ? ' · ' + esc(c.error) : ''}</span></div>
         <span class="st ${c.status === "done" ? "sub-accepted" : c.status === "failed" ? "sub-denied" : "sub-pending"}">${esc(CHANGE_LABEL[c.status] || c.status)}</span></div>`).join('')}</div>` : ''}`;
+
+  // While anything is Pending, check every 3 s. When the bot has carried it out, wait a moment for the roles to sync
+  // back, then show the result (Done / Failed, new year or rank). Nothing else redraws, and it stops when you leave.
+  clearInterval(deptWatch);
+  const waiting = (changes.data || []).filter((c) => c.status === 'pending').map((c) => c.id);
+  if (waiting.length) {
+    deptWatch = setInterval(async () => {
+      if (!body.isConnected || location.hash !== `#directors/${tool.id}`) return clearInterval(deptWatch);
+      const { data } = await sb.from('role_changes').select('id, status').in('id', waiting);
+      if ((data || []).some((c) => c.status !== 'pending')) {
+        clearInterval(deptWatch);
+        setTimeout(() => { if (body.isConnected && location.hash === `#directors/${tool.id}`) renderDept(body, tool); }, 2500);
+      }
+    }, 3000);
+  }
 
   const fail = (msg) => { const e = body.querySelector('#dp-err'); e.textContent = msg; e.hidden = false; };
   const act = async (fn, args) => {
