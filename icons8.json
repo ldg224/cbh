@@ -194,6 +194,11 @@
         "id": "40902",
         "commonName": "todo",
         "use": "Desk: To do"
+      },
+      "lock": {
+        "id": "2862",
+        "commonName": "lock",
+        "use": "Roles: role the bot can't change"
       }
     }
   }
