@@ -1,8 +1,8 @@
-# CareBeyond Dashboard
+# CBH (CareBeyond Hospital) staff dashboard
 
 Staff dashboard for the CareBeyond - Hospital Discord server, used alongside the CareBeyond Helper bot.
 
-- Live at https://ldg224.github.io/carebeyond-dashboard/ (GitHub Pages, deployed from `main`).
+- Live at https://ldg224.github.io/cbh/ (GitHub Pages, deployed from `main`).
 - Plain HTML, CSS and JS. No build step.
 - Login is Discord through Supabase Auth (project `ycrwcwfknqikezynzgyv`, Sydney).
 - The page talks only to Supabase. The bot reads and writes the same database from the owner's PC, so dashboard actions are carried out by the bot.
