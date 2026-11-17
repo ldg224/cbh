@@ -9,6 +9,7 @@ const AC_RANGES = {
 };
 const AC_SORTS = [['hours', 'Hours'], ['sessions', 'Sessions'], ['actions', 'Mod actions']];
 const acNum = (n) => Number(n || 0);
+const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const acH = (n) => { const v = acNum(n); return v >= 100 ? Math.round(v).toString() : v.toFixed(1); };
 const acDeptColour = (name) => (DEPARTMENTS.find((d) => d.name === name) || {}).color || '#3a82d0';
 
