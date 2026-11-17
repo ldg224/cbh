@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.15.1 (2026-11-17)
+
+**Changed:** the **Shifts** page is redesigned.
+- Your shift is one card: whether you're on shift, on a break or off, your department, a big live timer, when you started and how long you've had on breaks, and your hours this week and over the last 30 days. Take a break, End shift and Start shift sit inside the card. If you're in more than one department, tap the one you're working in first.
+- **On now** is grouped by department, in each department's colour, with everyone's photo and a green or amber dot for on shift or on a break.
+- **Your shifts** are grouped by week with each week's total, and shifts the bot ended for you are marked "Ended automatically".
+- Buttons show they're working ("Starting…") so a double tap can't start two shifts.
+
+Database change: none.
+
 ## 0.15.0 (2026-11-17)
 
 **Changed:** a new **CareBeyond** wordmark in the header, chosen from three options. It's one line: a lighter "Care" flowing into a bold "Beyond", then a thin divider and "HOSPITAL" in spaced teal. On phones the divider and "Hospital" drop away so the name never feels crowded.
