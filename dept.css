@@ -136,3 +136,57 @@
   .dp-sort select { flex: 1; }
   .dp-hrow .st { margin-top: 2px; }
 }
+
+/* Meetings (stage 2) */
+.dp-mhead { margin: 4px 0 12px; }
+.dp-mhead + .card + .dp-mhead, .dp-mlist + .dp-mhead { margin-top: 22px; }
+#dp-mt-form:not(:empty) { margin-bottom: 12px; }
+.dp-mlist { padding: 6px 20px; }
+.dp-mlist > p { margin: 12px 0; }
+.dp-mrow + .dp-mrow { border-top: 1px solid var(--line); }
+.dp-mrow-main { display: flex; align-items: center; gap: 12px; padding: 12px 0; flex-wrap: wrap; }
+.dp-meet { display: flex; align-items: center; gap: 14px; flex: 1 1 300px; min-width: 0; }
+.dp-meet.off { opacity: .6; }
+.dp-meet.off strong { text-decoration: line-through; }
+.dp-date { width: 50px; flex: none; text-align: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.dp-date b { display: block; background: var(--dept-tab, #6a4fd6); color: #fff; font-size: 10.5px; letter-spacing: .12em; padding: 2px 0; }
+.dp-date span { display: block; font-weight: 800; font-size: 19px; padding: 2px 0 3px; }
+.dp-macts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.dp-macts button { font-size: 13px; padding: 7px 12px; border-radius: 8px; font-weight: 600; }
+.dp-macts .ghost { color: var(--text); }
+.dp-macts .danger:hover { border-color: #e88b8b; color: #8a1c1c; }
+.dp-live { background: #e6f6ec; border-color: #9fd9b4; color: #14663a; }
+.dp-agenda { margin: -4px 0 12px 64px; font-size: 13.5px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.dp-minline { padding-left: 64px; }
+.dp-f3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.dp-switch { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.dp-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.dp-sw { width: 38px; height: 22px; border-radius: 999px; background: #c9d4e4; position: relative; flex: none; transition: background .15s; }
+.dp-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(11, 30, 74, .25); transition: transform .15s; }
+.dp-switch input:checked + .dp-sw { background: var(--teal); }
+.dp-switch input:checked + .dp-sw::after { transform: translateX(16px); }
+.dp-switch input:focus-visible + .dp-sw { outline: 2px solid var(--blue); outline-offset: 2px; }
+.dp-switch em { font-style: normal; font-weight: 500; }
+.dp-att-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+.dp-allp { justify-self: start; padding: 2px 0; color: var(--blue); font-weight: 600; }
+.dp-att-list { display: grid; gap: 2px; max-height: 420px; overflow-y: auto; }
+.dp-att-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.dp-att-row + .dp-att-row { border-top: 1px solid var(--line); }
+.dp-att-name { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dp-att-seg { flex-wrap: nowrap; gap: 4px; }
+.dp-att-seg button { --c: #9aa9c4; padding: 5px 10px; font-size: 12.5px; }
+.dp-att-seg button.a-present[aria-checked="true"] { background: #16b364; border-color: #16b364; }
+.dp-att-seg button.a-late[aria-checked="true"] { background: #e09a00; border-color: #e09a00; }
+.dp-att-seg button.a-apologies[aria-checked="true"] { background: var(--blue); border-color: var(--blue); }
+.dp-att-seg button.a-absent[aria-checked="true"] { background: #c42b2b; border-color: #c42b2b; }
+.dp-iform .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (max-width: 560px) {
+  .dp-mlist { padding: 4px 14px; }
+  .dp-f3 { grid-template-columns: 1fr 1fr; }
+  .dp-f3 .f:last-child { grid-column: 1 / -1; }
+  .dp-macts { width: 100%; justify-content: flex-start; padding-left: 64px; }
+  .dp-agenda, .dp-minline { margin-left: 0; padding-left: 0; }
+  .dp-att-row { flex-wrap: wrap; }
+  .dp-att-seg { width: 100%; padding-left: 42px; }
+  .dp-att-seg button { flex: 1; padding: 6px 4px; }
+}
