@@ -21,7 +21,7 @@ const ROLE_FIELDS = 'id, name, color, position, kind, department, rank_label, ra
 // Your own member row (the database only returns yours), your roles (highest first) and the department roles
 // (for department colours, in case someone has a rank but not the hidden division role).
 async function fetchMine() {
-  const { data: me, error } = await sb.from('members').select('display_name, avatar_url, role_ids, is_staff').maybeSingle();
+  const { data: me, error } = await sb.from('members').select('discord_id, display_name, avatar_url, role_ids, is_staff').maybeSingle();
   if (error) throw error;
   if (!me) return { me: null, roles: [], departments: [] };
   const ids = me.role_ids.length ? me.role_ids.join(',') : '0';
@@ -30,14 +30,31 @@ async function fetchMine() {
   const mine = new Set(me.role_ids);
   const roles = rows.filter((r) => mine.has(r.id)).sort((a, b) => b.position - a.position);
   const departments = rows.filter((r) => r.kind === 'department');
-  return { me, roles, departments };
+  const [acc, sess] = await Promise.all([
+    sb.rpc('my_access').then((r) => r.data || null, () => null),
+    fetchSession(),
+  ]);
+  return { me, roles, departments, access: acc, session: sess };
+}
+
+// The banner: a live session, else the next scheduled one, plus the join code (from the session or settings).
+async function fetchSession() {
+  try {
+    const nowIso = new Date().toISOString();
+    const [live, next, code] = await Promise.all([
+      sb.from('sessions').select('status, note, host_name, started_at, scheduled_for, join_code').eq('status', 'live').order('started_at', { ascending: false }).limit(1),
+      sb.from('sessions').select('status, note, host_name, started_at, scheduled_for, join_code').eq('status', 'scheduled').gt('scheduled_for', nowIso).order('scheduled_for').limit(1),
+      sb.from('settings').select('value').eq('key', 'join_code').maybeSingle(),
+    ]);
+    return { live: live.data?.[0] || null, next: next.data?.[0] || null, code: code.data?.value || null };
+  } catch { return null; }
 }
 
 // Only what the page shows, so timestamps from the bot's routine resync don't count as a change.
 // The page shows your name, photo and badges, so only those count (a new ping role, say, changes nothing on screen).
-function fingerprint({ me, roles, departments }) {
+function fingerprint({ me, roles, departments, session }) {
   if (!me) return 'not-in-server';
-  return JSON.stringify([me.display_name, me.avatar_url, buildBadges(roles, departments)]);
+  return JSON.stringify([me.display_name, me.avatar_url, buildBadges(roles, departments), session]);
 }
 
 // ---------- badges ----------
@@ -245,9 +262,10 @@ function draw(data) {
   setPhoto(me.avatar_url);
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
-  setAccess(me, roles);
+  myDiscordId = me.discord_id;
+  setAccess(me, roles, data.access);
   buildMenu();
-  buildSessionBanner();
+  buildSessionBanner(data.session);
   route();
   // No "how this page works" text: the note only appears for loading and errors.
   note('');
@@ -353,14 +371,15 @@ const PAGES = [
     { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
   ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
-    { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'list' },
-    { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'log' },
-    { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'list' },
+    { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'cases' },
+    { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'logs' },
+    { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'tickets' },
     { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'list', aud: 'exec' },
   ] },
   { id: 'shifts',   aud: 'staff',    title: 'Shifts',         icon: 'clock',   layout: 'shifts' },
   { id: 'roster',   aud: 'staff',    title: 'Staff & roster', icon: 'people',  layout: 'people' },
   { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'doc' },
+  { id: 'tickets',  aud: 'leads',    title: 'Team tickets',   icon: 'inbox',   layout: 'tickets' },   // leads who aren't admins
   { id: 'contact',  aud: 'everyone', title: 'Contact a team', icon: 'chat',    layout: 'contact' },
   { id: 'apply',    aud: 'everyone', title: 'Apply',          icon: 'resume',  layout: 'form' },
   { id: 'commands', aud: 'everyone', title: 'Commands',       icon: 'console', layout: 'commands' },
@@ -368,7 +387,13 @@ const PAGES = [
 // Who can see what. Derived from role kinds (cbh/roles.py): exec = leadership or Executive; admin = the
 // Administration department, or exec; staff = the bot's is_staff flag.
 let access = { exec: false, admin: false, staff: false, everyone: true };
-function setAccess(me, roles) {
+let myDiscordId = null;
+function setAccess(me, roles, acc) {
+  if (acc) {   // my_access() in Supabase: the same rules the database uses (RLS)
+    access = { exec: !!acc.exec, admin: !!acc.admin, staff: !!acc.team || !!me.is_staff, everyone: true,
+      leads: !acc.admin && (acc.leads || []).length > 0 };
+    return;
+  }
   const exec = roles.some((r) => r.kind === 'leadership' || r.kind === 'executive');
   const admin = exec || roles.some((r) => r.department === 'Administration');
   access = { exec, admin, staff: !!me.is_staff || admin, everyone: true };
@@ -402,8 +427,8 @@ function buildMenu() {
   const nav = $('menu');
   nav.replaceChildren();
   for (const aud of AUDIENCES) {
-    const pages = PAGES.filter((p) => p.aud === aud.id);
-    if (!canSee(aud.id) || !pages.length) continue;
+    const pages = PAGES.filter((p) => (p.aud === aud.id && canSee(p.aud)) || (aud.id === 'staff' && p.aud === 'leads' && canSee('leads')));
+    if (!pages.length) continue;
     const group = document.createElement('section');
     group.className = `menu-group aud-${aud.id}`;
     group.innerHTML = `<h2 class="menu-label"><span class="aud-dot"></span>${aud.label}</h2>`;
@@ -438,23 +463,43 @@ const LAYOUTS = {
   commands: () => commandsPage(),
 };
 
-// Bot commands: a static list for now (Bravo keeps us told about changes; later the bot may sync it to Supabase).
-const COMMANDS = [
-  { name: '/login', args: 'code', what: 'Log in to this website with the code from "Log in with a code".', who: 'Everyone' },
+// Bot commands, grouped by who can use them (from Bravo; bot replies are private to the person who ran it).
+// Static for now; Bravo tells us about changes. Later the bot may sync this list to Supabase.
+const COMMAND_GROUPS = [
+  { aud: 'everyone', title: 'Everyone', cmds: [
+    ['/login', 'code', 'Log in to this website with the code from "Log in with a code".'],
+    ['/contact', 'team subject message', 'Contact a team: Administration (support), Nursing, Paramedicine or Community Engagement (partnerships). Replies come by DM; reply by DMing the bot.'],
+  ] },
+  { aud: 'admin', title: 'Admins · sessions', cmds: [
+    ['/session start', '[note]', 'Announce a session now in #server-starts with Session Ping, the join code and host.'],
+    ['/session end', '', 'End the live session.'],
+    ['/session schedule', 'date time [note]', 'Plan a session (date 2026-11-21, time 19:30 Sydney). It shows on the website banner.'],
+    ['/session cancel', '[number]', 'Cancel a scheduled session (the next one if no number).'],
+  ] },
+  { aud: 'admin', title: 'Admins · moderation', note: 'Each is saved as a case, posted to #server-logs, and the member gets a DM where possible. You can’t act on someone with the same or a higher role.', cmds: [
+    ['/warn', 'member reason', 'Warn a member.'],
+    ['/timeout', 'member length reason', 'Time out for 10 minutes, 1 hour, 6 hours, 1 day, 3 days or 1 week.'],
+    ['/untimeout', 'member [reason]', 'Remove a timeout.'],
+    ['/kick', 'member reason', 'Kick a member.'],
+    ['/ban', 'member reason [delete_messages]', 'Ban a member, optionally deleting their last 1 or 7 days of messages.'],
+    ['/unban', 'user_id reason', 'Unban someone by their Discord ID.'],
+    ['/cases', 'member', 'Their last 10 cases.'],
+  ] },
+  { aud: 'exec', title: 'Executives', cmds: [
+    ['/joincode', 'code', 'Change the Maple Hospital server join code (the website banner and the USE CODE channel update).'],
+  ] },
 ];
 function commandsPage() {
-  const el = document.createElement('div');
-  el.className = 'card';
-  for (const c of COMMANDS) {
-    const row = document.createElement('div');
-    row.className = 'row-item cmd-row';
-    row.innerHTML = '<code class="cmd"></code><div class="cmd-what"></div><span class="cmd-who"></span>';
-    row.querySelector('.cmd').textContent = c.args ? `${c.name} ${c.args}` : c.name;
-    row.querySelector('.cmd-what').textContent = c.what;
-    row.querySelector('.cmd-who').textContent = c.who;
-    el.append(row);
-  }
-  return el.outerHTML;
+  return COMMAND_GROUPS.map((g) => `
+    <section class="cmd-group aud-${g.aud}">
+      <h2 class="menu-label"><span class="aud-dot"></span>${esc(g.title)}</h2>
+      ${g.note ? `<p class="muted small cmd-note">${esc(g.note)}</p>` : ''}
+      <div class="card">${g.cmds.map(([name, args, what]) => `
+        <div class="row-item cmd-row">
+          <code class="cmd">${esc(name)}${args ? ` <span class="cmd-args">${esc(args)}</span>` : ''}</code>
+          <div class="cmd-what">${esc(what)}</div>
+        </div>`).join('')}</div>
+    </section>`).join('');
 }
 
 // #exec, #admin/logs, #shifts… Anything else = home. Only while logged in, and only pages this person may see.
@@ -490,7 +535,7 @@ function route() {
   const body = $('page-body');
   if (tool) {
     setPageTitle(tool.icon, tool.title, tool.aud || page.aud);
-    body.innerHTML = LAYOUTS[tool.layout]();
+    if (LIVE[tool.layout]) LIVE[tool.layout](body); else body.innerHTML = LAYOUTS[tool.layout]();
   } else if (page.tools) {
     setPageTitle(page.icon, page.title, page.aud);
     const grid = document.createElement('div');
@@ -504,24 +549,364 @@ function route() {
     }
     body.replaceChildren(grid);
   } else {
-    setPageTitle(page.icon, page.title, page.aud);
-    body.innerHTML = LAYOUTS[page.layout]();
+    setPageTitle(page.icon, page.title, page.aud === 'leads' ? 'staff' : page.aud);
+    if (LIVE[page.layout]) LIVE[page.layout](body); else body.innerHTML = LAYOUTS[page.layout]();
   }
   document.title = (tool ? tool.title : page.title) + ' · CareBeyond';
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
 
+// ---------- live pages (data from Supabase; back end by Bravo, migration 0004) ----------
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function when(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), now = Date.now(), diff = (now - d) / 1000;
+  if (diff >= 0 && diff < 60) return 'just now';
+  if (diff >= 0 && diff < 3600) return Math.floor(diff / 60) + ' min ago';
+  if (diff >= 0 && diff < 86400 && d.getDate() === new Date().getDate()) return 'today ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+function whenAhead(iso) {
+  const d = new Date(iso);
+  const day = d.toDateString() === new Date().toDateString() ? 'Today' : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${day} at ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function liveError(body, err) {
+  body.insertAdjacentHTML('beforeend', `<p class="error">Couldn't load this: ${esc(err.message || err)}</p>`);
+}
+
+// ----- Mod reports (#admin/cases) -----
+const CASE_ACTIONS = [
+  { id: 'warn', label: 'Warn' }, { id: 'timeout', label: 'Timeout' }, { id: 'kick', label: 'Kick' },
+  { id: 'ban', label: 'Ban' }, { id: 'unban', label: 'Unban' }, { id: 'note', label: 'Note' },
+];
+const ACTION_LABEL = { warn: 'Warn', timeout: 'Timeout', untimeout: 'Timeout removed', kick: 'Kick', ban: 'Ban', unban: 'Unban', note: 'Note' };
+const SOURCE_LABEL = { discord: 'Discord', website: 'Website', in_game: 'In game' };
+
+async function renderCases(body) {
+  let filter = 'all';
+  body.innerHTML = `
+    <div class="toolbar">
+      <button class="refresh" id="case-new">New report</button>
+      <div class="chips" id="case-filter">${[{ id: 'all', label: 'All' }, ...CASE_ACTIONS].map((a) =>
+        `<button class="chip${a.id === 'all' ? ' on' : ''}" data-f="${a.id}">${a.label}</button>`).join('')}</div>
+    </div>
+    <form class="card case-form" id="case-form" hidden>
+      <div class="seg" id="case-action">${CASE_ACTIONS.map((a, i) =>
+        `<button type="button" class="seg-btn${i === 0 ? ' on' : ''}" data-a="${a.id}">${a.label}</button>`).join('')}</div>
+      <div class="f-row">
+        <label class="f"><span>Who</span><input id="case-target" required maxlength="100" placeholder="Their Discord or Roblox name"></label>
+        <label class="f"><span>Discord ID <em>(optional)</em></span><input id="case-target-id" inputmode="numeric" pattern="[0-9]{15,22}" placeholder="e.g. 1142255844453523527"></label>
+      </div>
+      <div class="f-row">
+        <label class="f" id="case-dur-wrap" hidden><span>Length (minutes)</span><input id="case-dur" type="number" min="1" max="40320" placeholder="60"></label>
+        <label class="f"><span>Where</span><select id="case-source"><option value="in_game">In game (Maple Hospital)</option><option value="website">Discord / other</option></select></label>
+      </div>
+      <label class="f"><span>Reason</span><textarea id="case-reason" required maxlength="1000" rows="3"></textarea></label>
+      <p class="error" id="case-error" hidden></p>
+      <div class="f-actions"><button type="button" class="linkish" id="case-cancel">Cancel</button><button class="refresh" type="submit">Save report</button></div>
+    </form>
+    <div class="card" id="case-list"><p class="muted small">Loading…</p></div>`;
+
+  const form = body.querySelector('#case-form');
+  let action = 'warn';
+  const showDur = () => { body.querySelector('#case-dur-wrap').hidden = !['timeout', 'ban'].includes(action); };
+  body.querySelector('#case-new').onclick = () => { form.hidden = !form.hidden; if (!form.hidden) body.querySelector('#case-target').focus(); };
+  body.querySelector('#case-cancel').onclick = () => { form.hidden = true; };
+  body.querySelector('#case-action').onclick = (e) => {
+    const b = e.target.closest('.seg-btn'); if (!b) return;
+    action = b.dataset.a;
+    body.querySelectorAll('#case-action .seg-btn').forEach((x) => x.classList.toggle('on', x === b));
+    showDur();
+  };
+  body.querySelector('#case-filter').onclick = (e) => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    filter = b.dataset.f;
+    body.querySelectorAll('#case-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
+    load();
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const err = body.querySelector('#case-error');
+    err.hidden = true;
+    const dur = parseInt(body.querySelector('#case-dur').value, 10);
+    const row = {
+      action,
+      target_name: body.querySelector('#case-target').value.trim(),
+      target_discord_id: body.querySelector('#case-target-id').value.trim() || null,
+      reason: body.querySelector('#case-reason').value.trim(),
+      duration_minutes: ['timeout', 'ban'].includes(action) && dur > 0 ? dur : null,
+      source: body.querySelector('#case-source').value,
+      moderator_discord_id: myDiscordId,
+      moderator_name: $('name').textContent,
+    };
+    const { error } = await sb.from('mod_cases').insert(row);
+    if (error) { err.textContent = "Couldn't save the report: " + error.message; err.hidden = false; return; }
+    form.reset(); form.hidden = true; load();
+  };
+
+  async function load() {
+    const list = body.querySelector('#case-list');
+    let q = sb.from('mod_cases').select('*').order('created_at', { ascending: false }).limit(100);
+    if (filter !== 'all') q = q.eq('action', filter);
+    const { data, error } = await q;
+    if (error) { list.innerHTML = ''; return liveError(list, error); }
+    if (!data.length) { list.innerHTML = `<p class="muted small">${filter === 'all' ? 'No reports yet.' : 'None of these yet.'}</p>`; return; }
+    list.innerHTML = data.map((c) => `
+      <div class="row-item case">
+        <span class="act act-${esc(c.action)}">${esc(ACTION_LABEL[c.action] || c.action)}</span>
+        <div class="case-main">
+          <div><strong>${esc(c.target_name || c.target_discord_id || 'Unknown')}</strong>${c.duration_minutes ? ` <span class="muted">· ${c.duration_minutes} min</span>` : ''}</div>
+          <div class="case-reason">${esc(c.reason)}</div>
+          <div class="muted small-meta">by ${esc(c.moderator_name || 'unknown')} · ${esc(SOURCE_LABEL[c.source] || c.source)} · ${when(c.created_at)}</div>
+        </div>
+      </div>`).join('');
+  }
+  load();
+}
+
+// ----- Discord logs (#admin/logs) -----
+const LOG_GROUPS = [
+  { id: 'all', label: 'All', types: null },
+  { id: 'messages', label: 'Messages', types: ['message_delete', 'message_edit'] },
+  { id: 'members', label: 'Joins & leaves', types: ['member_join', 'member_leave'] },
+  { id: 'roles', label: 'Roles & names', types: ['roles_change', 'nickname_change'] },
+  { id: 'mod', label: 'Moderation', types: ['member_ban', 'member_unban', 'timeout'] },
+];
+const LOG_LABEL = {
+  message_delete: 'Message deleted', message_edit: 'Message edited', member_join: 'Joined', member_leave: 'Left',
+  member_ban: 'Banned', member_unban: 'Unbanned', roles_change: 'Roles changed', nickname_change: 'Nickname changed', timeout: 'Timed out',
+};
+function logDetail(l) {
+  const d = l.details || {};
+  switch (l.type) {
+    case 'message_delete': return `<div class="log-quote">${esc(d.content || '(no text)')}</div>${d.attachments?.length ? `<div class="muted small-meta">${d.attachments.length} attachment(s)</div>` : ''}`;
+    case 'message_edit': return `<div class="log-quote was">${esc(d.before || '')}</div><div class="log-quote">${esc(d.after || '')}</div>`;
+    case 'roles_change': return `<div class="small-meta">${(d.added || []).map((r) => `<span class="rchip add">+ ${esc(r)}</span>`).join('')}${(d.removed || []).map((r) => `<span class="rchip rem">− ${esc(r)}</span>`).join('')}</div>`;
+    case 'nickname_change': return `<div class="small-meta">${esc(d.before || '(none)')} → ${esc(d.after || '(none)')}</div>`;
+    case 'member_join': return d.account_age_days != null ? `<div class="muted small-meta">Account ${d.account_age_days} days old${d.account_age_days < 7 ? ' · <strong class="warn-text">new account</strong>' : ''}</div>` : '';
+    default: return '';
+  }
+}
+
+async function renderLogs(body) {
+  const PAGE = 50;
+  let group = 'all', offset = 0;
+  body.innerHTML = `
+    <div class="toolbar"><div class="chips" id="log-filter">${LOG_GROUPS.map((g) =>
+      `<button class="chip${g.id === 'all' ? ' on' : ''}" data-g="${g.id}">${g.label}</button>`).join('')}</div></div>
+    <div class="card" id="log-list"><p class="muted small">Loading…</p></div>
+    <div class="center"><button class="ghost" id="log-more" hidden>Load more</button></div>`;
+  const list = body.querySelector('#log-list');
+  body.querySelector('#log-filter').onclick = (e) => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    group = b.dataset.g; offset = 0;
+    body.querySelectorAll('#log-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
+    load(true);
+  };
+  body.querySelector('#log-more').onclick = () => load(false);
+  async function load(fresh) {
+    let q = sb.from('discord_logs').select('*').order('at', { ascending: false }).range(offset, offset + PAGE - 1);
+    const g = LOG_GROUPS.find((x) => x.id === group);
+    if (g.types) q = q.in('type', g.types);
+    const { data, error } = await q;
+    if (fresh) list.innerHTML = '';
+    if (error) return liveError(list, error);
+    if (fresh && !data.length) list.innerHTML = '<p class="muted small">Nothing logged yet.</p>';
+    list.insertAdjacentHTML('beforeend', data.map((l) => `
+      <div class="row-item log">
+        <span class="log-type t-${esc(l.type)}">${esc(LOG_LABEL[l.type] || l.type)}</span>
+        <div class="case-main">
+          <div><strong>${esc(l.user_name || l.user_discord_id || 'Unknown')}</strong>${l.channel_name ? ` <span class="muted">in #${esc(l.channel_name)}</span>` : ''}</div>
+          ${logDetail(l)}
+        </div>
+        <span class="muted small-meta when">${when(l.at)}</span>
+      </div>`).join(''));
+    offset += data.length;
+    body.querySelector('#log-more').hidden = data.length < PAGE;
+  }
+  load(true);
+}
+
+const LIVE = { cases: renderCases, logs: renderLogs };
+
+// ----- Contact a team (#contact) and team tickets (#admin/tickets, #tickets) -----
+// Back end by Bravo (migration 0005): a ticket opens a private thread in the team's Discord channel; replies flow
+// both ways (Discord thread / DMs <-> website).
+const TEAMS = [
+  { id: 'Administration', label: 'Administration', sub: 'Support', icon: 'clipboard', color: 0x5C72FF },
+  { id: 'Nursing', label: 'Nursing', sub: '', icon: 'nurse', color: 0xFF3D7E },
+  { id: 'Paramedicine', label: 'Paramedicine', sub: '', icon: 'ambulance', color: 0xFF5533 },
+  { id: 'Community Engagement', label: 'Community Engagement', sub: 'Partnerships', icon: 'handshake', color: 0xFFAA00 },
+];
+const STATUS_LABEL = { open: 'Open', claimed: 'Claimed', closed: 'Closed' };
+const teamOf = (id) => TEAMS.find((t) => t.id === id) || TEAMS[0];
+
+function ticketRow(t, showOpener) {
+  const team = teamOf(t.team);
+  return `<button class="row-item ticket" data-id="${t.id}">
+    <span class="t-ico" style="--c:${hex(team.color)};--icon:${iconUrl(team.icon)}" aria-hidden="true"></span>
+    <span class="case-main">
+      <strong>${esc(t.subject)}</strong>
+      <span class="muted small-meta">${esc(team.label)}${showOpener ? ` · from ${esc(t.opener_name || 'unknown')}` : ''}${t.claimed_by_name ? ` · ${esc(t.claimed_by_name)} has it` : ''} · ${when(t.created_at)}</span>
+    </span>
+    <span class="st st-${esc(t.status)}">${esc(STATUS_LABEL[t.status] || t.status)}</span>
+  </button>`;
+}
+
+// One conversation. `staff`: show Claim / Close and send replies as staff.
+async function renderThread(body, ticket, { staff, back }) {
+  const team = teamOf(ticket.team);
+  body.innerHTML = `
+    <button class="back inline-back" type="button"><span class="back-ico" aria-hidden="true"></span>All tickets</button>
+    <div class="card thread-head">
+      <span class="t-ico" style="--c:${hex(team.color)};--icon:${iconUrl(team.icon)}" aria-hidden="true"></span>
+      <div class="case-main"><strong class="thread-subject">${esc(ticket.subject)}</strong>
+        <span class="muted small-meta">${esc(team.label)}${staff ? ` · from ${esc(ticket.opener_name || 'unknown')}` : ''} · ${when(ticket.created_at)}</span></div>
+      <span class="st st-${esc(ticket.status)}">${esc(STATUS_LABEL[ticket.status])}</span>
+    </div>
+    ${staff && ticket.status !== 'closed' ? `<div class="toolbar">${ticket.status === 'open' ? '<button class="ghost" id="t-claim">Claim</button>' : ''}<button class="ghost" id="t-close">Close ticket</button></div>` : ''}
+    <div class="card msgs" id="t-msgs"><p class="muted small">Loading…</p></div>
+    ${ticket.status !== 'closed' ? `<form class="card reply" id="t-reply">
+      <textarea id="t-body" rows="3" maxlength="2000" required placeholder="Write a reply"></textarea>
+      <p class="error" id="t-err" hidden></p>
+      <div class="f-actions"><button class="refresh" type="submit">Send</button></div></form>` : ''}`;
+  body.querySelector('.inline-back').onclick = back;
+  const msgs = body.querySelector('#t-msgs');
+  async function load() {
+    const { data, error } = await sb.from('ticket_messages').select('*').eq('ticket_id', ticket.id).order('created_at');
+    if (error) { msgs.innerHTML = ''; return liveError(msgs, error); }
+    msgs.innerHTML = data.length ? data.map((m) => `
+      <div class="msg${m.from_staff ? ' staff' : ''}${m.author_discord_id === myDiscordId ? ' mine' : ''}">
+        <div class="msg-meta">${esc(m.author_name || 'Unknown')}${m.from_staff ? ' · ' + esc(team.label) : ''} · ${when(m.created_at)}</div>
+        <div class="msg-body">${esc(m.body)}</div>
+      </div>`).join('') : '<p class="muted small">No messages yet.</p>';
+  }
+  const form = body.querySelector('#t-reply');
+  if (form) form.onsubmit = async (e) => {
+    e.preventDefault();
+    const text = body.querySelector('#t-body').value.trim();
+    if (!text) return;
+    const row = { ticket_id: ticket.id, author_discord_id: myDiscordId, author_name: $('name').textContent, body: text };
+    if (staff) row.from_staff = true;
+    const { error } = await sb.from('ticket_messages').insert(row);
+    const err = body.querySelector('#t-err');
+    if (error) { err.textContent = "Couldn't send: " + error.message; err.hidden = false; return; }
+    err.hidden = true; form.reset(); load();
+  };
+  const upd = async (patch) => {
+    const { error } = await sb.from('tickets').update(patch).eq('id', ticket.id);
+    if (error) return liveError(body, error);
+    Object.assign(ticket, patch);
+    renderThread(body, ticket, { staff, back });
+  };
+  body.querySelector('#t-claim')?.addEventListener('click', () =>
+    upd({ status: 'claimed', claimed_by_discord_id: myDiscordId, claimed_by_name: $('name').textContent }));
+  body.querySelector('#t-close')?.addEventListener('click', () => {
+    if (confirm('Close this ticket? The Discord thread will be archived.')) upd({ status: 'closed', closed_at: new Date().toISOString() });
+  });
+  load();
+}
+
+async function renderContact(body) {
+  body.innerHTML = `
+    <form class="card case-form" id="c-form">
+      <div class="team-pick" id="c-team">${TEAMS.map((t, i) => `
+        <button type="button" class="team${i === 0 ? ' on' : ''}" data-t="${esc(t.id)}" style="--c:${hex(t.color)}">
+          <span class="t-ico" style="--icon:${iconUrl(t.icon)}" aria-hidden="true"></span>
+          <span class="team-name">${esc(t.label)}</span>${t.sub ? `<span class="team-sub">${esc(t.sub)}</span>` : ''}
+        </button>`).join('')}</div>
+      <label class="f"><span>Subject</span><input id="c-subject" required maxlength="120"></label>
+      <label class="f"><span>Message</span><textarea id="c-body" required maxlength="2000" rows="4"></textarea></label>
+      <p class="error" id="c-err" hidden></p>
+      <div class="f-actions"><button class="refresh" type="submit">Send</button></div>
+    </form>
+    <h2 class="menu-label aud-everyone"><span class="aud-dot"></span>Your tickets</h2>
+    <div class="card" id="c-list"><p class="muted small">Loading…</p></div>`;
+  let team = TEAMS[0].id;
+  body.querySelector('#c-team').onclick = (e) => {
+    const b = e.target.closest('.team'); if (!b) return;
+    team = b.dataset.t;
+    body.querySelectorAll('#c-team .team').forEach((x) => x.classList.toggle('on', x === b));
+  };
+  body.querySelector('#c-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = body.querySelector('#c-err'); err.hidden = true;
+    const subject = body.querySelector('#c-subject').value.trim(), text = body.querySelector('#c-body').value.trim();
+    const { data: t, error } = await sb.from('tickets').insert({ team, subject, opener_discord_id: myDiscordId, opener_name: $('name').textContent }).select().single();
+    if (error) { err.textContent = "Couldn't send: " + error.message; err.hidden = false; return; }
+    const { error: e2 } = await sb.from('ticket_messages').insert({ ticket_id: t.id, author_discord_id: myDiscordId, author_name: $('name').textContent, body: text });
+    if (e2) { err.textContent = "Your ticket was opened but the message didn't send: " + e2.message; err.hidden = false; return; }
+    renderThread(body, t, { staff: false, back: () => renderContact(body) });
+  };
+  const list = body.querySelector('#c-list');
+  const { data, error } = await sb.from('tickets').select('*').eq('opener_discord_id', myDiscordId).order('created_at', { ascending: false });
+  if (error) { list.innerHTML = ''; return liveError(list, error); }
+  list.innerHTML = data.length ? data.map((t) => ticketRow(t, false)).join('') : '<p class="muted small">You haven’t contacted a team yet.</p>';
+  list.onclick = (e) => {
+    const b = e.target.closest('.ticket'); if (!b) return;
+    renderThread(body, data.find((x) => String(x.id) === b.dataset.id), { staff: false, back: () => renderContact(body) });
+  };
+}
+
+async function renderTeamTickets(body) {
+  let filter = 'active';
+  body.innerHTML = `
+    <div class="toolbar"><div class="chips" id="tk-filter">
+      <button class="chip on" data-f="active">Open</button><button class="chip" data-f="closed">Closed</button></div></div>
+    <div class="card" id="tk-list"><p class="muted small">Loading…</p></div>`;
+  body.querySelector('#tk-filter').onclick = (e) => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    filter = b.dataset.f;
+    body.querySelectorAll('#tk-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
+    load();
+  };
+  const list = body.querySelector('#tk-list');
+  async function load() {
+    let q = sb.from('tickets').select('*').order('created_at', { ascending: false }).limit(100);
+    q = filter === 'closed' ? q.eq('status', 'closed') : q.in('status', ['open', 'claimed']);
+    const { data, error } = await q;
+    if (error) { list.innerHTML = ''; return liveError(list, error); }
+    list.innerHTML = data.length ? data.map((t) => ticketRow(t, true)).join('') : `<p class="muted small">${filter === 'closed' ? 'No closed tickets.' : 'No open tickets.'}</p>`;
+    list.onclick = (e) => {
+      const b = e.target.closest('.ticket'); if (!b) return;
+      renderThread(body, data.find((x) => String(x.id) === b.dataset.id), { staff: true, back: () => renderTeamTickets(body) });
+    };
+  }
+  load();
+}
+
+LIVE.contact = renderContact;
+LIVE.tickets = renderTeamTickets;
+
 // ---------- session banner ----------
 // Under the Welcome card: the Maple Hospital custom server and its join code (pinned; the owner will say if it
 // changes). Live / next-session status comes once the sessions back end is ready.
-const JOIN_CODE = '4920-4087';
-function buildSessionBanner() {
-  $('join-code').textContent = JOIN_CODE;
+let joinCode = '4920-4087';   // fallback; the live value comes from settings or the session
+function buildSessionBanner(sess) {
+  const live = sess && sess.live, next = sess && sess.next;
+  joinCode = (live && live.join_code) || (sess && sess.code) || joinCode;
+  $('join-code').textContent = joinCode;
+  const banner = $('session'), label = $('session-label'), status = $('session-status');
+  banner.classList.toggle('is-live', !!live);
+  if (live) {
+    label.textContent = 'Session live now';
+    status.textContent = [live.host_name && `Hosted by ${live.host_name}`, live.started_at && `since ${new Date(live.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`].filter(Boolean).join(' · ');
+  } else if (next) {
+    label.textContent = 'Next session';
+    status.textContent = [whenAhead(next.scheduled_for), next.host_name && `with ${next.host_name}`].filter(Boolean).join(' · ');
+  } else {
+    label.textContent = 'Maple Hospital server';
+    status.textContent = '';
+  }
+  status.hidden = !status.textContent;
 }
 $('copy-join').addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(JOIN_CODE);
+    await navigator.clipboard.writeText(joinCode);
     $('copy-join').textContent = 'Copied';
     setTimeout(() => { $('copy-join').textContent = 'Copy'; }, 1500);
   } catch { /* the code is on screen */ }

@@ -3,6 +3,20 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.6.0 (2026-11-17)
+
+**Added:**
+- **Session banner** under the Welcome card shows **Session live now** (who's hosting and since when) or the **next scheduled session**, with the join code and a Copy button. Admins run sessions with `/session start | end | schedule | cancel`; execs change the code with `/joincode`.
+- **Admin hub → Mod reports:** every warn, timeout, kick and ban in one list, filterable by type. **New report** logs something done in game (e.g. "I banned X in Maple Hospital").
+- **Admin hub → Discord logs:** deleted and edited messages, joins and leaves (new accounts flagged), role and nickname changes, bans and timeouts, filterable and kept for 90 days.
+- **Contact a team:** pick Administration (support), Nursing, Paramedicine or Community Engagement (partnerships), write a message and follow the conversation on the site. Replies also reach you by DM. Also works in Discord with `/contact`.
+- **Tickets** for team leads (in the Admin hub for admins; a **Team tickets** tile for other leads): reply, claim and close.
+- **Commands** lists every bot command, grouped by who can use it.
+
+**Changed:** who sees which pages now comes from the same access rules the database uses.
+Bot (by Bravo): `/session`, `/joincode`, `/warn`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban`, `/cases`, `/contact`, and Discord logging.
+Database change: yes, migrations 0004 (access helpers, sessions, settings, mod cases, Discord logs) and 0005 (tickets).
+
 ## 0.5.0 (2026-11-17)
 
 **Added:**
