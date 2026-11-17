@@ -1141,3 +1141,7 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
   border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
 .pg-sess .ss-host button { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 0; background: #dfe7f2; color: var(--muted); font-weight: 700; cursor: pointer; }
 .pg-sess .ss-host button:hover { background: #fde2e1; color: #b42318; }
+
+/* 0.20.1: shown on the login card inside in-app browsers (Discord, Instagram, ...) */
+.inapp-note { margin: 14px auto 0; max-width: 340px; font-size: 13px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.inapp-note .linkish { display: block; margin: 4px auto 0; padding: 4px 8px; color: var(--blue); font-weight: 600; }

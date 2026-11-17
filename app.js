@@ -4,7 +4,21 @@
 // The page never redraws by itself. It loads once after login, then quietly checks for changes
 // (every 30 s while the tab is open, and when you come back to the tab). If something you can see
 // has changed, it shows "Things have changed. [Refresh]" and only redraws when that button is pressed.
-const sb = supabase.createClient(CBH_CONFIG.supabaseUrl, CBH_CONFIG.supabaseKey);
+// PKCE (0.20.1): Discord sends people back with ?code=... in the query instead of #access_token=... in the fragment.
+// In-app browsers on phones (e.g. Discord's) sometimes lost the session coming back from the fragment, so people
+// landed on the login screen again even though Discord had signed them in. supabase-js swaps the code for a session
+// by itself on load (detectSessionInUrl); the code login (setSession) is unaffected.
+const sb = supabase.createClient(CBH_CONFIG.supabaseUrl, CBH_CONFIG.supabaseKey, {
+  auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true },
+});
+// What came back in the address bar from a Discord login, read before supabase-js tidies it away.
+const AUTH_RETURN = (() => {
+  const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.slice(1));
+  return {
+    code: q.has('code') || h.has('access_token'),
+    error: q.get('error_description') || h.get('error_description') || q.get('error') || h.get('error') || '',
+  };
+})();
 const $ = (id) => document.getElementById(id);
 const CHECK_EVERY_MS = 30_000;
 $('version').textContent = 'v' + window.CBH_VERSION;
@@ -1675,5 +1689,46 @@ $('logout').addEventListener('click', async () => {
   history.replaceState(null, '', location.pathname);
 })();
 
-sb.auth.onAuthStateChange((_event, session) => onSession(session));
-sb.auth.getSession().then(({ data }) => onSession(data.session));
+sb.auth.onAuthStateChange((_event, session) => { onSession(session); if (session) tidyAuthUrl(); });
+sb.auth.getSession().then(({ data, error }) => {
+  onSession(data.session);
+  if (data.session) { tidyAuthUrl(); return; }
+  if (AUTH_RETURN.error) return loginProblem("Discord login didn't finish: " + AUTH_RETURN.error.replace(/\+/g, ' '));
+  if (AUTH_RETURN.code) {
+    // Coming back from Discord: getSession waits for the code swap, so no session here means it failed. A short
+    // pause covers a SIGNED_IN that's still on its way.
+    setTimeout(async () => {
+      const { data: again } = await sb.auth.getSession();
+      if (!again.session) loginProblem("Discord signed you in, but this browser didn't keep the login" + (error ? ' (' + error.message + ')' : '') + '. Try again, open this page in Safari or Chrome, or use Log in with a code.');
+    }, 1500);
+  }
+});
+// Remove ?code= / #access_token= etc. from the address bar once the login is done (keeps any page route).
+function tidyAuthUrl() {
+  const q = new URLSearchParams(location.search);
+  let changed = false;
+  for (const k of ['code', 'error', 'error_code', 'error_description', 'state']) if (q.has(k)) { q.delete(k); changed = true; }
+  const hashIsAuth = /(^|&)(access_token|refresh_token|error_description)=/.test(location.hash.slice(1));
+  if (!changed && !hashIsAuth) return;
+  try { history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + (hashIsAuth ? '' : location.hash)); } catch { /* fine */ }
+}
+function loginProblem(text) {
+  tidyAuthUrl();
+  const e = $('login-error');
+  if (!e || currentUserId) return;
+  e.textContent = text;
+  e.hidden = false;
+}
+
+// In-app browsers (Discord, Instagram, Facebook, TikTok, Snapchat, Android webviews...) can drop logins. Point people
+// to their normal browser or the code login. (Discord on iPhone may look like Safari; the error above covers that.)
+(function inAppNote() {
+  const ua = navigator.userAgent || '';
+  if (!/Discord|Instagram|FBAN|FBAV|FB_IAB|Line\/|TikTok|musical_ly|Snapchat|Twitter|; wv\)/i.test(ua)) return;
+  const n = $('inapp-note');
+  if (n) n.hidden = false;
+})();
+$('inapp-copy')?.addEventListener('click', async (e) => {
+  try { await navigator.clipboard.writeText(location.origin + location.pathname); e.target.textContent = 'Link copied'; }
+  catch { e.target.textContent = location.origin + location.pathname; }
+});
