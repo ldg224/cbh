@@ -254,6 +254,7 @@ function draw(data) {
   pending = null;
   shownSig = fingerprint(data);
   const { me, roles, departments } = data;
+  homeReady = !!me;
   if (!me) {
     $('badges').hidden = true;
     note("We couldn't find you in the CareBeyond - Hospital server. Join it with this Discord account, then refresh.");
@@ -331,6 +332,8 @@ function onSession(session) {
   $('who').hidden = !user;
   $('changed').hidden = true;
   $('menu').hidden = true;
+  $('home').hidden = true;
+  homeReady = false;
   $('page').hidden = true;
   $('session').hidden = true;
   $('session-admin').hidden = true;
@@ -559,8 +562,13 @@ function commandsPage() {
 }
 
 // #exec, #admin/logs, #shifts… Anything else = home. Only while logged in, and only pages this person may see.
+let homeReady = false;   // the new home (home.js) shows once your member row has loaded
 function findRoute() {
   const [a, b] = location.hash.slice(1).split('/');
+  if (a === 'f') {   // a folder opened as its own page (home.js)
+    const folder = FOLDERS.find((f) => f.id === b);
+    return folder && myTools().some((t) => t.folder === folder.id) ? { folder } : null;
+  }
   const page = PAGES.find((p) => p.id === a && canSee(p.aud));
   if (!page) return null;
   if (!b) return { page };
@@ -579,17 +587,29 @@ function route() {
   if (!currentUserId) return;
   closePop();
   const r = findRoute();
-  $('signed-in').hidden = !!r;
-  $('session').hidden = !!r;
-  $('session-admin').hidden = true;   // sessions are run from the Directors hub / Admin hub (0.10.0)
-  $('menu').hidden = !!r;
+  // 0.14.0: the home page is home.js (search, Session active, pins, folders). The old Welcome card only shows
+  // while loading or when something is wrong (its note), and the old menu and session banner are retired.
+  $('signed-in').hidden = !!r || homeReady;
+  $('session').hidden = true;
+  $('session-admin').hidden = true;
+  $('menu').hidden = true;
+  $('home').hidden = !!r || !homeReady;
   $('page').hidden = !r;
-  if (!r) { document.title = 'CareBeyond Dashboard'; fitBadges(); return; }
-  const { page, tool } = r;
-  if (page.tools && !tool) { location.replace('#'); return; }   // no hub pages any more (0.13.0)
+  $('page-title').hidden = false;
+  if (!r) { document.title = 'CareBeyond'; if (homeReady) renderHome(); return; }
   const back = $('page').querySelector('.back');
   back.href = '#';
-  back.lastChild.textContent = 'Menu';
+  back.lastChild.textContent = 'Home';
+  if (r.folder) {
+    $('page-title').hidden = true;
+    $('page-body').classList.remove('is-building');
+    document.title = r.folder.title + ' · CareBeyond';
+    renderFolder($('page-body'), r.folder);
+    window.scrollTo(0, 0);
+    return;
+  }
+  const { page, tool } = r;
+  if (page.tools && !tool) { location.replace('#'); return; }   // no hub pages any more (0.13.0)
   const body = $('page-body');
   body.classList.remove('is-building');
   if (tool) {
@@ -855,6 +875,13 @@ async function renderCases(body) {
   }
   sync();
   load();
+  if (pendingCase) {   // from the home search or the Moderation folder's quick buttons
+    const pc = pendingCase; pendingCase = null;
+    form.hidden = false;
+    if (DISCORD_ACTIONS.some((a) => a.id === pc.action)) action = pc.action;
+    if (pc.person) pick({ discord_id: pc.person.discord_id, display_name: pc.person.display_name, username: pc.person.username, avatar_url: pc.person.avatar_url });
+    else { sync(); q.focus(); }
+  }
 }
 
 // ----- Failed Mod actions: a red notice at the top for the person who asked, closed with X (gone for good) -----
@@ -902,7 +929,7 @@ async function renderRecords(body) {
     if (!sugg.innerHTML && q.value.trim().length >= 2) sugg.innerHTML = '<p class="muted small sg-empty">Nobody found. Someone who has left can be found by their Discord ID.</p>';
     sugg.hidden = !sugg.innerHTML;
   };
-  const open = (m) => { sugg.hidden = true; q.value = ''; q.blur(); showRecord(body.querySelector('#rec-body'), m.discord_id); };
+  const open = (m) => { sugg.hidden = true; q.value = ''; q.blur(); rememberRecord(m.discord_id, cleanName(m.display_name || m.username || m.discord_id)); showRecord(body.querySelector('#rec-body'), m.discord_id); };
   q.oninput = () => {
     clearTimeout(timer);
     const term = q.value.trim();
@@ -922,7 +949,8 @@ async function renderRecords(body) {
   };
   sugg.onclick = (e) => { const b = e.target.closest('.sg'); if (b) open(b.dataset.raw ? { discord_id: b.dataset.raw } : results[+b.dataset.i]); };
   document.addEventListener('click', (e) => { if (body.isConnected && !e.target.closest('.rec-search')) sugg.hidden = true; });
-  q.focus();
+  if (pendingRecord) { const id = pendingRecord; pendingRecord = null; showRecord(body.querySelector('#rec-body'), id); }
+  else q.focus();
 }
 
 const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '');

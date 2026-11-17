@@ -3,6 +3,23 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.14.0 (2026-11-17)
+
+**A new home page** (the design chosen on the mockup canvas).
+
+**Added:**
+- **Search** at the top ("What do you need?"). Type a name, username or Discord ID to find **people**: admins get **Warn**, **Time out** and **Record** right there, and Enter opens their record. It also finds **things to do** (start or end your shift, start or schedule a session, new mod action, change the join code) and **every tool**. Use the arrow keys and Enter, and press **/** anywhere to jump to search.
+- **Smart suggestions** under the search (up to 4), based on what's happening for you: an action that didn't go through, ending or starting your shift, applications to review, a ticket to reply to, copying the join code during a session, scheduling one when none is planned, or reopening the last record you looked at.
+- **Session active**: a block that appears only while a session is running. It shows who's hosting and for how long, the **join code** with Copy, **your shift** (live timer with Take a break and End shift, or Start shift), and **who's on shift** with photos and a count per department. When no session is running but one is scheduled, a small line shows when.
+- **Pins**: choose your own pinned tools. **Edit pins** lets you turn pins on or off, pick how many (2 to 7), put them in order, remove them and swap others in. Saved to your account, so they follow you between phone and computer.
+- **Everything you can use**, in four folders: **Moderation**, **People**, **Operations** and **Help and info**. Each tool is a card with a live line ("6 this week", "3 waiting", "Live", "You're on: 1h 18m"), and each folder shows what needs you.
+- **Folder pages**: the **›** button on a folder opens it as its own page with its stats and bigger cards. Moderation also gets **Warn**, **Time out**, **Kick** and **New action** buttons and the latest actions.
+
+**Changed:** the old Welcome card, session banner and menu blocks are replaced by the new home. Back on every page now says **Home**. Every person still only sees the tools they can use.
+
+Bot: no change.
+Database change: yes, migration 0016 (by Bravo: saved pins, home counts, people search).
+
 ## 0.13.2 (2026-11-17)
 
 **Changed:** in **Records**, **Incidents** is now **Actions**: only mod actions taken on that person's Discord account (timeouts, kicks, bans, unbans). Role changes, joins and leaves no longer appear there, and in-game records don't show on anyone's record. Incidents are meant for explicit write-ups only.
