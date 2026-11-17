@@ -42,13 +42,17 @@ function draw(data) {
   shownSig = fingerprint(data);
   const { me, roles } = data;
   if (!me) {
-    $('staff-line').textContent = '';
+    $('status-badge').hidden = true;
     $('roles-note').textContent = "We couldn't find you in the CareBeyond - Hospital server. Join it with this Discord account, then refresh.";
     return;
   }
   $('welcome-name').textContent = me.display_name;
   $('name').textContent = me.display_name;
-  $('staff-line').innerHTML = me.is_staff ? 'CareBeyond staff <span class="badge">Staff</span>' : 'CareBeyond member';
+  // Status is shown only by the badge next to the name (never as a sentence like "CareBeyond staff").
+  const badge = $('status-badge');
+  badge.textContent = me.is_staff ? 'Staff' : 'Member';
+  badge.className = me.is_staff ? 'badge' : 'badge badge-member';
+  badge.hidden = false;
   for (const r of roles) {
     const li = document.createElement('li');
     li.className = 'role';
@@ -66,7 +70,7 @@ function draw(data) {
 async function loadAndDraw() {
   $('roles').replaceChildren();
   $('roles-note').textContent = 'Loading your roles…';
-  $('staff-line').textContent = '';
+  $('status-badge').hidden = true;
   try {
     draw(await fetchMine());
   } catch (err) {
