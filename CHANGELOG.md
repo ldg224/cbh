@@ -3,6 +3,20 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.21.1 (2026-11-18)
+
+**Fixed:**
+- Logging in with Discord inside **Discord's own browser** (and other in-app browsers) now works; you're no longer sent back to the login screen.
+
+**Added:**
+- **Continue as <your name>** for the last account used on this device, plus **Not you? Use another account**.
+- Logging in brings you back to the page you were on.
+
+**Changed:**
+- A clear message if a login doesn't finish, pointing to **Log in with a code**.
+
+Bot: no change. Database change: no.
+
 ## 0.21.0 (2026-11-18)
 
 **Added:**
