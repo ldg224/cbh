@@ -22,7 +22,7 @@ const TOOL_BLURB = {
   'admin/tickets': 'Contact-a-team conversations', tickets: 'Your team’s conversations', 'exec/strikes': 'Staff discipline',
   roster: 'Everyone, by department', 'admin/applications': 'Read and decide', review: 'Read and decide',
   'directors/sessions': 'Start or schedule', 'admin/sessions': 'Start or schedule', shifts: 'Clock in and out',
-  'exec/reports': 'Hours by person and department', 'exec/announce': 'Post to Discord', 'exec/settings': 'Join code, auto-end',
+  'exec/reports': 'Hours, sessions and mod actions', 'exec/announce': 'Post to Discord', 'exec/settings': 'Join code, auto-end',
   rules: 'Policy and what each rank does', contact: 'Talk to a team', apply: 'Join a team', commands: 'The bot’s commands',
 };
 const SEARCH_WORDS = {
@@ -30,7 +30,7 @@ const SEARCH_WORDS = {
   'admin/logs': 'deleted edited messages joins leaves audit', 'admin/tickets': 'support help conversations',
   tickets: 'support conversations', roster: 'staff members people directory', shifts: 'clock in out on duty hours',
   'directors/sessions': 'session server start schedule maple', 'admin/sessions': 'session server start schedule maple',
-  'exec/reports': 'hours quota activity', 'exec/settings': 'join code auto end settings maple', apply: 'application form join',
+  'exec/reports': 'activity reports hours quota sessions mod actions staff', 'exec/settings': 'join code auto end settings maple', apply: 'application form join',
   contact: 'ticket support help', rules: 'policy rules ranks', commands: 'slash bot',
 };
 
