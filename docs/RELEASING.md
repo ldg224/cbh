@@ -16,7 +16,9 @@ While we're on 0.x, minor versions can change things freely.
 
 ## Releasing a version
 
-1. Pull first (`git pull --rebase`); the owner sometimes edits on github.com.
+1. Pull first (`git pull --rebase`) **before editing**; the owner sometimes edits on github.com. A pull with uncommitted
+   edits fails, so if you've already started, commit first and then pull. Run the release steps one at a time and
+   check each worked: a failed step in a chained command can leave a tag or release with the wrong number.
 2. Pick the number (table above).
 3. Set it in **both** places:
    - `version.js` here (`window.CBH_VERSION`), which the dashboard shows in the footer;
