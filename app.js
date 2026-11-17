@@ -33,8 +33,8 @@ async function fetchMine() {
   const [acc, sess, reviewTeams] = await Promise.all([
     sb.rpc('my_access').then((r) => r.data || null, () => null),
     fetchSession(),
-    // Teams that review a form (forms.review_team): their leads may review submissions. null = execs only.
-    sb.from('forms').select('review_team').then((r) => [...new Set((r.data || []).map((f) => f.review_team).filter(Boolean))], () => []),
+    // Departments whose applications I may review (rank permissions, 0027/0028). Execs always may.
+    sb.rpc('my_perms').then((r) => { myPerms = r.data || {}; return Object.keys(myPerms).filter((d) => (myPerms[d] || []).includes('applications.review')); }, () => []),
   ]);
   return { me, roles, departments, access: acc, session: sess, reviewTeams };
 }
@@ -412,12 +412,13 @@ const PAGES = [
 // Administration department, or exec; staff = the bot's is_staff flag.
 let access = { exec: false, admin: false, staff: false, everyone: true };
 let myDiscordId = null;
+let myPerms = {};         // my_perms(): { Department: ['applications.review', …] } (rank permissions, 0027)
 let myDepartments = [];   // departments I can start a shift in (from my roles)
 function setAccess(me, roles, acc, reviewTeams = []) {
   if (acc) {   // my_access() in Supabase: the same rules the database uses (RLS)
     access = { exec: !!acc.exec, admin: !!acc.admin, staff: !!acc.team || !!me.is_staff, everyone: true,
       leads: !acc.admin && (acc.leads || []).length > 0,
-      reviewer: !!acc.exec || (acc.leads || []).some((d) => reviewTeams.includes(d)) };
+      reviewer: !!acc.exec || reviewTeams.length > 0 };
     access['reviewer-lead'] = access.reviewer && !acc.admin;
     setDirectorAccess(acc.directs, roles, !!acc.exec, acc.run_sessions);
     return;
