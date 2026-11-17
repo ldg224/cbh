@@ -44,7 +44,7 @@ function draw(data) {
   const { me, roles } = data;
   if (!me) {
     $('status-badge').hidden = true;
-    $('roles-note').textContent = "We couldn't find you in the CareBeyond - Hospital server. Join it with this Discord account, then refresh.";
+    note("We couldn't find you in the CareBeyond - Hospital server. Join it with this Discord account, then refresh.");
     return;
   }
   $('welcome-name').textContent = me.display_name;
@@ -63,19 +63,23 @@ function draw(data) {
     li.append(dot, document.createTextNode(r.name));
     list.append(li);
   }
-  $('roles-note').textContent = roles.length
-    ? 'Loaded ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '. You\'ll see a Refresh button here if anything changes.'
-    : 'You have no roles in the server yet.';
+  // No "how this page works" text: the note only appears for loading, errors and empty states.
+  note(roles.length ? '' : 'You have no roles in the server yet.');
+}
+
+function note(text) {
+  $('roles-note').textContent = text;
+  $('roles-note').hidden = !text;
 }
 
 async function loadAndDraw() {
   $('roles').replaceChildren();
-  $('roles-note').textContent = 'Loading your roles…';
+  note('Loading your roles…');
   $('status-badge').hidden = true;
   try {
     draw(await fetchMine());
   } catch (err) {
-    $('roles-note').textContent = "Couldn't load your roles: " + (err.message || err);
+    note("Couldn't load your roles: " + (err.message || err));
   }
 }
 
