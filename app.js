@@ -44,11 +44,11 @@ async function fetchSession() {
   try {
     const nowIso = new Date().toISOString();
     const [live, next, code] = await Promise.all([
-      sb.from('sessions').select('status, note, host_name, started_at, scheduled_for, join_code').eq('status', 'live').order('started_at', { ascending: false }).limit(1),
-      sb.from('sessions').select('status, note, host_name, started_at, scheduled_for, join_code').eq('status', 'scheduled').gt('scheduled_for', nowIso).order('scheduled_for').limit(1),
+      sb.from('sessions').select('id, status, note, host_name, started_at, scheduled_for, join_code').eq('status', 'live').order('started_at', { ascending: false }).limit(1),
+      sb.from('sessions').select('id, status, note, host_name, started_at, scheduled_for, join_code').eq('status', 'scheduled').gt('scheduled_for', nowIso).order('scheduled_for').limit(5),
       sb.from('settings').select('value').eq('key', 'join_code').maybeSingle(),
     ]);
-    return { live: live.data?.[0] || null, next: next.data?.[0] || null, code: code.data?.value || null };
+    return { live: live.data?.[0] || null, next: next.data?.[0] || null, upcoming: next.data || [], code: code.data?.value || null };
   } catch { return null; }
 }
 
@@ -268,6 +268,7 @@ function draw(data) {
   setAccess(me, roles, data.access, data.reviewTeams);
   buildMenu();
   buildSessionBanner(data.session);
+  buildSessionAdmin(data.session);
   route();
   // No "how this page works" text: the note only appears for loading and errors.
   note('');
@@ -330,6 +331,7 @@ function onSession(session) {
   $('menu').hidden = true;
   $('page').hidden = true;
   $('session').hidden = true;
+  $('session-admin').hidden = true;
   stopCodeLogin();
   showLoginView('main');
   if (!user) return;
@@ -368,9 +370,9 @@ const AUDIENCES = [
 const PAGES = [
   { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
     { id: 'reports',  title: 'Reports',       icon: 'bar-chart', layout: 'reports' },
-    { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list' },
-    { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form' },
-    { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
+    { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list', building: true },
+    { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form', building: true },
+    { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings', building: true },
   ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
     { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'cases' },
@@ -380,7 +382,7 @@ const PAGES = [
   ] },
   { id: 'shifts',   aud: 'staff',    title: 'Shifts',         icon: 'clock',   layout: 'shifts' },
   { id: 'roster',   aud: 'staff',    title: 'Staff & roster', icon: 'people',  layout: 'people' },
-  { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'doc' },
+  { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'doc', building: true },
   { id: 'tickets',  aud: 'leads',    title: 'Team tickets',   icon: 'inbox',   layout: 'tickets' },   // leads who aren't admins
   { id: 'review',   aud: 'reviewer-lead', title: 'Applications', icon: 'resume', layout: 'review' },   // review-team leads who aren't admins
   { id: 'contact',  aud: 'everyone', title: 'Contact a team', icon: 'chat',    layout: 'contact' },
@@ -425,6 +427,7 @@ function tileEl(href, p, aud, extra = '') {
   t.className = 'tile-title';
   t.textContent = p.title;
   a.append(t);
+  if (p.building) a.insertAdjacentHTML('beforeend', '<span class="tile-flag building">Being built</span>');
   return a;
 }
 
@@ -468,6 +471,9 @@ const LAYOUTS = {
   commands: () => commandsPage(),
 };
 
+const BUILDING_NOTE = (title) => `<div class="card building-note"><span class="t-ico" style="--c:#3a82d0;--icon:${iconUrl('settings')}" aria-hidden="true"></span>
+  <div class="case-main"><strong>${esc(title)} is being built</strong><span class="muted small-meta">This is the layout it will have. Nothing here works yet.</span></div></div>`;
+
 // Bot commands, grouped by who can use them (from Bravo; bot replies are private to the person who ran it).
 // Static for now; Bravo tells us about changes. Later the bot may sync this list to Supabase.
 const COMMAND_GROUPS = [
@@ -480,12 +486,6 @@ const COMMAND_GROUPS = [
     ['/shift break', '', 'Start or end a break.'],
     ['/shift end', '', 'End your shift.'],
     ['/shift status', '', 'Your current shift and this week’s hours.'],
-  ] },
-  { aud: 'admin', title: 'Admins · sessions', cmds: [
-    ['/session start', '[note]', 'Announce a session now in #server-starts with Session Ping, the join code and host.'],
-    ['/session end', '', 'End the live session.'],
-    ['/session schedule', 'date time [note]', 'Plan a session (date 2026-11-21, time 19:30 Sydney). It shows on the website banner.'],
-    ['/session cancel', '[number]', 'Cancel a scheduled session (the next one if no number).'],
   ] },
   { aud: 'admin', title: 'Admins · moderation', note: 'Each is saved as a case, posted to #server-logs, and the member gets a DM where possible. You can’t act on someone with the same or a higher role.', cmds: [
     ['/warn', 'member reason', 'Warn a member.'],
@@ -536,6 +536,7 @@ function route() {
   const r = findRoute();
   $('signed-in').hidden = !!r;
   $('session').hidden = !!r;
+  $('session-admin').hidden = !!r || !access.admin;
   $('menu').hidden = !!r;
   $('page').hidden = !r;
   if (!r) { document.title = 'CareBeyond Dashboard'; fitBadges(); return; }
@@ -544,9 +545,11 @@ function route() {
   back.href = tool ? '#' + page.id : '#';
   back.lastChild.textContent = tool ? page.title : 'Menu';
   const body = $('page-body');
+  body.classList.remove('is-building');
   if (tool) {
     setPageTitle(tool.icon, tool.title, tool.aud === 'reviewer' ? 'exec' : (tool.aud || page.aud));
-    if (LIVE[tool.layout]) LIVE[tool.layout](body); else body.innerHTML = LAYOUTS[tool.layout]();
+    if (LIVE[tool.layout]) LIVE[tool.layout](body);
+    else { body.innerHTML = (tool.building ? BUILDING_NOTE(tool.title) : '') + LAYOUTS[tool.layout](); body.classList.toggle('is-building', !!tool.building); }
   } else if (page.tools) {
     setPageTitle(page.icon, page.title, page.aud);
     const grid = document.createElement('div');
@@ -561,7 +564,8 @@ function route() {
     body.replaceChildren(grid);
   } else {
     setPageTitle(page.icon, page.title, ['leads', 'reviewer-lead'].includes(page.aud) ? 'staff' : page.aud);
-    if (LIVE[page.layout]) LIVE[page.layout](body); else body.innerHTML = LAYOUTS[page.layout]();
+    if (LIVE[page.layout]) LIVE[page.layout](body);
+    else { body.innerHTML = (page.building ? BUILDING_NOTE(page.title) : '') + LAYOUTS[page.layout](); body.classList.toggle('is-building', !!page.building); }
   }
   document.title = (tool ? tool.title : page.title) + ' · CareBeyond';
   window.scrollTo(0, 0);
@@ -1179,6 +1183,91 @@ async function renderRoster(body) {
 }
 
 Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, reports: renderReports, people: renderRoster });
+
+// ---------- running sessions (admins) ----------
+// Sessions are run from the website only (the /session commands were removed). The website writes the sessions
+// row; the bot notices within ~10 s and does the Discord side (announcement with Session Ping, "Session Ended").
+function sydneyToIso(date, time) {
+  const guess = new Date(`${date}T${time}:00Z`);
+  const tz = (zone) => new Date(guess.toLocaleString('en-US', { timeZone: zone }));
+  return new Date(guess - (tz('Australia/Sydney') - tz('UTC'))).toISOString();
+}
+function sydneyToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());   // YYYY-MM-DD
+}
+
+function buildSessionAdmin(sess) {
+  const box = $('session-admin');
+  if (!access.admin) { box.hidden = true; return; }
+  const live = sess && sess.live, upcoming = (sess && sess.upcoming) || [];
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="sa-actions">
+      ${live ? '<button class="ghost danger" id="sa-end">End session</button>'
+        : '<button class="refresh" id="sa-start">Start session now</button>'}
+      <button class="ghost" id="sa-schedule">Schedule a session</button>
+    </div>
+    <form class="card sa-form" id="sa-form" hidden>
+      <div class="f-row">
+        <label class="f sa-when"><span>Date</span><input type="date" id="sa-date"></label>
+        <label class="f sa-when"><span>Time (Sydney)</span><input type="time" id="sa-time" step="300"></label>
+      </div>
+      <label class="f"><span>Note <em>(optional)</em></span><input id="sa-note" maxlength="200" placeholder="e.g. Training night, all departments"></label>
+      <p class="error" id="sa-err" hidden></p>
+      <div class="f-actions"><button type="button" class="linkish" id="sa-cancel-form">Cancel</button><button class="refresh" type="submit" id="sa-submit">Start session</button></div>
+    </form>
+    ${upcoming.length ? `<div class="card sa-list">${upcoming.map((u) => `
+      <div class="row-item"><div class="case-main"><strong>${esc(whenAhead(u.scheduled_for))}</strong>
+        <span class="muted small-meta">${esc([u.host_name && 'with ' + u.host_name, u.note].filter(Boolean).join(' · '))}</span></div>
+        ${live ? '' : `<button class="ghost small-btn" data-golive="${u.id}">Start now</button>`}<button class="ghost small-btn" data-cancel="${u.id}">Cancel</button></div>`).join('')}</div>` : ''}`;
+
+  const form = box.querySelector('#sa-form');
+  let mode = 'live';
+  const open = (m) => {
+    mode = m;
+    form.hidden = false;
+    form.querySelectorAll('.sa-when').forEach((x) => { x.hidden = m === 'live'; });
+    box.querySelector('#sa-submit').textContent = m === 'live' ? 'Start session' : 'Schedule';
+    if (m === 'scheduled' && !box.querySelector('#sa-date').value) box.querySelector('#sa-date').value = sydneyToday();
+    box.querySelector(m === 'live' ? '#sa-note' : '#sa-date').focus();
+  };
+  box.querySelector('#sa-start')?.addEventListener('click', () => open('live'));
+  box.querySelector('#sa-schedule').addEventListener('click', () => open('scheduled'));
+  box.querySelector('#sa-cancel-form').addEventListener('click', () => { form.hidden = true; });
+  const fail = (msg) => { const e = box.querySelector('#sa-err'); e.textContent = msg; e.hidden = false; };
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const note = box.querySelector('#sa-note').value.trim() || null;
+    const row = { status: mode, note, host_discord_id: myDiscordId, host_name: $('name').textContent };
+    if (mode === 'scheduled') {
+      const d = box.querySelector('#sa-date').value, t = box.querySelector('#sa-time').value;
+      if (!d || !t) return fail('Pick a date and a time.');
+      row.scheduled_for = sydneyToIso(d, t);
+      if (new Date(row.scheduled_for) <= new Date()) return fail('That time has already passed.');
+    }
+    const { error } = await sb.from('sessions').insert(row).select().single();   // started_at + join code filled by the database
+    if (error) return fail(error.code === '23505' ? 'A session is already live.' : "Couldn't save: " + error.message);
+    loadAndDraw();   // the admin asked for this change, so redraw now
+  };
+  box.querySelector('#sa-end')?.addEventListener('click', async () => {
+    if (!confirm('End the live session? The Discord announcement will change to "Session Ended".')) return;
+    const { error } = await sb.from('sessions').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', live.id).eq('status', 'live');
+    if (error) return fail("Couldn't end it: " + error.message);
+    loadAndDraw();
+  });
+  box.querySelectorAll('[data-golive]').forEach((b) => b.addEventListener('click', async () => {
+    const { error } = await sb.from('sessions').update({ status: 'live' }).eq('id', b.dataset.golive).eq('status', 'scheduled');
+    if (error) return fail(error.code === '23505' ? 'A session is already live.' : "Couldn't start it: " + error.message);
+    loadAndDraw();
+  }));
+  box.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Cancel this scheduled session?')) return;
+    const { error } = await sb.from('sessions').update({ status: 'cancelled' }).eq('id', b.dataset.cancel).eq('status', 'scheduled');
+    if (error) return fail("Couldn't cancel it: " + error.message);
+    loadAndDraw();
+  }));
+}
 
 // ---------- session banner ----------
 // Under the Welcome card: the Maple Hospital custom server and its join code (pinned; the owner will say if it

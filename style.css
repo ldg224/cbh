@@ -475,3 +475,21 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
   .stat strong { font-size: 24px; }
   .grid-3 .stat { padding: 14px; }
 }
+
+/* ---------- Running sessions (admins) ---------- */
+.session-admin { display: grid; gap: 10px; margin-top: 10px; }
+.sa-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sa-actions .refresh, .sa-actions .ghost { padding: 9px 16px; }
+.sa-actions .ghost { color: var(--text); }
+.ghost.danger:hover { border-color: #e88b8b; color: #8a1c1c; }
+.sa-form { display: grid; gap: 12px; }
+.sa-list .row-item { align-items: center; }
+.small-btn { padding: 6px 12px; color: var(--text); }
+@media (max-width: 560px) { .sa-actions > * { flex: 1; } }
+
+/* ---------- Pages not built yet (owner: keep them, clearly marked) ---------- */
+.tile-flag.building { background: rgba(255, 255, 255, .92); color: var(--text); border-color: transparent; }
+.building-note { display: flex; align-items: center; gap: 14px; background: var(--raised); }
+.is-building .sk { animation: none; background: #e9eff8; }   /* a still outline, never a "loading" shimmer */
+.is-building > .card:not(.building-note), .is-building > .grid-3, .is-building > .toolbar,
+.is-building > .team-pick, .is-building > .grid-people { opacity: .55; }

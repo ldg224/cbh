@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.8.0 (2026-11-17)
+
+**Added:** **run sessions from the website.** Admins see **Start session now** and **Schedule a session** under the session banner on the home page (date and time in Sydney time, optional note), a list of upcoming sessions with **Start now** and **Cancel**, and **End session** while one is live. CareBeyond Helper posts the announcement in #server-starts with the Session Ping when a session goes live, and changes it to "Session Ended" when it ends.
+
+**Changed:**
+- Pages that aren't built yet (Strikes, Announcements, Bot settings, Rules & info) now carry a **Being built** tag and say so on the page, instead of a shimmer that looked like it was stuck loading.
+- The `/session` commands are gone: sessions are run from the website. `/joincode` stays.
+
+Bot (by Bravo): a watcher does the Discord side of website sessions within about 10 seconds.
+Database change: yes, migration 0007 (admins can start, schedule, end and cancel sessions; one live session at a time).
+
 ## 0.7.1 (2026-11-17)
 
 **Fixed:** who can review applications now comes from the forms themselves. If a form is added for another team (e.g. Nursing), that team's leads can review it automatically.
