@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.21.4 (2026-11-18)
+
+**Added:**
+- **Clear pings:** **Dealt with**, **Snooze 30 days** or **On leave until** a date for quiet members (on Home and the Members tab); **Dismiss** for failed rank changes (in History).
+- A switch by your name (the cog) to turn **quiet-member notes** off just for you.
+
+Applications and attendance still clear only when the work is done.
+
+Bot: no change.
+Database change: yes, migration 0049 (dismissals and the notes switch; already applied).
+
 ## 0.21.3 (2026-11-18)
 
 **Changed:**
