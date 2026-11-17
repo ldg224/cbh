@@ -85,7 +85,9 @@
     const out = [];
     for (const p of PAGES.filter((x) => (x.id === 'admin' || x.id === 'exec') && x.tools)) {
       for (const t of p.tools) {
-        if (t.building || t.layout === 'sessions' || !canSee(toolAud(p, t))) continue;
+        // The page itself must be open to them (non-admins can't open #admin/...), and Applications live in each
+        // department's page since v2, so the old hub link would only send people Home or duplicate a department link.
+        if (t.building || t.layout === 'sessions' || t.layout === 'review' || !canSee(p.aud) || !canSee(toolAud(p, t))) continue;
         out.push({ href: `#${p.id}/${t.id}`, label: t.title, icon: t.icon });
       }
     }

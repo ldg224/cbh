@@ -332,6 +332,9 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
   .tile.wide .tile-title, .hub-grid .tile-title { font-size: 19px; }
   .team-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cmd-row { flex-wrap: wrap; }
+  /* Long commands wrap inside their chip instead of widening the page (Desk sweep D2, 0.21.5). */
+  .cmd { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+  .cmd-what { flex-basis: 100%; padding-top: 0; }   /* the description goes under the command, not squeezed beside it */
   .session { gap: 12px; }
   .page-title { font-size: 22px; }
   .grid-3 { grid-template-columns: 1fr; }
@@ -343,7 +346,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .session.is-live { border-color: rgba(46, 211, 198, .6); background: var(--teal-wash); }
 .session.is-live .session-label::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px;
   border-radius: 50%; background: #16b364; box-shadow: 0 0 0 3px rgba(22, 179, 100, .2); vertical-align: 1px; }
-.cmd-group { display: grid; gap: 0; }
+.cmd-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-width: 0; }
 .cmd-note { margin: -4px 0 10px; }
 .cmd-args { color: var(--muted); font-weight: 500; }
 
