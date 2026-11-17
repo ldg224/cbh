@@ -1,7 +1,7 @@
 // Department pages (#directors/<dept>), redesigned 0.17.x (Bravo; owner's choices in chat, 18 Nov 2026).
 // Layout A (tabs): a department banner (Directors violet into the department colour, with its numbers), then tabs
-// Overview, Members, Courses, Meetings, History. Courses and Meetings come in later stages and show as
-// "being built" for now. Every change (year/rank, add, remove) takes an optional reason, shown in History.
+// Overview, Members, Courses, Meetings, History. Courses comes in a later stage and shows as "being built" for
+// now. Meetings (stage 2, migration 0025) are scheduled here and posted by CareBeyond Helper (meetings cog). Every change (year/rank, add, remove) takes an optional reason, shown in History.
 // Back end: dept_roster, dept_weekly_hours, member_search, dept_set_rank / dept_add / dept_remove (reason
 // optional, migration 0023), role_changes. CareBeyond Helper carries changes out in Discord: Pending, then Done
 // or Failed. The page polls only while something is Pending, and stops when you leave.
@@ -13,8 +13,22 @@ const dpTab = {};          // last tab per department, for this visit
 let dpWatch = null;
 
 const dpDay = 864e5;
-const dpInactive = (p) => !p.on_shift && (!p.last_shift_at || Date.now() - new Date(p.last_shift_at).getTime() > DP_INACTIVE_DAYS * dpDay);
+const dpLastActive = (p) => Math.max(p.last_shift_at ? new Date(p.last_shift_at).getTime() : 0, p.last_meeting_at ? new Date(p.last_meeting_at).getTime() : 0);
+const dpInactive = (p) => !p.on_shift && Date.now() - dpLastActive(p) > DP_INACTIVE_DAYS * dpDay;
 const dpHours = (h) => { const n = Number(h || 0); return n >= 10 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, ''); };
+// Discord channel names carry emoji and a "・" separator ("🌸・Nursing Voice"): show just the words.
+const dpChan = (n) => cleanName((n || '').normalize('NFKC')).replace(/^[\s・|┃-]+/, '').trim() || n;
+const dpWhenShort = (iso) => { const d = new Date(iso); return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+const dpDayShort = (iso) => new Date(iso).toLocaleDateString([], { weekday: 'short', day: 'numeric' });
+function dpRel(iso) {
+  const ms = new Date(iso) - Date.now(), m = Math.round(ms / 6e4);
+  if (m < 1) return 'Starting';
+  if (m < 60) return `In ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `In ${h} hour${h === 1 ? '' : 's'}`;
+  const d = Math.round(h / 24);
+  return `In ${d} day${d === 1 ? '' : 's'}`;
+}
 const dpH = (h) => { const s = Math.round(Number(h || 0) * 3600); return s ? hrs(s) : '0m'; };
 
 async function renderDept(body, tool) {
@@ -26,11 +40,14 @@ async function renderDept(body, tool) {
   body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
     <div class="card"><p class="muted small">Loading…</p></div>`;
 
-  const [roster, ranksQ, changes, weekly] = await Promise.all([
+  const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ] = await Promise.all([
     sb.rpc('dept_roster', { department: dept }),
     sb.from('roles').select('id, name, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept).order('rank_order', { ascending: false }),
     sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100),
     sb.rpc('dept_weekly_hours', { department: dept }),
+    sb.from('meetings').select('*').eq('department', dept).order('scheduled_for', { ascending: false }).limit(60),
+    sb.rpc('dept_last_meeting', { department: dept }),
+    sb.from('discord_channels').select('id, name, kind, category, position').order('position'),
   ]);
   if (!body.isConnected || location.hash !== route) return;
   if (roster.error) { body.innerHTML = ''; return liveError(body, roster.error); }
@@ -42,6 +59,14 @@ async function renderDept(body, tool) {
   const Word = word === 'year' ? 'Year' : 'Rank';
   const people = (roster.data || []).sort((a, b) => (b.rank_order || 0) - (a.rank_order || 0) || cleanName(a.display_name).localeCompare(cleanName(b.display_name)));
   const byId = Object.fromEntries(people.map((p) => [p.discord_id, p]));
+  (lastMeet.data || []).forEach((r) => { if (byId[r.discord_id]) byId[r.discord_id].last_meeting_at = r.last_meeting_at; });
+  const meetings = meetQ.data || [];
+  // Voice channels from Discord (synced by CareBeyond Helper, migration 0026), grouped by category in the picker.
+  const chans = chanQ.data || [];
+  const chanName = (id) => { const c = chans.find((x) => x.id === id); return c ? dpChan(c.name) : null; };
+  const upcoming = meetings.filter((m) => m.status === 'scheduled' || m.status === 'live').sort((a, b) => (a.status === 'live' ? -1 : 0) - (b.status === 'live' ? -1 : 0) || new Date(a.scheduled_for) - new Date(b.scheduled_for));
+  const past = meetings.filter((m) => m.status === 'ended' || m.status === 'cancelled');
+  const nextMeet = upcoming[0] || null;
   const nameOf = (id, fallback) => cleanName(byId[id]?.display_name || fallback || 'Someone');
   const hist = changes.data || [];
   const pending = Object.fromEntries(hist.filter((c) => c.status === 'pending').map((c) => [c.target_discord_id, c]));
@@ -52,7 +77,6 @@ async function renderDept(body, tool) {
   const onNow = people.filter((p) => p.on_shift);
   const inactive = people.filter(dpInactive);
   const weekTotal = people.reduce((a, p) => a + Number(p.week_hours || 0), 0);
-  const active30 = people.filter((p) => Number(p.shifts_30d || 0) > 0).length;
 
   const rankBadge = (p) => {
     const r = rankById[p.rank_role_id];
@@ -80,7 +104,7 @@ async function renderDept(body, tool) {
     { id: 'overview', label: 'Overview' },
     { id: 'members', label: 'Members', n: people.length },
     { id: 'courses', label: 'Courses', soon: true },
-    { id: 'meetings', label: 'Meetings', soon: true },
+    { id: 'meetings', label: 'Meetings', n: upcoming.length || null },
     { id: 'history', label: 'History', n: hist.length || null },
   ];
   let tab = dpTab[dept] || 'overview';
@@ -94,7 +118,7 @@ async function renderDept(body, tool) {
         <div class="dp-stat"><b>${people.length}</b><span>Members</span></div>
         <div class="dp-stat"><b>${onNow.length}</b><span>On shift now</span></div>
         <div class="dp-stat"><b>${dpHours(weekTotal)}</b><span>Hours this week</span></div>
-        <div class="dp-stat"><b>${active30}</b><span>Active in 30 days</span></div>
+        <div class="dp-stat"><b>${nextMeet ? (nextMeet.status === 'live' ? 'Now' : esc(dpDayShort(nextMeet.scheduled_for))) : 'None'}</b><span>${nextMeet && nextMeet.status === 'live' ? 'Meeting on' : 'Next meeting'}</span></div>
       </div>
     </section>
     <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}">${t.label}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
@@ -106,6 +130,8 @@ async function renderDept(body, tool) {
   function show(id, focus) {
     tab = dpTab[dept] = id;
     tabsEl.querySelectorAll('[role=tab]').forEach((b) => { const on = b.dataset.tab === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+    const cur = tabsEl.querySelector('[aria-selected="true"]');   // keep the chosen tab in view on narrow screens
+    if (cur && (cur.offsetLeft < tabsEl.scrollLeft || cur.offsetLeft + cur.offsetWidth > tabsEl.scrollLeft + tabsEl.clientWidth)) tabsEl.scrollLeft = cur.offsetLeft - 12;
     pane.setAttribute('aria-labelledby', 'dpt-' + id);
     fail('');
     ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory })[id]();
@@ -124,7 +150,7 @@ async function renderDept(body, tool) {
   function drawOverview() {
     const attention = [
       ...hist.filter((c) => c.status === 'failed').slice(0, 3).map((c) => ({ id: c.target_discord_id, name: nameOf(c.target_discord_id, c.target_name), why: 'Change failed: ' + (c.error || 'try again'), flag: ['bad', 'Failed'] })),
-      ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: p.last_shift_at ? 'No shifts since ' + new Date(p.last_shift_at).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'No shifts yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
+      ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: dpLastActive(p) ? 'Not active since ' + new Date(dpLastActive(p)).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'No shifts or meetings yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
     ];
     const max = Math.max(1, ...deptWeeks);
     const weekLabel = (i) => {
@@ -137,13 +163,16 @@ async function renderDept(body, tool) {
         <section class="card dp-card"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
           ${attention.length ? `<div class="dp-list">${attention.map((a) => `<div class="dp-mini">${face({ name: a.name, discordId: a.id, avatarUrl: a.av || byId[a.id]?.avatar_url || '', size: 'm' })}
               <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div><span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span></div>`).join('')}</div>`
-            : `<p class="muted small">Nothing needs you right now. Everyone has had a shift in the last ${DP_INACTIVE_DAYS} days.</p>`}
+            : `<p class="muted small">Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.</p>`}
         </section>
         <section class="card dp-card"><div class="dp-head"><h2>Recent changes</h2>${hist.length > 5 ? '<button class="linkish" data-go="history">See all</button>' : ''}</div>
           ${hist.length ? `<div class="dp-list">${hist.slice(0, 5).map((c) => changeRow(c, false)).join('')}</div>` : `<p class="muted small">No changes yet.</p>`}
         </section>
       </div>
       <div class="dp-col">
+        <section class="card dp-card"><div class="dp-head"><h2>Next meeting</h2><button class="linkish" data-go="meetings">${nextMeet ? 'Meetings' : 'Schedule one'}</button></div>
+          ${nextMeet ? meetLine(nextMeet) : `<p class="muted small">No meeting planned.</p>`}
+        </section>
         <section class="card dp-card"><div class="dp-head"><h2>On shift now</h2></div>
           ${onNow.length ? `<div class="dp-list">${onNow.map((p) => `<div class="dp-mini">${face({ name: p.display_name, discordId: p.discord_id, avatarUrl: p.avatar_url, size: 'm' })}
               <div class="dp-m"><strong>${esc(cleanName(p.display_name))}</strong><span>${esc(dpH(p.week_hours))} this week</span></div>${rankBadge(p)}</div>`).join('')}</div>`
@@ -155,7 +184,7 @@ async function renderDept(body, tool) {
           </div>
         </section>
       </div></div>`;
-    pane.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; show(b.dataset.go); });
+    pane.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; if (b.dataset.go === 'meetings' && !nextMeet) meetState.open = 'new'; show(b.dataset.go); });
   }
 
   // ---------- Members ----------
@@ -203,7 +232,7 @@ async function renderDept(body, tool) {
         <div class="dp-row-main">
           <span class="dp-face${p.on_shift ? ' on' : ''}">${face({ name: p.display_name, discordId: p.discord_id, avatarUrl: p.avatar_url, size: 'm' })}</span>
           <div class="dp-m"><strong>${esc(name)}</strong>
-            <span>${esc(dpH(p.week_hours))} this week · ${Number(p.shifts_30d || 0)} shift${p.shifts_30d == 1 ? '' : 's'} in 30 days · ${esc(lastSeen(p))}</span></div>
+            <span>${esc(dpH(p.week_hours))} this week · ${Number(p.shifts_30d || 0)} shift${p.shifts_30d == 1 ? '' : 's'} in 30 days · ${esc(lastSeen(p))}${p.last_meeting_at ? ' · last meeting ' + esc(dpDayShort(p.last_meeting_at)) : ''}</span></div>
           ${spark(p.discord_id)}
           <span class="dp-tags">${pend ? `<span class="st sub-pending">Pending</span>` : dpInactive(p) ? '<span class="dp-flag warn">Inactive</span>' : ''}${rankBadge(p)}</span>
           <div class="ma-side dp-side">${locked(p) || pend ? '<span class="dp-dots-gap"></span>' : `<button type="button" class="ma-dots" aria-label="More for ${esc(name)}" aria-haspopup="menu" aria-expanded="false" data-menu="${esc(p.discord_id)}"><span></span></button>`}</div>
@@ -350,9 +379,256 @@ async function renderDept(body, tool) {
     pane.innerHTML = `<div class="is-building">${BUILDING_NOTE('Courses')}
       <div class="dp-cblocks">${['General Skills', 'Evaluation', 'Induction'].map((k) => `<div class="dp-cb"><span>${k}</span><b></b><i></i></div>`).join('')}</div></div>`;
   }
+  // ---------- Meetings (stage 2, migration 0025) ----------
+  // Upcoming and past meetings. The Director (or an exec) schedules, edits, starts, ends or cancels them, marks
+  // attendance and keeps notes. CareBeyond Helper posts each one in the department's channel (meetings cog).
+  const meetState = { open: null };   // 'new' | 'edit:<id>' | 'att:<id>' | 'notes:<id>' | 'cancel:<id>'
+  // A voice channel deleted in Discord leaves a dead id on the meeting: flag it so the Director picks another.
+  const chanGone = (m) => !!(m.voice_channel_id && chans.length && !chanName(m.voice_channel_id));
+  const meetWhere = (m) => (m.voice_channel_id ? (chanName(m.voice_channel_id) || 'Deleted channel') : m.location || 'Discord');
+  // Where picker: voice channels by category, or somewhere else (in game, etc.) as text.
+  function wherePicker(m) {
+    const groups = {};
+    chans.forEach((c) => { (groups[c.category ? dpChan(c.category) : 'Other'] ||= []).push(c); });
+    const other = !!(m && !m.voice_channel_id && m.location);
+    return `<div class="dp-where"><label class="f"><span>Where</span><select name="vc">
+        ${Object.entries(groups).map(([g, list]) => `<optgroup label="${esc(g)}">${list.map((c) => `<option value="${esc(c.id)}"${m && m.voice_channel_id === c.id ? ' selected' : ''}>${esc(dpChan(c.name))}</option>`).join('')}</optgroup>`).join('')}
+        ${m && chanGone(m) ? '<option value="__gone" selected disabled>Channel deleted: pick another</option>' : ''}
+        <option value=""${other || (!m && !chans.length) || (m && !m.voice_channel_id && !m.location) ? ' selected' : ''}>Somewhere else</option></select></label>
+      <label class="f dp-else"${other ? '' : ' hidden'}><span>Where exactly</span><input name="loc" maxlength="120" placeholder="e.g. In game, Ward 3" value="${esc(m?.location || '')}"></label></div>`;
+  }
+  function wireWhere(f) {
+    const sel = f.querySelector('[name=vc]'), alt = f.querySelector('.dp-else');
+    const sync = () => { alt.hidden = !!sel.value && sel.value !== '__gone'; if (sel.value === '__gone') alt.hidden = true; };
+    if (!f.dataset.edit && !sel.value && chans.length) {   // a new meeting starts in the department's own voice channel if there is one
+      const own = chans.find((c) => new RegExp(dept.split(' ')[0], 'i').test(c.name) && c.kind === 'voice') || chans[0];
+      sel.value = own.id;
+    }
+    sel.onchange = sync; sync();
+    return () => (sel.value === '__gone' ? { gone: true } : { voice_channel_id: sel.value || null, location: sel.value ? null : (f.querySelector('[name=loc]').value.trim() || null) });
+  }
+  function meetLine(m) {
+    const d = new Date(m.scheduled_for);
+    const st = m.status === 'live' ? '<span class="st dp-live">On now</span>' : m.status === 'cancelled' ? '<span class="st">Cancelled</span>'
+      : m.status === 'ended' ? '' : `<span class="st sub-pending">${esc(dpRel(m.scheduled_for))}</span>`;
+    return `<div class="dp-meet${m.status === 'cancelled' ? ' off' : ''}">
+      <span class="dp-date" aria-hidden="true"><b>${esc(d.toLocaleDateString([], { month: 'short' }).toUpperCase())}</b><span>${d.getDate()}</span></span>
+      <div class="dp-m"><strong>${esc(m.title)}</strong>
+        <span>${esc(d.toLocaleDateString([], { weekday: 'short' }))} ${esc(d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))} · ${esc(meetWhere(m))} · ${m.duration_minutes || 60} min</span>
+        ${m.status === 'scheduled' && chanGone(m) ? '<span class="dp-moved dp-gone">Channel deleted, pick another</span>' : ''}
+        ${m.moved_at && m.status === 'scheduled' ? `<span class="dp-moved">Moved${m.moved_from_at ? ' from ' + esc(dpWhenShort(m.moved_from_at)) : ''}${m.moved_from_channel_id && m.moved_from_channel_id !== m.voice_channel_id ? (m.moved_from_at ? ', ' : ' from ') + esc(chanName(m.moved_from_channel_id) || 'another channel') : ''}</span>` : ''}</div>${st}</div>`;
+  }
   function drawMeetings() {
-    pane.innerHTML = `<div class="is-building">${BUILDING_NOTE('Meetings')}
-      <div class="card">${[1, 2, 3].map(() => '<div class="dp-mt"><span class="dp-date"></span><span class="sk" style="width:55%"></span></div>').join('')}</div></div>`;
+    pane.innerHTML = `
+      <div class="dp-head dp-mhead"><h2>Upcoming</h2><button class="refresh" type="button" id="dp-new-meet">Schedule a meeting</button></div>
+      <div id="dp-mt-form"></div>
+      <div class="card dp-mlist">${upcoming.length ? upcoming.map((m) => meetRow(m)).join('') : `<p class="muted small">No meetings planned. Schedule one and CareBeyond Helper posts it in the ${esc(dept)} channel.</p>`}</div>
+      ${past.length ? `<div class="dp-head dp-mhead"><h2>Past</h2></div><div class="card dp-mlist">${past.map((m) => meetRow(m)).join('')}</div>` : ''}`;
+    pane.querySelector('#dp-new-meet').onclick = () => { meetState.open = meetState.open === 'new' ? null : 'new'; drawMeetForm(); };
+    pane.querySelectorAll('[data-mact]').forEach((b) => b.onclick = () => meetAct(b.dataset.mact, meetings.find((x) => x.id === +b.dataset.mid)));
+    if (meetState.open === 'new') drawMeetForm();
+    else if (meetState.open) { const [k, id] = meetState.open.split(':'); const m = meetings.find((x) => x.id === +id); meetState.open = null; if (m) meetAct(k, m); }
+  }
+  function meetRow(m) {
+    const acts = m.status === 'scheduled' ? [['start', 'Start now'], ['move', 'Reschedule or move'], ['edit', 'Edit'], ['cancel', 'Cancel']]
+      : m.status === 'live' ? [['end', 'End meeting'], ['att', 'Attendance'], ['notes', 'Notes']]
+      : m.status === 'ended' ? [['att', 'Attendance'], ['notes', m.notes ? 'Notes' : 'Add notes']] : [];
+    return `<div class="dp-mrow" data-mrow="${m.id}">
+      <div class="dp-mrow-main">${meetLine(m)}
+        <div class="dp-macts">${acts.map(([k, l]) => `<button type="button" class="${k === 'start' || k === 'end' ? 'refresh' : 'ghost'} small-btn${k === 'cancel' ? ' danger' : ''}" data-mact="${k}" data-mid="${m.id}">${l}</button>`).join('')}</div></div>
+      ${m.agenda && m.status !== 'ended' ? `<p class="dp-agenda">${esc(m.agenda)}</p>` : ''}
+      ${m.status === 'ended' && m.notes ? `<p class="dp-agenda dp-notes-peek">${esc(m.notes.length > 220 ? m.notes.slice(0, 220) + '…' : m.notes)}</p>` : ''}
+      <div class="dp-inline dp-minline" hidden></div></div>`;
+  }
+  function drawMeetForm(m) {
+    const box = pane.querySelector('#dp-mt-form');
+    if (!m && meetState.open !== 'new') { box.innerHTML = ''; return; }
+    const d = m ? new Date(m.scheduled_for) : null;
+    const sydDate = (x) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(x);
+    const sydTime = (x) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: false }).format(x);
+    const target = m ? pane.querySelector(`[data-mrow="${m.id}"] .dp-minline`) : box;
+    if (m) { target.hidden = false; }
+    target.innerHTML = `<form class="${m ? 'dp-iform' : 'card dp-add'} dp-mform">
+      ${m ? `<strong>Edit meeting</strong>` : `<div class="dp-head"><h2>Schedule a ${esc(dept)} meeting</h2></div>`}
+      <label class="f"><span>Title</span><input name="title" maxlength="100" required placeholder="e.g. Monthly ${esc(dept)} meeting" value="${esc(m?.title || '')}"></label>
+      <div class="dp-f3">
+        <label class="f"><span>Date</span><input type="date" name="date" required value="${d ? sydDate(d) : sydneyToday()}"></label>
+        <label class="f"><span>Time <em>Sydney</em></span><input type="time" name="time" required value="${d ? sydTime(d) : '19:00'}"></label>
+        <label class="f"><span>Length</span><select name="len">${[30, 45, 60, 90, 120].map((n) => `<option value="${n}"${(m?.duration_minutes || 60) === n ? ' selected' : ''}>${n < 60 ? n + ' minutes' : n / 60 + (n === 60 ? ' hour' : ' hours')}</option>`).join('')}</select></label>
+      </div>
+      ${wherePicker(m)}
+      <label class="f"><span>Agenda <em>optional</em></span><textarea name="agenda" rows="3" maxlength="1500" placeholder="What you'll cover">${esc(m?.agenda || '')}</textarea></label>
+      <label class="dp-switch"><input type="checkbox" name="ping"${m && !m.ping ? '' : ' checked'}><span class="dp-sw" aria-hidden="true"></span><span>Ping ${esc(dept)} in Discord <em class="muted">(15 minutes before, and when it starts)</em></span></label>
+      <p class="error" hidden></p>
+      <div class="f-actions"><button type="button" class="linkish" data-x>Cancel</button><button type="submit" class="refresh">${m ? 'Save changes' : 'Schedule meeting'}</button></div></form>`;
+    const f = target.querySelector('form');
+    if (m) f.dataset.edit = '1';
+    const where = wireWhere(f);
+    f.querySelector('[name=title]').focus();
+    f.querySelector('[data-x]').onclick = () => { meetState.open = null; target.innerHTML = ''; if (m) target.hidden = true; };
+    f.onkeydown = (e) => { if (e.key === 'Escape') f.querySelector('[data-x]').click(); };
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const er = f.querySelector('.error'), b = f.querySelector('[type=submit]');
+      const v = (n) => f.querySelector(`[name=${n}]`).value.trim();
+      const when = sydneyToIso(v('date'), v('time'));
+      if (!m && new Date(when) < Date.now() - 5 * 6e4) { er.textContent = 'Pick a time in the future.'; er.hidden = false; return; }
+      const w = where();
+      if (w.gone) { er.textContent = 'The voice channel was deleted in Discord. Pick another.'; er.hidden = false; return; }
+      b.disabled = true; er.hidden = true;
+      const { error } = await sb.rpc('meeting_save', { mid: m ? m.id : null, department: dept, title: v('title'), scheduled_for: when,
+        duration_minutes: +v('len'), ...w, agenda: v('agenda') || null, ping: f.querySelector('[name=ping]').checked });
+      if (error) { er.textContent = error.message; er.hidden = false; b.disabled = false; return; }
+      meetState.open = null; dpTab[dept] = 'meetings';
+      renderDept(body, tool);
+    };
+  }
+  async function meetAct(k, m) {
+    const row = pane.querySelector(`[data-mrow="${m.id}"]`), box = row.querySelector('.dp-minline');
+    pane.querySelectorAll('.dp-minline').forEach((x) => { if (x !== box) { x.hidden = true; x.innerHTML = ''; } });
+    const status = async (to) => {
+      const { error } = await sb.rpc('meeting_set_status', { mid: m.id, to_status: to });
+      if (error) return fail(error.message);
+      dpTab[dept] = 'meetings'; if (to === 'ended') meetState.open = 'att:' + m.id;
+      renderDept(body, tool);
+    };
+    if (k === 'edit') return drawMeetForm(m);
+    if (k === 'move') {
+      const d = new Date(m.scheduled_for);
+      const sydDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(d);
+      const sydTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+      box.hidden = false;
+      box.innerHTML = `<form class="dp-iform" data-edit="1"><strong>Reschedule or move “${esc(m.title)}”</strong>
+        <div class="dp-f3 dp-f2"><label class="f"><span>Date</span><input type="date" name="date" required value="${sydDate}"></label>
+          <label class="f"><span>Time <em>Sydney</em></span><input type="time" name="time" required value="${sydTime}"></label></div>
+        ${wherePicker(m)}
+        <span class="muted small-meta">CareBeyond Helper updates the post in Discord to say it moved.${m.reminder_sent ? '' : ' A new time also moves the reminder.'}</span>
+        <p class="error" hidden></p>
+        <div class="f-actions"><button type="button" class="linkish" data-x>Cancel</button><button type="submit" class="refresh">Save new time and place</button></div></form>`;
+      const f = box.querySelector('form'), where = wireWhere(f);
+      f.querySelector('[name=date]').focus();
+      f.querySelector('[data-x]').onclick = () => { box.hidden = true; box.innerHTML = ''; };
+      f.onkeydown = (e) => { if (e.key === 'Escape') f.querySelector('[data-x]').click(); };
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const er = f.querySelector('.error'), b = f.querySelector('[type=submit]');
+        const iso = sydneyToIso(f.querySelector('[name=date]').value, f.querySelector('[name=time]').value);
+        if (new Date(iso) < Date.now() - 5 * 6e4) { er.textContent = 'Pick a time in the future.'; er.hidden = false; return; }
+        const w = where();
+        if (w.gone) { er.textContent = 'The voice channel was deleted in Discord. Pick another.'; er.hidden = false; return; }
+        b.disabled = true; er.hidden = true;
+        const { error } = await sb.rpc('meeting_move', { mid: m.id, scheduled_for: iso, ...w });
+        if (error) { er.textContent = error.message === 'Nothing changed' ? 'That’s the same time and place as now.' : error.message; er.hidden = false; b.disabled = false; return; }
+        dpTab[dept] = 'meetings'; renderDept(body, tool);
+      };
+      return;
+    }
+    if (k === 'start') return status('live');
+    if (k === 'end') return status('ended');
+    if (k === 'cancel') {
+      box.hidden = false;
+      box.innerHTML = `<form class="dp-iform"><strong>Cancel “${esc(m.title)}”?</strong><span class="muted small-meta">CareBeyond Helper marks the Discord post as cancelled.</span>
+        <div class="f-actions"><button type="button" class="linkish" data-x>Keep it</button><button type="submit" class="refresh danger-fill">Cancel meeting</button></div></form>`;
+      const f = box.querySelector('form');
+      f.querySelector('[data-x]').onclick = () => { box.hidden = true; box.innerHTML = ''; };
+      f.onsubmit = (e) => { e.preventDefault(); status('cancelled'); };
+      f.querySelector('[type=submit]').focus();
+      return;
+    }
+    if (k === 'notes') {
+      box.hidden = false;
+      box.innerHTML = `<form class="dp-iform"><strong>Notes</strong>
+        <label class="f"><span class="sr-only">Notes for ${esc(m.title)}</span><textarea rows="7" maxlength="10000" placeholder="What was discussed, decisions, actions">${esc(m.notes || '')}</textarea></label>
+        ${m.notes_updated_at ? `<span class="muted small-meta">Last saved ${esc(when(m.notes_updated_at))}${m.notes_updated_by_name ? ' by ' + esc(cleanName(m.notes_updated_by_name)) : ''}</span>` : ''}
+        <p class="error" hidden></p>
+        <div class="f-actions"><button type="button" class="linkish" data-x>Close</button><button type="submit" class="refresh">Save notes</button></div></form>`;
+      const f = box.querySelector('form');
+      f.querySelector('textarea').focus();
+      f.querySelector('[data-x]').onclick = () => { box.hidden = true; box.innerHTML = ''; };
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const er = f.querySelector('.error'), b = f.querySelector('[type=submit]'); b.disabled = true; er.hidden = true;
+        const { error } = await sb.rpc('meeting_notes', { mid: m.id, notes: f.querySelector('textarea').value });
+        if (error) { er.textContent = error.message; er.hidden = false; b.disabled = false; return; }
+        dpTab[dept] = 'meetings'; renderDept(body, tool);
+      };
+      return;
+    }
+    if (k === 'att') {
+      box.hidden = false;
+      box.innerHTML = '<div class="dp-iform"><p class="muted small">Loading…</p></div>';
+      const [aQ, gQ] = await Promise.all([
+        sb.from('meeting_attendance').select('discord_id, status, guest').eq('meeting_id', m.id),
+        sb.rpc('meeting_guests', { mid: m.id }),
+      ]);
+      const error = aQ.error || gQ.error;
+      if (error) { box.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
+      const cur = Object.fromEntries((aQ.data || []).map((a) => [a.discord_id, a.status]));
+      const pick = { ...cur };
+      // Guests: people from outside the department added to this meeting. Their attendance doesn't count toward their
+      // own department's Inactive flag.
+      const guests = (gQ.data || []).map((g) => ({ discord_id: g.discord_id, display_name: g.display_name || 'Someone', avatar_url: g.avatar_url || '' }));
+      const OPTS = [['present', 'Present'], ['late', 'Late'], ['absent', 'Absent']];
+      const tally = () => OPTS.map(([k2, l]) => `${l} ${Object.values(pick).filter((x) => x === k2).length}`).join(' · ');
+      const row = (p, guest) => `<div class="dp-att-row" data-row="${esc(p.discord_id)}">${face({ name: p.display_name, discordId: p.discord_id, avatarUrl: p.avatar_url, size: 's' })}
+          <span class="dp-att-name">${esc(cleanName(p.display_name))}${guest ? ' <span class="dp-guest">Guest</span>' : ''}</span>
+          ${guest ? `<button type="button" class="dp-x" data-unguest="${esc(p.discord_id)}" aria-label="Remove ${esc(cleanName(p.display_name))} from this meeting">×</button>` : ''}
+          <div class="dp-seg dp-att-seg" role="radiogroup" aria-label="${esc(cleanName(p.display_name))}">${OPTS.map(([k2, l]) => `<button type="button" role="radio" data-p="${esc(p.discord_id)}" data-s="${k2}" class="a-${k2}" aria-checked="${pick[p.discord_id] === k2}">${l}</button>`).join('')}</div></div>`;
+      box.innerHTML = `<form class="dp-iform dp-att"><div class="dp-att-head"><strong>Attendance</strong><span class="muted small-meta" data-tally>${tally()}</span></div>
+        <button type="button" class="linkish dp-allp" data-all>Mark everyone not marked as Present</button>
+        <div class="dp-att-list">${people.map((p) => row(p, false)).join('')}<div data-guests>${guests.map((g) => row(g, true)).join('')}</div></div>
+        <div class="dp-guest-add"><label class="ma-search"><span class="h-glass" aria-hidden="true"></span><input type="search" data-gq placeholder="Add a guest from another department" autocomplete="off" aria-label="Add a guest"></label>
+          <div class="dp-results" data-gres role="listbox" aria-label="Server members"></div></div>
+        <p class="error" hidden></p>
+        <div class="f-actions"><button type="button" class="linkish" data-x>Close</button><button type="submit" class="refresh">Save attendance</button></div></form>`;
+      loadFaces(box);
+      const f = box.querySelector('form'), gq = f.querySelector('[data-gq]'), gres = f.querySelector('[data-gres]'), glist = f.querySelector('[data-guests]');
+      const paint = () => { f.querySelectorAll('[data-p]').forEach((b) => b.setAttribute('aria-checked', pick[b.dataset.p] === b.dataset.s)); f.querySelector('[data-tally]').textContent = tally(); };
+      f.onclick = (e) => {
+        const b = e.target.closest('[data-p]');
+        if (b) { pick[b.dataset.p] = pick[b.dataset.p] === b.dataset.s ? null : b.dataset.s; paint(); }
+        if (e.target.closest('[data-all]')) { people.forEach((p) => { if (!pick[p.discord_id]) pick[p.discord_id] = 'present'; }); paint(); }
+        const un = e.target.closest('[data-unguest]');
+        if (un) { pick[un.dataset.unguest] = null; f.querySelector(`[data-row="${CSS.escape(un.dataset.unguest)}"]`)?.remove(); paint(); gq.focus(); }
+        const add = e.target.closest('.dp-pick');
+        if (add) {
+          const g = { discord_id: add.dataset.id, display_name: add.dataset.name, avatar_url: add.dataset.av || '' };
+          pick[g.discord_id] = 'present';
+          glist.insertAdjacentHTML('beforeend', row(g, true));
+          loadFaces(glist); paint();
+          gq.value = ''; gres.innerHTML = ''; gq.focus();
+        }
+      };
+      let gt = null;
+      gq.oninput = () => {
+        clearTimeout(gt);
+        const term = gq.value.trim();
+        if (term.length < 2) { gres.innerHTML = ''; return; }
+        gt = setTimeout(async () => {
+          const { data, error: e3 } = await sb.rpc('member_search', { q: term });
+          if (gq.value.trim() !== term) return;
+          if (e3) { gres.innerHTML = `<p class="error">${esc(e3.message)}</p>`; return; }
+          const list = (data || []).filter((x) => !byId[x.discord_id] && !f.querySelector(`[data-row="${CSS.escape(x.discord_id)}"]`));
+          gres.innerHTML = list.length ? list.map((x) => `<button type="button" class="dp-pick" role="option" data-id="${esc(x.discord_id)}" data-name="${esc(x.display_name)}" data-av="${esc(x.avatar_url || '')}">
+              ${face({ name: x.display_name, discordId: x.discord_id, avatarUrl: x.avatar_url, size: 's' })}<span>${esc(cleanName(x.display_name))}</span></button>`).join('')
+            : `<p class="muted small">Nobody found outside ${esc(dept)}.</p>`;
+          loadFaces(gres);
+        }, 250);
+      };
+      f.querySelector('[data-x]').onclick = () => { box.hidden = true; box.innerHTML = ''; };
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        if (e.submitter && e.submitter !== f.querySelector('[type=submit]')) return;
+        const marks = Object.keys({ ...cur, ...pick }).filter((id) => (pick[id] || null) !== (cur[id] || null)).map((id) => ({ discord_id: id, status: pick[id] || null }));
+        const er = f.querySelector('.error'), b = f.querySelector('[type=submit]');
+        if (!marks.length) { box.hidden = true; box.innerHTML = ''; return; }
+        b.disabled = true; er.hidden = true;
+        const { error: e2 } = await sb.rpc('meeting_mark', { mid: m.id, marks });
+        if (e2) { er.textContent = e2.message; er.hidden = false; b.disabled = false; return; }
+        dpTab[dept] = 'meetings'; renderDept(body, tool);
+      };
+      gq.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); gres.querySelector('.dp-pick')?.click(); } };
+    }
   }
 
   // ---------- History ----------

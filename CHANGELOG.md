@@ -3,6 +3,26 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.18.0 (2026-11-18)
+
+**Added:**
+- **Meetings** on each Department page (a new **Meetings** tab).
+  - Directors and executives schedule, edit, start, end and cancel department meetings, with a title, time, length, agenda and a **ping** switch.
+  - **Where:** pick one of the server's voice channels (grouped by category) or type somewhere else. If the channel is deleted, the meeting is flagged until another is picked.
+  - **Reschedule or move** with one button; the meeting shows where and when it moved from.
+  - **Attendance:** Present, Late or Absent for the department's members, plus **guests** from other departments (guests don't count toward their own department's activity). **Meeting notes** too.
+  - The **Overview** shows the next meeting, and attending a meeting (Present or Late) counts as active for the Inactive flag.
+
+**Changed:**
+- The **Administration** and **Community Engagement** "Member" rank now shows as **Team Member**.
+
+**Bot:**
+- Each department's meetings are posted in its own channel, and the post updates when the meeting is edited, moved, cancelled, started or ended (a moved meeting says **Moved** and where and when it moved from). The channel is a link people can click to join.
+- A reminder 15 minutes before pings the department's role (only if ping is on), and a **Meeting Starting** message when it starts. Never @everyone, never posted twice.
+- The bot keeps the list of voice channels for the website's picker up to date.
+
+Database change: yes, migrations 0025 (meetings and attendance) and 0026 (voice channels, moving meetings, guests).
+
 ## 0.17.1 (2026-11-18)
 
 **Changed:**
