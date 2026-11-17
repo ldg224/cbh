@@ -880,3 +880,16 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .h-sel-l { border: 1px solid var(--line); background: var(--panel); color: var(--text); }
 .h-idle .small-btn { padding: 7px 12px; }
 @media (max-width: 700px) { .h-idle-part + .h-idle-part { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 14px; } .h-idle-link { margin-left: 0; } }
+
+/* Header wordmark (owner, 0.15.0, option B): one line, a medium "Care" flowing into an ExtraBold "Beyond", a thin
+   divider, then "HOSPITAL" in spaced teal. On phones the divider and "Hospital" drop away. */
+.mark { gap: 12px; }
+.mark-icon { width: 40px; height: 40px; }
+.wordmark { flex-direction: row; align-items: center; gap: 14px; }
+.wm-name { font-size: 22px; letter-spacing: -.015em; text-transform: none; white-space: nowrap; }
+.wm-care { font-weight: 500; }
+.wm-beyond { font-weight: 800; }
+.wm-rule { width: 1px; height: 22px; background: var(--line); flex: none; }
+.wm-sub { margin-top: 0; font-size: 12px; letter-spacing: .3em; }
+@media (min-width: 1100px) { .mark-icon { width: 42px; height: 42px; } .wm-name { font-size: 23px; } .wm-sub { font-size: 12px; } }
+@media (max-width: 560px) { .mark-icon { width: 34px; height: 34px; } .wm-name { font-size: 19px; } .wm-rule, .wm-sub { display: none; } }

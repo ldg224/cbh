@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.15.0 (2026-11-17)
+
+**Changed:** a new **CareBeyond** wordmark in the header, chosen from three options. It's one line: a lighter "Care" flowing into a bold "Beyond", then a thin divider and "HOSPITAL" in spaced teal. On phones the divider and "Hospital" drop away so the name never feels crowded.
+
+Bot: no change.
+Database change: none.
+
 ## 0.14.6 (2026-11-17)
 
 **Added:** a **Session and shift** bar on the home page, in the same spot as the Session active block (above **Pinned**), for when no session is running. It shows "No session running" or when the next session is, the join code, and a **Start a session** button for people who run sessions. For staff it also shows **your shift**: the live timer with **Take a break** and **End shift**, or **Off shift** with **Start shift** (pick a department if you're in more than one). The bold navy **Session active** block still takes over while a session is live.
