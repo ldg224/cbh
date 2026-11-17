@@ -3,6 +3,27 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.19.0 (2026-11-18)
+
+**Added:**
+- **Apply:** one application for each department (Administration, Nursing, Paramedicine, Community Engagement), each open or closed. Nursing and Paramedicine start closed with placeholder questions until an executive edits and opens them.
+- **Apply:** see your application's stage as it moves, withdraw it, and read the decision message. One waiting application per department, and a wait before reapplying after **Not accepted**.
+- **Applications:** waiting applications grouped by stage, with the applicant's account age, time in the server and past applications; private team notes with thumbs up or down; move between stages; **Accept** or **Not accept** with a message sent in their DM.
+- **Applications:** accepting gives the department's chosen roles automatically (starting rank plus any extra roles; never leadership or executive roles).
+- **Applications:** each department sets its own review stages, roles on accept and reapply wait; executives edit the questions and open or close each form.
+- **Rank permissions:** a **Ranks & permissions** tab on each Department page, where the Director (or an executive) chooses what each rank can see and do: view the department, see activity, change members, manage meetings, take attendance, review applications and change application settings.
+- **Rank permissions:** **Change members** has a window for each rank (e.g. Year 3 can manage Year 1 to Year 2), checked by the database too. The Department page and Applications show only what your rank is allowed to do.
+
+**Changed:**
+- The **Incident Report** form is no longer on Apply (Records has Incidents).
+- The **#form-submissions** post has a **Review on the website** button instead of Accept/Deny; old posts' buttons point to the website.
+
+**Bot:**
+- Gives the roles chosen on an accepted application, checking each one itself first (never leadership, executive, office, moderator or admin roles, or roles above the bot's own).
+- Sends the result DM (**Accepted** or **Not accepted**, with the reviewer's message) and keeps the #form-submissions post up to date as the application moves.
+
+Database change: yes, migrations 0027 (rank permissions), 0028 (applications), 0029 (department checks use rank permissions, change windows) and 0030 (keeping Discord posts in step).
+
 ## 0.18.0 (2026-11-18)
 
 **Added:**
