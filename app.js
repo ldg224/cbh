@@ -489,7 +489,14 @@ function setDirectorAccess(directs, roles, exec, runSessions) {
   access.sessions = runSessions ?? (access.director || access.admin);
   // Sessions sit in both hubs; show them once, in the Directors hub, to people who can see it.
   access['sessions-admin'] = access.sessions && !access.director;
+  // Plain members of a department (any of its division or rank roles) can open its page too, for what's theirs there
+  // (Courses: courses.js). Only tabs whose show() says yes appear; dept.js says so when there's nothing. This does
+  // not make them a Director (access.director stays permission-based).
+  myDeptMember = DEPARTMENTS.filter((d) => (roles || []).some((r) => r.department === d.name)).map((d) => d.name);
+  for (const d of myDeptMember) access['dir:' + d] = true;
 }
+let myDeptMember = [];   // departments I'm in (any role), set by setDirectorAccess
+const inMyDept = (dept) => myDeptMember.includes(dept);
 const canSee = (aud) => !!access[aud];
 // A tool's access key (Sessions in the Admin hub has its own) and the audience colour its tile wears.
 const toolAud = (page, t) => (t.layout === 'sessions' && page.id === 'admin') ? 'sessions-admin' : (t.layout === 'sessions' ? 'sessions' : (t.aud || page.aud));
@@ -625,7 +632,7 @@ function findRoute() {
     const folder = FOLDERS.find((f) => f.id === b);
     return folder && myTools().some((t) => t.folder === folder.id) ? { folder } : null;
   }
-  const page = PAGES.find((p) => p.id === a && canSee(p.aud));
+  const page = PAGES.find((p) => p.id === a && (canSee(p.aud) || (p.id === 'directors' && DEPARTMENTS.some((d) => canSee('dir:' + d.name)))));
   if (!page) return null;
   if (!b) return { page };
   const tool = (page.tools || []).find((t) => t.id === b && canSee(toolAud(page, t)));
