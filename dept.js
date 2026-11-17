@@ -55,7 +55,7 @@ async function renderDept(body, tool) {
   body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
     <div class="card"><p class="muted small">Loading…</p></div>`;
 
-  const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ] = await Promise.all([
+  const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ, disQ] = await Promise.all([
     sb.rpc('dept_roster', { department: dept }),
     sb.from('roles').select('id, name, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept).order('rank_order', { ascending: false }),
     sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100),
@@ -65,6 +65,8 @@ async function renderDept(body, tool) {
     sb.from('discord_channels').select('id, name, kind, category, position').order('position'),
     director || !editM ? Promise.resolve({ data: null }) : sb.rpc('my_members_window', { department: dept }),
     director ? sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi') : Promise.resolve({ data: [] }),
+    // Cleared To do items (0049): quiet members dealt with / snoozed / on leave, and dismissed failed rank changes.
+    sb.from('todo_dismissals').select('kind, target, until, last_active, reason, dismissed_by_name, created_at').eq('department', dept),
   ]);
   if (!body.isConnected || !here()) return;
   if (roster.error) { body.innerHTML = ''; return liveError(body, roster.error); }
@@ -96,7 +98,12 @@ async function renderDept(body, tool) {
   const locked = (p) => !editM || (!exec && (p.discord_id === myDiscordId || p.rank_label === 'Director'))
     || (!director && p.rank_order != null && !inWin(p.rank_order));
   const onNow = people.filter((p) => p.on_shift);
-  const inactive = seeAct ? people.filter(dpInactive) : [];
+  const dismissed = Object.fromEntries((disQ.data || []).map((x) => [x.kind + ':' + x.target, x]));
+  // A quiet member someone has dealt with stays cleared until they're active again; snooze / leave until the date.
+  const cleared = (p) => { const x = dismissed['inactive:' + p.discord_id]; if (!x) return null;
+    const last = dpLastActive(p), stillQuiet = !last || !x.last_active || last <= new Date(x.last_active).getTime();
+    return stillQuiet && (!x.until || new Date(x.until) > new Date()) ? x : null; };
+  const inactive = seeAct ? people.filter((p) => dpInactive(p) && !cleared(p)) : [];
   const weekTotal = people.reduce((a, p) => a + Number(p.week_hours || 0), 0);
 
   const rankBadge = (p) => {
@@ -118,6 +125,9 @@ async function renderDept(body, tool) {
       <div class="dp-hmain"><strong>${changeText(c)}</strong>
         ${c.reason ? `<span class="dp-reason">“${esc(c.reason)}”</span>` : ''}
         <span class="muted small-meta">${full && c.requested_by_name ? 'By ' + esc(cleanName(c.requested_by_name)) + ' · ' : ''}${esc(when(c.created_at))}${c.status === 'failed' && c.error ? ' · ' + esc(c.error) : ''}</span></div>
+      ${c.status === 'failed' && (seeHist || editM) ? (dismissed['failed_change:' + c.id]
+        ? `<span class="muted small-meta dp-dism">Dismissed${dismissed['failed_change:' + c.id].dismissed_by_name ? ' by ' + esc(cleanName(dismissed['failed_change:' + c.id].dismissed_by_name)) : ''}</span>`
+        : `<button type="button" class="ghost small-btn dp-dismiss" data-dismiss="${c.id}">Dismiss</button>`) : ''}
       <span class="st ${DP_ST_CLASS[c.status] || ''}">${esc(DP_STATUS[c.status] || c.status)}</span></div>`;
 
   // ---------- banner + tabs ----------
@@ -271,13 +281,42 @@ async function renderDept(body, tool) {
           <div class="dp-m"><strong>${esc(name)}</strong>
             <span>${seeAct ? `${esc(dpH(p.week_hours))} this week · ${Number(p.shifts_30d || 0)} shift${p.shifts_30d == 1 ? '' : 's'} in 30 days · ${esc(lastSeen(p))}${p.last_meeting_at ? ' · last meeting ' + esc(dpDayShort(p.last_meeting_at)) : ''}` : (p.on_shift ? 'On shift now' : '')}</span></div>
           ${seeAct ? spark(p.discord_id) : ''}
-          <span class="dp-tags">${pend ? `<span class="st sub-pending">Pending</span>` : seeAct && dpInactive(p) ? '<span class="dp-flag warn">Inactive</span>' : ''}${rankBadge(p)}</span>
+          <span class="dp-tags">${pend ? `<span class="st sub-pending">Pending</span>` : seeAct && dpInactive(p) ? (cleared(p) ? `<span class="dp-flag dp-cleared" title="${esc((cleared(p).reason || 'Dealt with') + (cleared(p).dismissed_by_name ? ' by ' + cleanName(cleared(p).dismissed_by_name) : ''))}">${cleared(p).until ? esc((cleared(p).reason || 'Snoozed') + ' until ' + dpDayShort(cleared(p).until)) : 'Dealt with'}</span>` : `<button type="button" class="dp-flag warn dp-quiet" data-quiet="${esc(p.discord_id)}" title="Dealt with, snooze or on leave">Inactive</button>`) : ''}${rankBadge(p)}</span>
           <div class="ma-side dp-side">${locked(p) || pend ? '<span class="dp-dots-gap"></span>' : `<button type="button" class="ma-dots" aria-label="More for ${esc(name)}" aria-haspopup="menu" aria-expanded="false" data-menu="${esc(p.discord_id)}"><span></span></button>`}</div>
         </div>
         <div class="dp-inline" hidden></div></div>`;
     }).join('');
     loadFaces(list);
   }
+  // Quiet members and failed rank changes (0049): clear them from the To do.
+  pane.addEventListener('click', async (e) => {
+    const q = e.target.closest('[data-quiet]');
+    if (q) {
+      const box = q.closest('.dp-row').querySelector('.dp-inline');
+      box.hidden = false;
+      box.innerHTML = `<div class="dp-iform dp-quietform"><strong>Inactive: what would you like to do?</strong>
+        <div class="f-actions" style="justify-content:flex-start;flex-wrap:wrap">
+          <button type="button" class="refresh" data-qa="dealt">Dealt with</button><button type="button" class="ghost" data-qa="snooze">Snooze 30 days</button>
+          <label class="hd-leave">On leave until <input type="date" data-qa="date" min="${new Date(Date.now() + 864e5).toISOString().slice(0, 10)}"></label>
+          <button type="button" class="ghost" data-qa="leave">Save</button><button type="button" class="linkish" data-qa="close">Close</button></div><p class="error" hidden></p></div>`;
+      box.dataset.who = q.dataset.quiet;
+      return;
+    }
+    const qa = e.target.closest('[data-qa]');
+    if (qa && qa.dataset.qa !== 'date') {
+      const box = qa.closest('.dp-inline');
+      if (qa.dataset.qa === 'close') { box.hidden = true; box.innerHTML = ''; return; }
+      const d = box.querySelector('[data-qa="date"]').value;
+      if (qa.dataset.qa === 'leave' && !d) { const er = box.querySelector('.error'); er.textContent = 'Pick the date they\u2019re back.'; er.hidden = false; return; }
+      const until = qa.dataset.qa === 'snooze' ? new Date(Date.now() + 30 * 864e5).toISOString() : qa.dataset.qa === 'leave' ? new Date(d + 'T23:59:00').toISOString() : null;
+      box.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+      const err = await window.deskDismiss?.(dept, 'inactive', box.dataset.who, until, { dealt: null, snooze: 'Snoozed', leave: 'On leave' }[qa.dataset.qa]);
+      if (err) { const er = box.querySelector('.error'); er.textContent = err; er.hidden = false; box.querySelectorAll('button').forEach((x) => { x.disabled = false; }); }
+      return;
+    }
+    const dm = e.target.closest('[data-dismiss]');
+    if (dm) { dm.disabled = true; const err = await window.deskDismiss?.(dept, 'failed_change', dm.dataset.dismiss); if (err) { dm.disabled = false; fail(err); } }
+  });
   // row menu
   pane.addEventListener('click', (e) => {
     const dots = e.target.closest('.dp-row [data-menu]');

@@ -231,3 +231,12 @@
   .dp-win { grid-column: 1 / -1; grid-template-columns: 1fr auto 1fr; justify-items: stretch; align-items: center; }
   .dp-pcell.has-win { grid-column: 1 / -1; }   /* the window drop-downs get the card's full width */
 }
+
+/* 0049: clearing quiet members and failed rank changes */
+button.dp-quiet { border: 0; cursor: pointer; font-family: inherit; }
+button.dp-quiet:hover { filter: brightness(.96); text-decoration: underline; }
+.dp-cleared { background: var(--raised); color: var(--muted); }
+.dp-dismiss { font-size: 12.5px; padding: 5px 10px; flex: none; }
+.dp-dism { flex: none; align-self: center; }
+.dp-quietform .hd-leave { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.dp-quietform .hd-leave input { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }

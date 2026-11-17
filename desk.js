@@ -149,7 +149,10 @@
     const ini = (name.trim()[0] || '?').toUpperCase();
     return `<div class="ds-me"><div class="ds-merow"><span class="ds-av ${state}">${photo ? `<img src="${esc(photo)}" alt="">` : `<span class="ds-ini">${esc(ini)}</span>`}</span>
       <span class="ds-who"><b>${esc(name)}</b><span>${esc(sub)}</span></span>
+      <button class="ds-out" type="button" data-desk="prefs" aria-label="Settings" title="Settings" aria-expanded="false"><span style="${icon('settings')}"></span></button>
       <button class="ds-out" type="button" data-desk="logout" aria-label="Log out" title="Log out"><span style="${icon('logout')}"></span></button></div>
+      <div class="ds-prefs" hidden><label class="ds-switch"><input type="checkbox" data-desk="quiet"${quietNotes ? ' checked' : ''}><span class="ds-sw" aria-hidden="true"></span>
+        <span>Show quiet-member notes<small>Pings when people in your departments haven\u2019t been active</small></span></label></div>
       ${canShift ? `<button class="ds-clock${shift ? ' end' : ''}" type="button" data-desk="clock">${shift ? (Date.now() < endArmed ? 'Tap again to clock out' : 'Clock out') : 'Clock in' + (myDepartments.length === 1 ? ' to ' + esc(myDepartments[0]) : '')}</button>` : ''}</div>`;
   }
   function drawTabs() {
@@ -199,6 +202,8 @@
       if (a === 'drawer') return setDrawer(!document.body.classList.contains('desk-open'));
       if (a === 'close') return setDrawer(false);
       if (a === 'logout') return $('logout').click();
+      if (a === 'prefs') { const p = side.querySelector('.ds-prefs'); p.hidden = !p.hidden; act.setAttribute('aria-expanded', !p.hidden); return; }
+      if (a === 'quiet') { act.disabled = true; await window.deskSetQuietNotes(act.checked); const p = side.querySelector('.ds-prefs'); if (p) p.hidden = false; return; }
       if (a === 'clock') return clock(act);
       if (a === 'copy') { try { await navigator.clipboard.writeText(joinCode); act.textContent = 'Copied'; } catch { act.textContent = joinCode; } setTimeout(() => { act.textContent = 'Copy'; }, 1500); return; }
       if (a === 'search') { setDrawer(false); if (hash() !== '#') location.hash = ''; setTimeout(() => $('h-q')?.focus(), 60); return; }
@@ -219,11 +224,36 @@
     const { data: t } = await sb.rpc('my_todo');
     window.deskTodo = t || {};
   }
+  let quietNotes = true;   // user_prefs.quiet_notes (0049): show quiet-member notes
+  async function loadPrefs() { const { data: p } = await sb.rpc('get_my_prefs'); quietNotes = !(p && p.quiet_notes === false); }
+  async function refreshTodo() {
+    await loadTodo().catch(() => {});
+    drawAll();
+    if (!$('home').hidden && typeof drawNeeds === 'function' && $('h-need-sec')) drawNeeds();
+  }
+  // Clear a To do item (todo_dismiss checks who may). Returns an error message, or '' when saved.
+  window.deskDismiss = async (dept, kind, target, until = null, reason = null) => {
+    const { error } = await sb.rpc('todo_dismiss', { department: dept, kind, target: String(target), until, reason });
+    if (error) return error.message;
+    await refreshTodo();
+    if (location.hash.startsWith('#directors/') && typeof route === 'function') route();
+    return '';
+  };
+  window.deskUndismiss = async (dept, kind, target) => {
+    const { error } = await sb.rpc('todo_undismiss', { department: dept, kind, target: String(target) });
+    if (error) return error.message;
+    await refreshTodo(); return '';
+  };
+  window.deskSetQuietNotes = async (show) => {
+    const { error } = await sb.rpc('set_my_quiet_notes', { show });
+    if (error) return error.message;
+    quietNotes = show; await refreshTodo(); return '';
+  };
   window.deskDraw = async (d) => {
     data = d;
     document.body.classList.add('desk');
     drawAll();
-    await Promise.all([loadShift().catch(() => {}), loadTodo().catch(() => {})]);
+    await Promise.all([loadShift().catch(() => {}), loadTodo().catch(() => {}), loadPrefs().catch(() => {})]);
     drawAll();
     if (!$('home').hidden && typeof drawNeeds === 'function' && $('h-need-sec')) drawNeeds();
   };
