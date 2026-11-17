@@ -41,6 +41,9 @@ async function renderDept(body, tool) {
   const director = exec || myDirects.includes(dept);
   const can = (perm) => hasPerm(perm, dept);
   const seeAct = can('activity.view'), editM = can('members.edit'), manageMt = can('meetings.manage');
+  // "See this page" = Overview and Members; History has its own permission (0033). Anyone with a permission here can
+  // open the page, but only sees the tabs their permissions allow (Charlie, 18 Nov 2026).
+  const seeDept = can('dept.view'), seeHist = can('history.view');
   const attMt = manageMt || can('meetings.attendance');
   const dep = DEPARTMENTS.find((d) => d.name === dept) || { name: dept, color: '#3a82d0', icon: 'clock' };
   const route = `#directors/${tool.id}`;
@@ -118,28 +121,28 @@ async function renderDept(body, tool) {
 
   // ---------- banner + tabs ----------
   const TABS = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'members', label: 'Members', n: people.length },
-    { id: 'courses', label: 'Courses', soon: true },
-    { id: 'meetings', label: 'Meetings', n: upcoming.length || null },
-    { id: 'history', label: 'History', n: hist.length || null },
+    ...(seeDept ? [{ id: 'overview', label: 'Overview' }, { id: 'members', label: 'Members', n: people.length }] : []),
+    ...(seeDept || can('courses.manage') ? [{ id: 'courses', label: 'Courses', soon: true }] : []),
+    ...(seeDept || manageMt || attMt ? [{ id: 'meetings', label: 'Meetings', n: upcoming.length || null }] : []),
+    ...(seeHist ? [{ id: 'history', label: 'History', n: hist.length || null }] : []),
     ...window.DEPT_TABS.filter((x) => { try { return x.show(dept); } catch { return false; } }).map((x) => ({ id: x.id, label: x.label, ext: x })),
     ...(director ? [{ id: 'ranks', label: 'Ranks & permissions' }] : []),
   ];
-  let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || dpTab[dept] || 'overview';
-  if (!TABS.some((t) => t.id === tab)) tab = 'overview';
+  if (!TABS.length) { body.innerHTML = `<div class="card"><p class="muted small">You don’t have anything to see in ${esc(dept)} yet.</p></div>`; return; }
+  let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || dpTab[dept] || TABS[0].id;
+  if (!TABS.some((t) => t.id === tab)) tab = TABS[0].id;
   body.innerHTML = `
     <section class="dp-banner" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}">
       <span class="dp-big" aria-hidden="true"></span>
       <div class="dp-b-row"><span class="dp-sq" aria-hidden="true"></span>
         <div><h1 class="dp-name">${esc(dept)}</h1>
           <span class="dp-pill">${exec ? 'Executive view' : director ? 'You direct this department' : 'Team view'}</span></div></div>
-      <div class="dp-stats">
+      ${seeDept ? `<div class="dp-stats">
         <div class="dp-stat"><b>${people.length}</b><span>Members</span></div>
         <div class="dp-stat"><b>${onNow.length}</b><span>On shift now</span></div>
         ${seeAct ? `<div class="dp-stat"><b>${dpHours(weekTotal)}</b><span>Hours this week</span></div>` : `<div class="dp-stat"><b>${upcoming.length}</b><span>Meetings planned</span></div>`}
         <div class="dp-stat"><b>${nextMeet ? (nextMeet.status === 'live' ? 'Now' : esc(dpDayShort(nextMeet.scheduled_for))) : 'None'}</b><span>${nextMeet && nextMeet.status === 'live' ? 'Meeting on' : 'Next meeting'}</span></div>
-      </div>
+      </div>` : ''}
     </section>
     <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}">${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
     <p class="error" id="dp-err" hidden></p>
@@ -195,9 +198,9 @@ async function renderDept(body, tool) {
               <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div><span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span></div>`).join('')}</div>`
             : `<p class="muted small">${seeAct ? `Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.` : 'Nothing needs you right now.'}</p>`}
         </section>` : ''}
-        <section class="card dp-card"><div class="dp-head"><h2>Recent changes</h2>${hist.length > 5 ? '<button class="linkish" data-go="history">See all</button>' : ''}</div>
+        ${seeHist ? `<section class="card dp-card"><div class="dp-head"><h2>Recent changes</h2>${hist.length > 5 ? '<button class="linkish" data-go="history">See all</button>' : ''}</div>
           ${hist.length ? `<div class="dp-list">${hist.slice(0, 5).map((c) => changeRow(c, false)).join('')}</div>` : `<p class="muted small">No changes yet.</p>`}
-        </section>
+        </section>` : ''}
       </div>
       <div class="dp-col">
         <section class="card dp-card"><div class="dp-head"><h2>Next meeting</h2>${nextMeet || manageMt ? `<button class="linkish" data-go="meetings">${nextMeet ? 'Meetings' : 'Schedule one'}</button>` : ''}</div>
@@ -666,14 +669,15 @@ async function renderDept(body, tool) {
   // Ranks down the side, permissions across. "Change members" also has a change window: the lowest and highest rank
   // that rank may manage. Each tick saves straight away (set_rank_perm / set_rank_window).
   const PERMS = [
-    ['dept.view', 'See this page', 'Open the department page'],
-    ['activity.view', 'See hours and activity', 'Hours, shifts and Inactive flags'],
-    ['members.edit', 'Change members', 'Change years, add and remove people, inside their window'],
-    ['meetings.manage', 'Run meetings', 'Schedule, move, start, end and cancel'],
-    ['meetings.attendance', 'Attendance and notes', 'Mark attendance and write notes'],
-    ['applications.review', 'Review applications', 'Review this department’s applications'],
-    ['applications.settings', 'Application settings', 'Change this department’s application form'],
-    ['courses.manage', 'Manage courses', 'Create and edit courses (coming soon)'],
+    ['dept.view', 'See this page', 'Overview and members'],
+    ['activity.view', 'See activity', 'Hours and inactivity'],
+    ['members.edit', 'Edit members', 'Ranks, add, remove'],
+    ['history.view', 'See history', 'Changes and reasons'],
+    ['meetings.manage', 'Run meetings', 'Schedule and cancel'],
+    ['meetings.attendance', 'Attendance', 'Attendance and notes'],
+    ['applications.review', 'Review applications', 'Review and decide'],
+    ['applications.settings', 'Edit applications', 'Forms, settings, stages'],
+    ['courses.manage', 'Edit courses', 'Coming soon'],
   ];
   function drawRanks() {
     const rows = ranks.filter((r) => r.rank_label !== 'Director');

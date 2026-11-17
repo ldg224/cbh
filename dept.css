@@ -204,7 +204,7 @@
 .dp-perms-card { padding: 20px; overflow: hidden; }
 .dp-perms-card .dp-head { flex-wrap: wrap; }
 .dp-pgrid { display: grid; overflow-x: auto; }
-.dp-prow { display: grid; grid-template-columns: 120px repeat(8, minmax(86px, 1fr)); align-items: center; gap: 0; border-top: 1px solid var(--line); }
+.dp-prow { display: grid; grid-template-columns: 120px repeat(9, minmax(78px, 1fr)); align-items: center; gap: 0; border-top: 1px solid var(--line); }
 .dp-phead { border-top: 0; align-items: end; }
 .dp-phead span { font-size: 11.5px; font-weight: 700; color: var(--muted); line-height: 1.3; padding: 0 6px 10px; text-align: center; }
 .dp-phead span:first-child { text-align: left; padding-left: 0; }
