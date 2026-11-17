@@ -145,3 +145,26 @@ body.desk .h-sec { margin-top: 26px; }
 .hd-notes .hd-txt b { font-weight: 600; }
 .hd-go.note { background: #fff3e2; color: #8a4b00; }
 .hd-list.hd-notes { border-color: #f3dcb8; }
+
+/* 0049: quiet members you can clear, and the notes switch by your name */
+.hd-person { flex-wrap: wrap; }
+.hd-person .hd-txt { text-decoration: none; color: inherit; }
+.hd-acts { display: flex; gap: 6px; flex: none; }
+.hd-acts .hd-go { border: 0; cursor: pointer; font-family: inherit; }
+.hd-more { width: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-weight: 800; color: var(--muted); }
+.hd-more:hover { border-color: var(--blue); }
+.hd-opts { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 0 51px; font-size: 13px; }
+.hd-opts button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 11px; font: inherit; font-weight: 700; cursor: pointer; color: var(--text); }
+.hd-opts button:disabled { opacity: .5; cursor: default; }
+.hd-leave { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 600; }
+.hd-leave input { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; color: var(--text); }
+.ds-prefs { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.ds-switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px; font-weight: 700; }
+.ds-switch small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+.ds-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ds-sw { width: 34px; height: 20px; border-radius: 999px; background: #c9d4e4; position: relative; flex: none; margin-top: 1px; transition: background .15s; }
+.ds-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.ds-switch input:checked + .ds-sw { background: var(--teal); }
+.ds-switch input:checked + .ds-sw::after { transform: translateX(14px); }
+.ds-switch input:focus-visible + .ds-sw { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 560px) { .hd-opts { padding-left: 0; } }

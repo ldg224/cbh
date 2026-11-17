@@ -3,6 +3,30 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.22.0 (2026-11-18)
+
+**Added:**
+- **Roles** (executives, under Hospital tools): a new role editor. Every server role is listed in Discord's order, grouped by Leadership, each department and other roles, with its colour, member count and a search.
+- Open a role to switch on what it can do on the website: **Mod actions**, **Records**, **Discord logs**, **Incidents** and **Run sessions**, and for a department rank its department powers and change window. **Members** lists who holds it.
+- Display, Bot commands, Discord permissions and History are coming next (editing roles in Discord through CareBeyond Helper).
+
+**Changed:**
+- Admin access is now set per role instead of being fixed. Nothing changed for anyone today: Administration Director, Leader and Team Member keep the hospital tools, Trainees don't, executives have everything.
+
+Bot: no change.
+Database change: yes, migrations 0050 (hospital permissions per role) and 0052 (role list reads); already applied.
+
+## 0.21.4 (2026-11-18)
+
+**Added:**
+- **Clear pings:** **Dealt with**, **Snooze 30 days** or **On leave until** a date for quiet members (on Home and the Members tab); **Dismiss** for failed rank changes (in History).
+- A switch by your name (the cog) to turn **quiet-member notes** off just for you.
+
+Applications and attendance still clear only when the work is done.
+
+Bot: no change.
+Database change: yes, migration 0049 (dismissals and the notes switch; already applied).
+
 ## 0.21.3 (2026-11-18)
 
 **Changed:**

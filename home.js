@@ -178,10 +178,16 @@ function drawNeeds() {
     for (const m of (t.attendance_list || []).slice(0, 2)) out.push({ ico: 'calendar', c, t: `Take attendance for ${m.title}`, s: d.name + ' \u00b7 ' + when(m.at), b: 'Take attendance', href: base + '/meetings' });
     if (n0(t.attendance) > 2) out.push({ ico: 'calendar', c, t: `${n0(t.attendance) - 2} more meetings need attendance`, s: d.name, b: 'Open', href: base + '/meetings' });
     // Inactivity: red only after a long gap (60+ days); 14-59 days is an orange note, listed separately below.
-    const names = (list) => list.slice(0, 3).map((x) => cleanName(x.name)).join(', ');
-    const longGone = (t.inactive_list || []).filter((x) => n0(x.days) >= n0(t.alert_days || 60)), recent = (t.inactive_list || []).filter((x) => n0(x.days) < n0(t.alert_days || 60));
-    if (n0(t.inactive_alert)) out.push({ ico: 'clock', c, t: `${plural(n0(t.inactive_alert), 'member')} inactive for ${n0(t.alert_days || 60)}+ days`, s: d.name + (longGone.length ? ' \u00b7 ' + names(longGone) + (n0(t.inactive_alert) > 3 ? '\u2026' : '') : ''), b: 'See who', href: base + '/members' });
-    if (n0(t.inactive_note)) notes.push({ ico: 'clock', c: '#e8890c', t: `${plural(n0(t.inactive_note), 'member')} quiet for ${n0(t.note_days || 14)}+ days`, s: d.name + (recent.length ? ' \u00b7 ' + names(recent) + (n0(t.inactive_note) > 3 ? '\u2026' : '') : ''), b: 'See who', href: base + '/members' });
+    // One row per quiet member, each with Dealt with / Snooze 30 days / On leave (0049, owner: "a way to say yes,
+    // I've dealt with this"). 60+ days is red (Needs you); 14-59 days is an orange note.
+    const alertDays = n0(t.alert_days || 60);
+    for (const x of (t.inactive_list || [])) {
+      const p = { person: true, dept: d.name, id: x.discord_id, ico: 'clock', name: cleanName(x.name || 'Someone'), days: n0(x.days), href: base + '/members' };
+      if (p.days >= alertDays) out.push({ ...p, c, t: `${p.name} hasn\u2019t been active for ${p.days} days`, s: d.name });
+      else notes.push({ ...p, c: '#e8890c', t: `${p.name} has been quiet for ${p.days} days`, s: d.name });
+    }
+    const more = n0(t.inactive) - (t.inactive_list || []).length;
+    if (more > 0) notes.push({ ico: 'clock', c: '#e8890c', t: `${plural(more, 'more quiet member')}`, s: d.name, b: 'See all', href: base + '/members' });
     if (n0(t.failed)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(t.failed), 'rank change')} didn\u2019t go through`, s: d.name, b: 'See why', href: base + '/history' });
   }
   if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: '#admin/cases' });
@@ -189,11 +195,37 @@ function drawNeeds() {
   if (n0(h.tickets_open) && tk) out.push({ ico: 'inbox', c: '#3a82d0', t: `${plural(n0(h.tickets_open), 'ticket')} open`,
     s: h.tickets_latest && h.tickets_latest.name ? `Latest from ${cleanName(h.tickets_latest.name)}${h.tickets_latest.team ? ' · ' + h.tickets_latest.team : ''}` : 'Waiting for a reply', b: 'Reply', href: tk });
   const sec = $('h-need-sec');
-  const row = (x, note) => `<a class="hd-item" href="${x.href}" style="--c:${x.c}">
+  const row = (x, note) => x.person
+    ? `<div class="hd-item hd-person" style="--c:${x.c}" data-dept="${esc(x.dept)}" data-who="${esc(x.id)}">
+        <span class="hd-ico" style="--icon:${iconUrl(x.ico)}" aria-hidden="true"></span><a class="hd-txt" href="${x.href}"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></a>
+        <span class="hd-acts"><button type="button" class="hd-go${note ? ' note' : ''}" data-q="dealt">Dealt with</button>
+          <button type="button" class="hd-more" data-q="more" aria-label="More for ${esc(x.name)}" aria-expanded="false">\u22ef</button></span>
+        <span class="hd-opts" hidden><button type="button" data-q="snooze">Snooze 30 days</button>
+          <label class="hd-leave">On leave until <input type="date" data-q="date" min="${new Date(Date.now() + 864e5).toISOString().slice(0, 10)}"></label>
+          <button type="button" data-q="leave" disabled>Save</button></span></div>`
+    : `<a class="hd-item" href="${x.href}" style="--c:${x.c}">
       <span class="hd-ico" style="--icon:${iconUrl(x.ico)}" aria-hidden="true"></span><span class="hd-txt"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></span>
       <span class="hd-go${note ? ' note' : ''}">${esc(x.b)}</span></a>`;
   sec.innerHTML = (out.length ? `<h2 class="h-label">Needs you</h2><div class="hd-list">${out.map((x) => row(x)).join('')}</div>` : '')
-    + (notes.length ? `<h2 class="h-label" style="margin-top:${out.length ? '22px' : '0'}">Notes</h2><div class="hd-list hd-notes">${notes.map((x) => row(x, true)).join('')}</div>` : '');
+    + (notes.length ? `<div class="h-sec-head" style="margin-top:${out.length ? '22px' : '0'}"><h2 class="h-label">Notes</h2><button class="linkish" type="button" data-q="notes-off">Turn off quiet-member notes</button></div><div class="hd-list hd-notes">${notes.map((x) => row(x, true)).join('')}</div>` : '');
+  wireQuiet(sec);
+}
+// Dealt with / Snooze / On leave on a quiet member, and turning the notes off (desk.js does the saving).
+function wireQuiet(sec) {
+  sec.onclick = async (e) => {
+    const b = e.target.closest('[data-q]'); if (!b || b.tagName === 'INPUT') return;
+    if (b.dataset.q === 'notes-off') { b.disabled = true; await window.deskSetQuietNotes?.(false); return; }
+    const item = b.closest('.hd-person'); if (!item) return;
+    const { dept, who } = item.dataset;
+    if (b.dataset.q === 'more') { const o = item.querySelector('.hd-opts'); o.hidden = !o.hidden; b.setAttribute('aria-expanded', !o.hidden); return; }
+    const until = b.dataset.q === 'snooze' ? new Date(Date.now() + 30 * 864e5).toISOString()
+      : b.dataset.q === 'leave' ? new Date(item.querySelector('[data-q="date"]').value + 'T23:59:00').toISOString() : null;
+    const reason = { dealt: null, snooze: 'Snoozed', leave: 'On leave' }[b.dataset.q];
+    item.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+    const err = await window.deskDismiss?.(dept, 'inactive', who, until, reason);
+    if (err) { item.querySelectorAll('button').forEach((x) => { x.disabled = false; }); item.querySelector('.hd-txt span').textContent = err; }
+  };
+  sec.oninput = (e) => { const i = e.target.closest('[data-q="date"]'); if (i) i.closest('.hd-opts').querySelector('[data-q="leave"]').disabled = !i.value; };
 }
 function drawDeptCards() {
   const h = HC || {};
