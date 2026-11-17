@@ -3,6 +3,20 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.17.1 (2026-11-18)
+
+**Changed:**
+- **Reports** is now called **Activity**.
+
+**Added:**
+- **Activity:** pick **This week**, **Last week** or **Last 30 days**, with each number compared to the period before.
+- **Activity:** hours on shift (breaks not counted), shifts, sessions run and mod actions, as headline numbers and for each department.
+- **Activity:** a staff list with each person's hours, shifts, sessions hosted and mod actions, sorted by any of them; tap a department to see only its staff.
+- **Activity:** a **No shifts** list of staff who haven't done a shift in the period.
+
+Bot: no change.
+Database change: yes, migration 0024 (the Activity report, executives only).
+
 ## 0.17.0 (2026-11-18)
 
 **Added:**

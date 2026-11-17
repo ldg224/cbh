@@ -381,7 +381,7 @@ const DEPARTMENTS = [
 ];
 const PAGES = [
   { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
-    { id: 'reports',  title: 'Reports',       icon: 'bar-chart', layout: 'reports' },
+    { id: 'reports',  title: 'Activity',      icon: 'bar-chart', layout: 'reports' },
     { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list', building: true },
     { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form', building: true },
     { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
@@ -1222,49 +1222,7 @@ async function renderSettings(body) {
   }));
 }
 
-// ----- Reports (#exec/reports) -----
-async function renderReports(body) {
-  const ranges = {
-    week: () => [weekStartSydney(), new Date().toISOString()],
-    last: () => { const s = new Date(weekStartSydney()); return [new Date(s - 7 * 864e5).toISOString(), s.toISOString()]; },
-    d30: () => [new Date(Date.now() - 30 * 864e5).toISOString(), new Date().toISOString()],
-  };
-  let range = 'week';
-  body.innerHTML = `
-    <div class="toolbar"><div class="chips" id="rp-range"><button class="chip on" data-r="week">This week</button><button class="chip" data-r="last">Last week</button><button class="chip" data-r="d30">Last 30 days</button></div></div>
-    <div id="rp-body"><div class="card"><p class="muted small">Loading…</p></div></div>`;
-  body.querySelector('#rp-range').onclick = (e) => {
-    const b = e.target.closest('.chip'); if (!b) return;
-    range = b.dataset.r;
-    body.querySelectorAll('#rp-range .chip').forEach((x) => x.classList.toggle('on', x === b));
-    load();
-  };
-  async function load() {
-    const out = body.querySelector('#rp-body');
-    const [from_ts, to_ts] = ranges[range]();
-    const { data, error } = await sb.rpc('shift_report', { from_ts, to_ts });
-    if (error) { out.innerHTML = ''; return liveError(out, error); }
-    const rows = (data || []).slice().sort((a, b) => b.hours - a.hours);
-    const total = rows.reduce((a, r) => a + Number(r.hours || 0), 0), shifts = rows.reduce((a, r) => a + Number(r.shifts || 0), 0);
-    const depts = {};
-    rows.forEach((r) => { depts[r.department] = (depts[r.department] || 0) + Number(r.hours || 0); });
-    const max = Math.max(1, ...Object.values(depts));
-    out.innerHTML = `
-      <div class="grid-3">
-        <div class="card tight stat"><span class="muted small-meta">Hours</span><strong>${total.toFixed(1)}</strong></div>
-        <div class="card tight stat"><span class="muted small-meta">Shifts</span><strong>${shifts}</strong></div>
-        <div class="card tight stat"><span class="muted small-meta">People</span><strong>${rows.length}</strong></div>
-      </div>
-      ${Object.keys(depts).length ? `<div class="card bars">${Object.entries(depts).sort((a, b) => b[1] - a[1]).map(([d, h]) => {
-        const t = TEAMS.find((x) => x.id === d);
-        return `<div class="bar-row"><span class="bar-label">${esc(d)}</span><span class="meter"><span style="width:${(h / max) * 100}%;--c:${t ? hex(t.color) : '#3a82d0'}"></span></span><span class="bar-val">${h.toFixed(1)}h</span></div>`;
-      }).join('')}</div>` : ''}
-      <div class="card">${rows.length ? rows.map((r, i) => `
-        <div class="row-item"><span class="rank-n">${i + 1}</span><div class="case-main"><strong>${esc(r.name)}</strong><span class="muted small-meta">${esc(r.department)} · ${r.shifts} shift${r.shifts == 1 ? '' : 's'}</span></div>
-          <strong>${Number(r.hours).toFixed(1)}h</strong></div>`).join('') : '<p class="muted small">No shifts in this period.</p>'}</div>`;
-  }
-  load();
-}
+// Activity (#exec/reports, was Reports) lives in activity.js since the 0.16.x redesign.
 
 // ----- Staff & roster (#roster) -----
 // Compact badges for person cards: a department + its rank stay one block ("Nursing · Year 5" style, shortened).
@@ -1424,7 +1382,7 @@ async function renderRoster(body) {
 
 // ----- Department pages (#directors/<dept>): dept.js / dept.css (0.17.x redesign, Bravo) -----
 
-Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, reports: renderReports, people: renderRoster, settings: renderSettings, sessions: renderSessions });
+Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, people: renderRoster, settings: renderSettings, sessions: renderSessions });
 
 // ---------- running sessions (admins) ----------
 // Sessions are run from the website only (the /session commands were removed). The website writes the sessions
