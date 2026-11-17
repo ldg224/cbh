@@ -3,6 +3,22 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.15.2 (2026-11-17)
+
+**Changed:** **Mod actions** is redesigned.
+- **At a glance:** four numbers across the top: this week, active warnings, pending, and either **Waiting for review** (supervisors) or **Didn't go through** (everyone else). Click one to filter the list.
+- **Find things fast:** search by name or reason, filter by type (Warnings, Timeouts, Kicks, Bans, Unbans, Notes), choose **Everywhere**, **Discord** or **In game**, or switch on **Only mine**. **Load more** at the bottom.
+- **A tidier list:** grouped under Today, Yesterday and earlier dates. Each row shows the person, a fixed-size action tag, the length of any timeout, the reason, and who did it, where and when. Names open the person's record (Roblox names open their Roblox profile). Pending actions update by themselves without the list flickering.
+- **A ⋯ menu on every row:** **Open record**, **Remove timeout** (while it's still running), **Unban**, **Remove warning** (executives), **Copy details**, and **Send for supervisor review**.
+- **Supervisor review (new):** any admin can send an action for review with a note. Supervisors (executives and whoever directs Administration) see a **Waiting for review** count and decide **Upheld**, **Changed** or **Overturned** with a note. Nobody can review their own action or their own request, and everything is kept on the case.
+- **New action** opens in a side panel (full screen on phones) in three steps: **Who** (with their history, e.g. "2 warnings, last today"), **What** (each action explained, timeout lengths as buttons, and a gentle hint such as "already has 2 warnings, a timeout may be the next step"), and **Why** (quick reasons: Spam / flooding, Disrespect / harassment, Inappropriate content, Breaking roleplay / trolling), then an on-page review and confirm. Kicks and bans are shown in red. No more browser pop-ups.
+- **Your actions that didn't go through** sit at the top of Mod actions with **Try again** and **Dismiss**.
+
+**Changed (every page):** failed actions no longer stack up as red bars. You now see one calm line, e.g. "2 of your actions didn't go through", which opens to show why, with a link to Mod actions and × to dismiss them all.
+
+Bot: no change.
+Database change: yes, migration 0017 (supervisor review).
+
 ## 0.15.1 (2026-11-17)
 
 **Changed:** the **Shifts** page is redesigned.
