@@ -1,0 +1,42 @@
+/* Roles (#exec/roles): the website role editor (R1, Bravo). Loaded after style.css, dept.css (tabs, switch) and desk.css. */
+.ro-wrap { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; align-items: start; }
+.ro-list { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; position: sticky; top: 16px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+.ro-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; }
+.ro-search:focus-within { border-color: var(--blue); }
+.ro-search input { border: 0; outline: 0; font: inherit; font-size: 13.5px; flex: 1; min-width: 0; color: var(--text); background: transparent; }
+.ro-groups { overflow-y: auto; display: grid; gap: 1px; align-content: start; }
+.ro-g { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #8a9ab8; padding: 12px 8px 4px; }
+.ro-item { display: flex; align-items: center; gap: 9px; border: 0; background: none; padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; text-align: left; min-width: 0; }
+.ro-item:hover { background: #e9f0f9; color: var(--text); }
+.ro-item[aria-current="true"] { background: color-mix(in srgb, var(--c) 14%, #fff); color: var(--text); box-shadow: inset 3px 0 0 var(--c); }
+.ro-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; box-shadow: inset 0 0 0 1px rgba(11, 30, 74, .12); }
+.ro-nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ro-cnt { font-size: 11.5px; font-weight: 700; color: #8a9ab8; flex: none; }
+.ro-main { min-width: 0; }
+.ro-head { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; border-top: 4px solid var(--c); }
+.ro-head h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; text-transform: none; color: var(--text); }
+.ro-swatch { width: 42px; height: 42px; border-radius: 12px; background: var(--c); flex: none; box-shadow: inset 0 0 0 1px rgba(11, 30, 74, .12); }
+.ro-tabs { margin: 14px 0 12px; }
+.ro-tabs .soon { color: #8a9ab8; }
+.ro-sec { padding: 16px 18px; margin-bottom: 12px; }
+.ro-sh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.ro-sh h3 { margin: 0; font-size: 15px; font-weight: 800; }
+.ro-note { margin: 0 0 10px; font-size: 13px; color: var(--muted); background: var(--raised); border-radius: 9px; padding: 8px 11px; }
+.ro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 6px 18px; }
+.ro-sw { display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px; cursor: pointer; border-radius: 8px; }
+.ro-sw:hover { background: #f7fafd; }
+.ro-sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ro-sw .dp-sw { margin-top: 2px; }
+.ro-sw.off { cursor: default; opacity: .7; }
+.ro-sw.off:hover { background: none; }
+.ro-swl { display: grid; } .ro-swl b { font-size: 13.5px; } .ro-swl small { font-size: 12px; color: var(--muted); }
+.ro-win { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.ro-win select { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; color: var(--text); background: var(--panel); }
+.ro-mem { padding: 6px 16px; }
+.ro-mrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-weight: 600; }
+.ro-mrow + .ro-mrow { border-top: 1px solid var(--line); }
+.ro-foot { margin-top: 8px; }
+@media (max-width: 860px) {
+  .ro-wrap { grid-template-columns: minmax(0, 1fr); }
+  .ro-list { position: static; max-height: 300px; }
+}
