@@ -277,6 +277,7 @@ function draw(data) {
   $('welcome-name').textContent = cleanName(me.display_name);
   $('name').textContent = cleanName(me.display_name);
   setPhoto(me.avatar_url);
+  rememberAccount(me);
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
   myDiscordId = me.discord_id;
@@ -354,7 +355,7 @@ function onSession(session) {
   $('session-admin').hidden = true;
   stopCodeLogin();
   showLoginView('main');
-  if (!user) return;
+  if (!user) { drawLastAccount(); return; }
   const meta = user.user_metadata || {};
   const name = meta.full_name || meta.custom_claims?.global_name || meta.name || 'staff member';
   $('name').textContent = cleanName(name);
@@ -364,17 +365,45 @@ function onSession(session) {
   loadAndDraw();
 }
 
-$('login').addEventListener('click', async () => {
+// Log in with Discord (PKCE, 0.20.1). quick = "Continue as <name>": asks Discord to skip its Authorize page for
+// someone who has already authorised the app (prompt=none); if Discord refuses, we start a normal login.
+// The page they were on (#route) is kept in this tab and put back after the login.
+async function startDiscordLogin(quick) {
   $('login-error').hidden = true;
+  try {
+    sessionStorage.setItem('cbh-return-hash', location.hash);
+    if (quick) sessionStorage.setItem('cbh-quick', '1'); else sessionStorage.removeItem('cbh-quick');
+  } catch { /* fine without it */ }
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'discord',
-    options: { redirectTo: location.origin + location.pathname, scopes: 'identify' },
+    options: { redirectTo: location.origin + location.pathname, scopes: 'identify', ...(quick ? { queryParams: { prompt: 'none' } } : {}) },
   });
   if (error) {
     $('login-error').textContent = "Couldn't start Discord login: " + error.message;
     $('login-error').hidden = false;
   }
-});
+}
+$('login').addEventListener('click', () => startDiscordLogin(false));
+$('login-again').addEventListener('click', () => startDiscordLogin(true));
+$('login-other').addEventListener('click', () => { forgetAccount(); drawLastAccount(); });
+
+// The last account on this device: only a name and photo, kept in this browser (no tokens), for "Continue as".
+const LAST_ACCOUNT = 'cbh-last-account';
+function lastAccount() { try { return JSON.parse(localStorage.getItem(LAST_ACCOUNT) || 'null'); } catch { return null; } }
+function rememberAccount(me) {
+  try { localStorage.setItem(LAST_ACCOUNT, JSON.stringify({ name: cleanName(me.display_name || ''), avatar: me.avatar_url || null })); } catch { /* fine */ }
+}
+function forgetAccount() { try { localStorage.removeItem(LAST_ACCOUNT); } catch { /* fine */ } }
+function drawLastAccount() {
+  const a = lastAccount(), on = !!(a && a.name);
+  $('login-again').hidden = !on; $('login-other').hidden = !on;
+  $('login').classList.toggle('secondary', on);
+  if (!on) return;
+  $('login-again-name').textContent = a.name;
+  const img = $('login-again-img');
+  img.hidden = !a.avatar;
+  if (a.avatar) { img.onerror = () => { img.hidden = true; }; img.src = sized(a.avatar, 64); }
+}
 
 // ---------- home menu, hubs and pages ----------
 // The owner's rules (Plans/CareBeyond/RESEARCH.md §6): as few pages as possible, tools grouped into HUBS, each
@@ -1679,38 +1708,39 @@ $('logout').addEventListener('click', async () => {
   onSession(null);
 });
 
-// A failed Discord login comes back with ?error_description=... in the address. Show it, then tidy the address.
-(function showLoginError() {
-  const params = new URLSearchParams(location.search + '&' + location.hash.slice(1));
-  const desc = params.get('error_description');
-  if (!desc) return;
-  $('login-error').textContent = "Discord login didn't work: " + desc + '. Ask the Hospital Director to check the dashboard setup.';
-  $('login-error').hidden = false;
-  history.replaceState(null, '', location.pathname);
-})();
-
+// A failed Discord login comes back with ?error=... / #error_description=...: shown by the getSession check below.
 sb.auth.onAuthStateChange((_event, session) => { onSession(session); if (session) tidyAuthUrl(); });
+if (AUTH_RETURN.code) $('loading').textContent = 'Logging you in…';
 sb.auth.getSession().then(({ data, error }) => {
   onSession(data.session);
   if (data.session) { tidyAuthUrl(); return; }
-  if (AUTH_RETURN.error) return loginProblem("Discord login didn't finish: " + AUTH_RETURN.error.replace(/\+/g, ' '));
+  let quick = false;
+  try { quick = sessionStorage.getItem('cbh-quick') === '1'; sessionStorage.removeItem('cbh-quick'); } catch { /* fine */ }
+  if (AUTH_RETURN.error) {
+    // "Continue as" asked Discord to skip its Authorize page and it said no: do a normal login instead.
+    if (quick) { tidyAuthUrl(); return startDiscordLogin(false); }
+    return loginProblem("Discord login didn't finish: " + AUTH_RETURN.error.replace(/\+/g, ' '));
+  }
   if (AUTH_RETURN.code) {
-    // Coming back from Discord: getSession waits for the code swap, so no session here means it failed. A short
-    // pause covers a SIGNED_IN that's still on its way.
+    // Coming back from Discord: getSession waits for the code swap, so no session here means it failed (usually
+    // the login started in another browser or app). A short pause covers a SIGNED_IN that's still on its way.
     setTimeout(async () => {
       const { data: again } = await sb.auth.getSession();
-      if (!again.session) loginProblem("Discord signed you in, but this browser didn't keep the login" + (error ? ' (' + error.message + ')' : '') + '. Try again, open this page in Safari or Chrome, or use Log in with a code.');
+      if (!again.session) loginProblem('Discord signed you in, but this browser lost the login on the way back. Try again, or tap Log in with a code.' + (error ? ' (' + error.message + ')' : ''));
     }, 1500);
   }
 });
-// Remove ?code= / #access_token= etc. from the address bar once the login is done (keeps any page route).
+// Remove ?code= / #access_token= etc. from the address bar once the login is done, and put back the page they were on.
 function tidyAuthUrl() {
   const q = new URLSearchParams(location.search);
   let changed = false;
   for (const k of ['code', 'error', 'error_code', 'error_description', 'state']) if (q.has(k)) { q.delete(k); changed = true; }
-  const hashIsAuth = /(^|&)(access_token|refresh_token|error_description)=/.test(location.hash.slice(1));
-  if (!changed && !hashIsAuth) return;
-  try { history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + (hashIsAuth ? '' : location.hash)); } catch { /* fine */ }
+  const hashIsAuth = /(^|&)(access_token|refresh_token|error_description|error)=/.test(location.hash.slice(1));
+  let back = '';
+  try { back = sessionStorage.getItem('cbh-return-hash') || ''; sessionStorage.removeItem('cbh-return-hash'); } catch { /* fine */ }
+  const hash = hashIsAuth || !location.hash ? (currentUserId && /^#[\w/-]*$/.test(back) ? back : '') : location.hash;
+  if (!changed && !hashIsAuth && hash === location.hash) return;
+  try { history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + hash); } catch { /* fine */ }
 }
 function loginProblem(text) {
   tidyAuthUrl();
@@ -1720,15 +1750,12 @@ function loginProblem(text) {
   e.hidden = false;
 }
 
-// In-app browsers (Discord, Instagram, Facebook, TikTok, Snapchat, Android webviews...) can drop logins. Point people
-// to their normal browser or the code login. (Discord on iPhone may look like Safari; the error above covers that.)
+// In-app browsers (Discord, Instagram, Facebook, TikTok, Snapchat...) can lose a login on the way back from Discord.
+// A quiet pointer to the code login, which doesn't depend on the browser. iPhone in-app browsers don't say "Safari/".
 (function inAppNote() {
   const ua = navigator.userAgent || '';
-  if (!/Discord|Instagram|FBAN|FBAV|FB_IAB|Line\/|TikTok|musical_ly|Snapchat|Twitter|; wv\)/i.test(ua)) return;
+  const inApp = /Discord|Instagram|FBAN|FBAV|FB_IAB|Line\/|TikTok|musical_ly|Snapchat|Twitter|; wv\)/i.test(ua)
+    || (/iPhone|iPad|iPod/.test(ua) && /AppleWebKit/.test(ua) && !/Safari\//.test(ua));
   const n = $('inapp-note');
-  if (n) n.hidden = false;
+  if (n) n.hidden = !inApp;
 })();
-$('inapp-copy')?.addEventListener('click', async (e) => {
-  try { await navigator.clipboard.writeText(location.origin + location.pathname); e.target.textContent = 'Link copied'; }
-  catch { e.target.textContent = location.origin + location.pathname; }
-});

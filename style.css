@@ -1143,5 +1143,11 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .pg-sess .ss-host button:hover { background: #fde2e1; color: #b42318; }
 
 /* 0.20.1: shown on the login card inside in-app browsers (Discord, Instagram, ...) */
-.inapp-note { margin: 14px auto 0; max-width: 340px; font-size: 13px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.inapp-note .linkish { display: block; margin: 4px auto 0; padding: 4px 8px; color: var(--blue); font-weight: 600; }
+.inapp-note { margin: 14px auto 0; max-width: 340px; font-size: 13px; color: var(--muted); }
+/* Continue as <name>: the last account on this device */
+.login-again { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.login-again img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .7); object-fit: cover; }
+.login-again b { font-weight: 700; }
+.login-actions .discord.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+.login-other { font-size: 13px; color: var(--muted); padding: 4px 8px; }
+.login-other:hover { color: var(--blue-deep); text-decoration: underline; }

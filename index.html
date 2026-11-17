@@ -53,12 +53,14 @@
         <h1>Welcome to CareBeyond</h1>
         <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
         <div class="login-actions">
+          <!-- The last account on this device (name and photo kept in this browser only; no tokens). -->
+          <button id="login-again" class="discord login-again" type="button" hidden><img id="login-again-img" alt="" hidden><span>Continue as <b id="login-again-name"></b></span></button>
           <button id="login" class="discord">Log in with Discord</button>
           <button id="code-login" class="ghost">Log in with a code</button>
+          <button id="login-other" class="linkish login-other" type="button" hidden>Not you? Use another account</button>
         </div>
         <p id="login-error" class="error" hidden></p>
-        <p id="inapp-note" class="inapp-note" hidden>Having trouble? Open this page in Safari or Chrome, or use <b>Log in with a code</b>.
-          <button id="inapp-copy" class="linkish" type="button">Copy the link</button></p>
+        <p id="inapp-note" class="inapp-note" hidden>Stuck? Try <b>Log in with a code</b>.</p>
       </div>
 
       <!-- Log in with a code: type /login CODE in Discord, the bot confirms, this page logs in by itself. -->
