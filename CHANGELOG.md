@@ -3,6 +3,11 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.7.1 (2026-11-17)
+
+**Fixed:** who can review applications now comes from the forms themselves. If a form is added for another team (e.g. Nursing), that team's leads can review it automatically.
+Database change: none.
+
 ## 0.7.0 (2026-11-17)
 
 **Added:**

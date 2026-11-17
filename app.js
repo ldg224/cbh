@@ -30,11 +30,13 @@ async function fetchMine() {
   const mine = new Set(me.role_ids);
   const roles = rows.filter((r) => mine.has(r.id)).sort((a, b) => b.position - a.position);
   const departments = rows.filter((r) => r.kind === 'department');
-  const [acc, sess] = await Promise.all([
+  const [acc, sess, reviewTeams] = await Promise.all([
     sb.rpc('my_access').then((r) => r.data || null, () => null),
     fetchSession(),
+    // Teams that review a form (forms.review_team): their leads may review submissions. null = execs only.
+    sb.from('forms').select('review_team').then((r) => [...new Set((r.data || []).map((f) => f.review_team).filter(Boolean))], () => []),
   ]);
-  return { me, roles, departments, access: acc, session: sess };
+  return { me, roles, departments, access: acc, session: sess, reviewTeams };
 }
 
 // The banner: a live session, else the next scheduled one, plus the join code (from the session or settings).
@@ -263,7 +265,7 @@ function draw(data) {
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
   myDiscordId = me.discord_id;
-  setAccess(me, roles, data.access);
+  setAccess(me, roles, data.access, data.reviewTeams);
   buildMenu();
   buildSessionBanner(data.session);
   route();
@@ -389,11 +391,11 @@ const PAGES = [
 // Administration department, or exec; staff = the bot's is_staff flag.
 let access = { exec: false, admin: false, staff: false, everyone: true };
 let myDiscordId = null;
-function setAccess(me, roles, acc) {
+function setAccess(me, roles, acc, reviewTeams = []) {
   if (acc) {   // my_access() in Supabase: the same rules the database uses (RLS)
     access = { exec: !!acc.exec, admin: !!acc.admin, staff: !!acc.team || !!me.is_staff, everyone: true,
       leads: !acc.admin && (acc.leads || []).length > 0,
-      reviewer: !!acc.exec || (acc.leads || []).some((d) => ['Administration', 'Community Engagement'].includes(d)) };
+      reviewer: !!acc.exec || (acc.leads || []).some((d) => reviewTeams.includes(d)) };
     access['reviewer-lead'] = access.reviewer && !acc.admin;
     return;
   }
