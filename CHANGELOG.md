@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.22.2 (2026-11-18)
+
+**Fixed:**
+- **Desk:** the sidebar stays where you scrolled it when you open a page, on computers and in the phone menu.
+
+Bot: no change. Database change: no.
+
 ## 0.22.1 (2026-11-18)
 
 **Fixed:**
