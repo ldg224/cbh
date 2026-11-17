@@ -3,6 +3,15 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.3.0 (2026-11-17)
+
+**Added:**
+- Your Discord profile photo on the Welcome card (on the right on computers, beside your name on phones) and in the header, with the CareBeyond teal ring and glow.
+- The Welcome card is always the same size. Badges show on one line, most important first (leadership title, then department and year, then Executive, then Verified). Any that don't fit go behind a **+N** button that opens them in a small pop-up. It closes when you tap or click outside it, or press Esc.
+
+**Changed:** the "Staff dashboard" label is gone from the header and the login screen, which now says "Welcome to CareBeyond".
+Database change: none.
+
 ## 0.2.2 (2026-11-17)
 
 **Changed:**

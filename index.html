@@ -19,10 +19,9 @@
         <img class="mark-icon" src="assets/cbh-icon.svg" alt="" width="44" height="44">
         <span class="wordmark" aria-hidden="true"><span class="wm-name">CareBeyond</span><span class="wm-sub">Hospital</span></span>
       </a>
-      <span class="section">Staff dashboard</span>
     </div>
     <div id="who" class="who" hidden>
-      <img id="avatar" alt="" width="28" height="28">
+      <img id="avatar" class="avatar" alt="" width="30" height="30">
       <span id="name"></span>
       <button id="logout" class="ghost">Log out</button>
     </div>
@@ -36,17 +35,22 @@
 
     <section id="signed-out" class="card center" hidden>
       <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="88" height="88">
-      <h1>Staff dashboard</h1>
+      <h1>Welcome to CareBeyond</h1>
       <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
       <button id="login" class="discord">Log in with Discord</button>
       <p id="login-error" class="error" hidden></p>
     </section>
 
-    <section id="signed-in" class="card" hidden>
-      <h1>Welcome, <span id="welcome-name"></span></h1>
-      <div id="badges" class="badges" hidden></div>
-      <p id="note" class="muted small" hidden></p>
+    <!-- One fixed-size card: name, one line of badges (extra ones behind "+N"), and the Discord photo. -->
+    <section id="signed-in" class="card welcome" hidden>
+      <div class="w-text">
+        <h1 class="w-title">Welcome, <span id="welcome-name"></span></h1>
+        <div id="badges" class="badges" hidden></div>
+        <p id="note" class="muted small w-note" hidden></p>
+      </div>
+      <img id="photo" class="photo" alt="" width="96" height="96" hidden>
     </section>
+    <div id="more-pop" class="pop" role="dialog" aria-label="More badges" tabindex="-1" hidden></div>
 
     <p id="loading" class="muted center">Loading…</p>
   </main>

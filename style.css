@@ -43,12 +43,25 @@ body {
 .wordmark { display: flex; flex-direction: column; line-height: 1; }
 .wm-name { font-size: 21px; font-weight: 800; letter-spacing: .01em; text-transform: uppercase; }
 .wm-sub { margin-top: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .42em; text-transform: uppercase; color: var(--teal-ink); }
-.section { padding-left: 14px; border-left: 1px solid var(--line); color: var(--teal-ink); font-size: 11.5px;
-  font-weight: 600; letter-spacing: .22em; text-transform: uppercase; white-space: nowrap; }
 .who #name { font-weight: 600; }
 .hero-icon { display: block; margin: 0 auto 16px; }
 .who { display: flex; align-items: center; gap: 10px; }
-.who img { border-radius: 50%; }
+/* Profile photos wear the icon's teal ring and glow. */
+.avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 2px solid var(--teal);
+  box-shadow: 0 0 8px 1px rgba(46, 211, 198, .45); background: var(--raised); }
+
+/* Welcome card: always one size. Name top-left, one line of badges under it, photo on the right. */
+.welcome {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px; align-items: center;
+}
+.w-text { min-width: 0; }   /* name + badges as one block, centred against the photo */
+.w-title { margin: 0 0 10px; }
+.photo {
+  width: 96px; height: 96px; margin: 8px; border-radius: 50%; object-fit: cover;
+  border: 3px solid var(--teal); background: var(--raised);
+  box-shadow: 0 0 0 4px #fff, 0 0 18px 6px rgba(46, 211, 198, .42);
+}
+.w-note { margin: 8px 0 0; }
 
 main { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
 .card {
@@ -72,10 +85,15 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* Identity badges under the name. Each is tinted with its role's colour (--c); text stays navy so pale Discord
    colours are still readable. A department's year/rank badge is joined onto its department badge as one block. */
-.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px; }
+/* Always ONE line, so the card never grows: badges that don't fit go behind a "+N" chip (app.js fitBadges). */
+.badges { display: flex; flex-wrap: nowrap; gap: 6px; margin: 2px 0 4px; overflow: hidden; min-width: 0; }
+.badges > * { flex: none; }
+.badges > .shrink { flex: 0 1 auto; min-width: 0; }
+.shrink .rl, .rbadge.shrink .rl { overflow: hidden; text-overflow: ellipsis; }
+.rl { white-space: nowrap; min-width: 0; }
 .rbadge {
   --c: #9aa9c4;
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; min-width: 0;
   padding: 3px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
   color: var(--text);
   background: color-mix(in srgb, var(--c) 16%, #fff);
@@ -95,6 +113,26 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
   margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0;
   background: color-mix(in srgb, var(--c) 30%, #fff);
 }
+.pair.shrink .rbadge:first-child { min-width: 0; flex: 0 1 auto; }
+
+/* "+N": a plain neutral badge that opens the hidden badges in a popover (the card never changes size). */
+.more {
+  font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.5; cursor: pointer;
+  padding: 3px 11px; border-radius: 999px;
+  background: var(--raised); color: var(--blue-deep); border: 1px solid var(--line);
+}
+.more:hover, .more[aria-expanded="true"] { border-color: var(--blue); }
+.pop {
+  position: fixed; z-index: 50; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start;
+  width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(11, 30, 74, .16), 0 2px 6px rgba(11, 30, 74, .06);
+}
+.pop:focus { outline: none; }
+/* In the popover a long department name shortens with "…" rather than running off a narrow phone. */
+.pop > * { max-width: 100%; min-width: 0; }
+.pop .pair .rbadge:first-child { flex: 0 1 auto; min-width: 0; }
+.pop .rl { overflow: hidden; text-overflow: ellipsis; }
 
 .notice {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -117,8 +155,19 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 }
 /* Phones: tighter spacing, bigger tap targets, nothing hidden that matters. */
 @media (max-width: 560px) {
-  #name, .section { display: none; }
+  #name { display: none; }
   .bar { padding: 10px 14px; }
+  /* Welcome card on phones: name beside a smaller photo, badges full width underneath. */
+  .welcome { grid-template-areas: "title photo" "badges badges" "note note"; column-gap: 12px; }
+  .w-text { display: contents; }
+  .w-title { grid-area: title; }
+  .photo { grid-area: photo; }
+  .welcome #badges { grid-area: badges; }
+  .w-note { grid-area: note; }
+  .w-title { font-size: 20px; line-height: 1.25; align-self: center; margin: 0 0 12px; }
+  .photo { width: 60px; height: 60px; margin: 4px 4px 14px; border-width: 2px;
+    box-shadow: 0 0 0 3px #fff, 0 0 12px 4px rgba(46, 211, 198, .42); }
+  .more { font-size: 13px; padding: 4px 11px; }
   .mark-icon { width: 38px; height: 38px; }
   .wm-name { font-size: 18px; }
   .wm-sub { font-size: 9.5px; letter-spacing: .38em; }
