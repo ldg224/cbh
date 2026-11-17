@@ -117,6 +117,8 @@
   function drawSide() {
     const depts = DEPARTMENTS.filter((d) => canSee('dir:' + d.name) && deptPages(d).length);
     const hosp = hospitalTools();
+    // Redrawing on every page change used to reset the nav to the top (user, 18 Nov 2026): keep its scroll position.
+    const before = side.querySelector('.ds-nav'), keepTop = before ? before.scrollTop : 0;
     side.innerHTML = `
       <a class="ds-brand" href="#"><img src="assets/cbh-icon.svg" alt="" width="32" height="32"><span class="ds-wm"><span class="wm-care">Care</span><span class="wm-beyond">Beyond</span></span></a>
       <button class="ds-search" type="button" data-desk="search"><span class="ds-i" style="${icon('search')};width:16px;height:16px;background:currentColor;-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat"></span>Search or do anything<kbd>/</kbd></button>
@@ -132,6 +134,15 @@
       </nav>
       ${sessionCard()}
       ${meCard()}`;
+    const nav = side.querySelector('.ds-nav');
+    if (!nav) return;
+    nav.scrollTop = keepTop;
+    // Only if the page you're on has ended up out of view (e.g. a folder opened above it), bring it just into view.
+    const cur = nav.querySelector('[aria-current="page"]');
+    if (cur) {
+      const n = nav.getBoundingClientRect(), c = cur.getBoundingClientRect();
+      if (c.top < n.top || c.bottom > n.bottom) cur.scrollIntoView({ block: 'nearest' });
+    }
   }
   function sessionCard() {
     const s = typeof currentSession !== 'undefined' ? currentSession : null, live = s && s.live, next = s && s.next;
