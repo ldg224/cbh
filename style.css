@@ -47,5 +47,12 @@ h2 { margin: 24px 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .04
 .role .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--role, #99aab5); flex: none; }
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
   background: rgba(46, 211, 198, .15); color: var(--brand); margin-left: 6px; vertical-align: 2px; }
+.notice {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 16px; padding: 10px 12px 10px 16px; border-radius: 8px;
+  background: rgba(46, 211, 198, .1); border: 1px solid rgba(46, 211, 198, .35);
+}
+.refresh { background: var(--brand); color: #0f1419; font-weight: 600; padding: 6px 14px; }
+.refresh:hover { filter: brightness(1.1); }
 [hidden] { display: none !important; }
 @media (max-width: 480px) { #name { display: none; } }
