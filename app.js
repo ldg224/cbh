@@ -265,6 +265,7 @@ function draw(data) {
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
   myDiscordId = me.discord_id;
+  myDepartments = (data.access && data.access.teams) || [...new Set(roles.filter((r) => r.department).map((r) => r.department))];
   setAccess(me, roles, data.access, data.reviewTeams);
   buildMenu();
   buildSessionBanner(data.session);
@@ -372,7 +373,7 @@ const PAGES = [
     { id: 'reports',  title: 'Reports',       icon: 'bar-chart', layout: 'reports' },
     { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list', building: true },
     { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form', building: true },
-    { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings', building: true },
+    { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
   ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
     { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'cases' },
@@ -393,6 +394,7 @@ const PAGES = [
 // Administration department, or exec; staff = the bot's is_staff flag.
 let access = { exec: false, admin: false, staff: false, everyone: true };
 let myDiscordId = null;
+let myDepartments = [];   // departments I can start a shift in (from my roles)
 function setAccess(me, roles, acc, reviewTeams = []) {
   if (acc) {   // my_access() in Supabase: the same rules the database uses (RLS)
     access = { exec: !!acc.exec, admin: !!acc.admin, staff: !!acc.team || !!me.is_staff, everyone: true,
@@ -479,27 +481,17 @@ const BUILDING_NOTE = (title) => `<div class="card building-note"><span class="t
 const COMMAND_GROUPS = [
   { aud: 'everyone', title: 'Everyone', cmds: [
     ['/login', 'code', 'Log in to this website with the code from "Log in with a code".'],
-    ['/contact', 'team subject message', 'Contact a team: Administration (support), Nursing, Paramedicine or Community Engagement (partnerships). Replies come by DM; reply by DMing the bot.'],
   ] },
-  { aud: 'staff', title: 'Department members · shifts', cmds: [
-    ['/shift start', '[department]', 'Start a shift (pick a department if you’re in more than one).'],
-    ['/shift break', '', 'Start or end a break.'],
-    ['/shift end', '', 'End your shift.'],
-    ['/shift status', '', 'Your current shift and this week’s hours.'],
-  ] },
-  { aud: 'admin', title: 'Admins · moderation', note: 'Each is saved as a case, posted to #server-logs, and the member gets a DM where possible. You can’t act on someone with the same or a higher role.', cmds: [
+  { aud: 'admin', title: 'Admins · moderation', note: 'Each is saved as a case (see Mod reports), posted to #server-logs, and the member gets a DM where possible. You can\u2019t act on someone with the same or a higher role.', cmds: [
     ['/warn', 'member reason', 'Warn a member.'],
     ['/timeout', 'member length reason', 'Time out for 10 minutes, 1 hour, 6 hours, 1 day, 3 days or 1 week.'],
     ['/untimeout', 'member [reason]', 'Remove a timeout.'],
     ['/kick', 'member reason', 'Kick a member.'],
     ['/ban', 'member reason [delete_messages]', 'Ban a member, optionally deleting their last 1 or 7 days of messages.'],
     ['/unban', 'user_id reason', 'Unban someone by their Discord ID.'],
-    ['/cases', 'member', 'Their last 10 cases.'],
-  ] },
-  { aud: 'exec', title: 'Executives', cmds: [
-    ['/joincode', 'code', 'Change the Maple Hospital server join code (the website banner and the USE CODE channel update).'],
   ] },
 ];
+// Owner's rule: Discord keeps only these 7 commands; everything else is done on this website.
 function commandsPage() {
   return COMMAND_GROUPS.map((g) => `
     <section class="cmd-group aud-${g.aud}">
@@ -714,7 +706,8 @@ async function renderLogs(body) {
     <div class="toolbar"><div class="chips" id="log-filter">${LOG_GROUPS.map((g) =>
       `<button class="chip${g.id === 'all' ? ' on' : ''}" data-g="${g.id}">${g.label}</button>`).join('')}</div></div>
     <div class="card" id="log-list"><p class="muted small">Loading…</p></div>
-    <div class="center"><button class="ghost" id="log-more" hidden>Load more</button></div>`;
+    <div class="center"><button class="ghost" id="log-more" hidden>Load more</button></div>
+    <p class="muted small center">Gaps mean the bot was offline: Discord events from that time can't be recorded.</p>`;
   const list = body.querySelector('#log-list');
   body.querySelector('#log-filter').onclick = (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
@@ -1070,10 +1063,14 @@ async function renderShifts(body) {
     <div class="card shift-me">
       <span class="t-ico big" style="--c:${myNow ? '#16b364' : '#9aa9c4'};--icon:${iconUrl('clock')}" aria-hidden="true"></span>
       <div class="case-main"><strong class="thread-subject">${myNow ? (myNow.status === 'break' ? 'On a break' : 'On shift') : 'Off shift'}</strong>
-        <span class="muted small-meta">${myNow ? `${esc(myNow.department)} · ${hrs(shiftSecs(myNow))} so far` : 'Start a shift in Discord with /shift start'}</span></div>
+        <span class="muted small-meta">${myNow ? `${esc(myNow.department)} · ${hrs(shiftSecs(myNow))} so far` : (myDepartments.length ? 'Ready when you are' : 'You need a department role to start a shift')}</span></div>
       <div class="stat-mini"><span class="muted small-meta">This week</span><strong>${hrs(weekSecs)}</strong></div>
     </div>
-    <div class="cmd-strip">${['/shift start', '/shift break', '/shift end', '/shift status'].map((c) => `<code class="cmd">${c}</code>`).join('')}</div>
+    <div class="shift-actions">${myNow
+      ? `<button class="ghost" id="sh-break">${myNow.status === 'break' ? 'End break' : 'Take a break'}</button><button class="refresh" id="sh-end">End shift</button>`
+      : (myDepartments.length ? `${myDepartments.length > 1 ? `<select id="sh-dept" class="sh-dept">${myDepartments.map((d) => `<option>${esc(d)}</option>`).join('')}</select>` : ''}<button class="refresh" id="sh-start">Start shift${myDepartments.length === 1 ? ' · ' + esc(myDepartments[0]) : ''}</button>` : '')}
+    </div>
+    <p class="error" id="sh-err" hidden></p>
     <h2 class="menu-label aud-staff"><span class="aud-dot"></span>On now</h2>
     <div class="card">${(on.data || []).length ? on.data.map((s) => `
       <div class="row-item"><span class="dot-status ${s.status === 'break' ? 'brk' : 'on'}"></span>
@@ -1084,6 +1081,54 @@ async function renderShifts(body) {
       <div class="row-item"><div class="case-main"><strong>${new Date(s.started_at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</strong>
         <span class="muted small-meta">${esc(s.department)} · ${new Date(s.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${s.ended_at ? '–' + new Date(s.ended_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ' · now'}${s.ended_by === 'auto' ? ' · ended automatically' : ''}</span></div>
         <strong>${hrs(shiftSecs(s))}</strong></div>`).join('') : '<p class="muted small">No shifts yet.</p>'}</div>`;
+  wireShiftButtons(body);
+}
+
+// Shift buttons (back end: Bravo's shift_* RPCs; the bot does roles, #shift-logs and auto-end).
+async function shiftAction(body, fn, args) {
+  const { error } = await sb.rpc(fn, args || {});
+  if (error) { const e = body.querySelector('#sh-err'); e.textContent = error.message; e.hidden = false; return; }
+  renderShifts(body);
+}
+function wireShiftButtons(body) {
+  body.querySelector('#sh-start')?.addEventListener('click', () =>
+    shiftAction(body, 'shift_start', { department: body.querySelector('#sh-dept')?.value || myDepartments[0] }));
+  body.querySelector('#sh-break')?.addEventListener('click', () => shiftAction(body, 'shift_break'));
+  body.querySelector('#sh-end')?.addEventListener('click', () => {
+    if (confirm('End your shift?')) shiftAction(body, 'shift_end');
+  });
+}
+
+// ----- Bot settings (#exec/settings) — execs; saved with set_setting(key, value); the bot applies them -----
+const SETTINGS = [
+  { key: 'join_code', label: 'Maple Hospital join code', help: 'Shown on the session banner and in the USE CODE channel name (the channel can take a few minutes to update).', type: 'text', placeholder: '4920-4087' },
+  { key: 'shift_auto_end_hours', label: 'End forgotten shifts after', help: 'Hours. A shift still running after this long is ended automatically.', type: 'number', suffix: 'hours', min: 1, max: 24 },
+];
+async function renderSettings(body) {
+  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const { data, error } = await sb.from('settings').select('key, value');
+  if (error) { body.innerHTML = ''; return liveError(body, error); }
+  const cur = Object.fromEntries((data || []).map((r) => [r.key, r.value]));
+  body.innerHTML = `<div class="card settings">${SETTINGS.map((st) => `
+    <form class="row-item setting" data-key="${st.key}">
+      <div class="case-main"><strong>${esc(st.label)}</strong><span class="muted small-meta">${esc(st.help)}</span></div>
+      <div class="setting-ctl">
+        <input class="set-in" type="${st.type}" ${st.min ? `min="${st.min}" max="${st.max}"` : ''} placeholder="${esc(st.placeholder || '')}" value="${esc(cur[st.key] ?? '')}" required>
+        ${st.suffix ? `<span class="muted small-meta">${esc(st.suffix)}</span>` : ''}
+        <button class="refresh" type="submit">Save</button>
+      </div>
+      <span class="set-msg small-meta" hidden></span>
+    </form>`).join('')}</div>`;
+  body.querySelectorAll('.setting').forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const st = SETTINGS.find((x) => x.key === f.dataset.key), raw = f.querySelector('.set-in').value.trim();
+    const value = st.type === 'number' ? Number(raw) : raw;
+    const { error } = await sb.rpc('set_setting', { setting: st.key, val: value });
+    const msg = f.querySelector('.set-msg');
+    msg.hidden = false;
+    msg.className = 'set-msg small-meta ' + (error ? 'error' : 'ok');
+    msg.textContent = error ? "Couldn't save: " + error.message : 'Saved.';
+  }));
 }
 
 // ----- Reports (#exec/reports) -----
@@ -1182,7 +1227,7 @@ async function renderRoster(body) {
   draw();
 }
 
-Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, reports: renderReports, people: renderRoster });
+Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, reports: renderReports, people: renderRoster, settings: renderSettings });
 
 // ---------- running sessions (admins) ----------
 // Sessions are run from the website only (the /session commands were removed). The website writes the sessions

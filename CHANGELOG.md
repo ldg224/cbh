@@ -3,6 +3,21 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.9.0 (2026-11-17)
+
+**Added:**
+- **Shifts on the website:** **Start shift** (pick a department if you're in more than one), **Take a break** / **End break**, and **End shift**. CareBeyond Helper still sets your In Game / On Call / On Break role and posts to #shift-logs.
+- **Bot settings** (Executive hub) is now a real page: change the **Maple Hospital join code** (the banner and the USE CODE channel update) and how long before a **forgotten shift ends automatically**.
+
+**Changed:**
+- **Discord commands are down to seven:** `/ban`, `/kick`, `/timeout`, `/untimeout`, `/warn`, `/unban` and `/login`. Everything else is done on the website.
+- **Nothing is lost while the bot is offline.** Anything done on the website while it's off (sessions, tickets, applications, mod reports, shifts, join code) is carried out as soon as it's back. Forgotten shifts no longer count offline time as worked.
+- Mod reports filed on the website are now also posted to #server-logs.
+- Discord logs explain that gaps mean the bot was offline.
+
+Bot (by Bravo): `/cases`, `/contact`, `/joincode` and `/shift` removed; every part catches up on startup.
+Database change: yes, migrations 0008 (shift and settings actions) and 0009 (catch-up tracking).
+
 ## 0.8.0 (2026-11-17)
 
 **Added:** **run sessions from the website.** Admins see **Start session now** and **Schedule a session** under the session banner on the home page (date and time in Sydney time, optional note), a list of upcoming sessions with **Start now** and **Cancel**, and **End session** while one is live. CareBeyond Helper posts the announcement in #server-starts with the Session Ping when a session goes live, and changes it to "Session Ended" when it ends.

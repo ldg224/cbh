@@ -493,3 +493,16 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .is-building .sk { animation: none; background: #e9eff8; }   /* a still outline, never a "loading" shimmer */
 .is-building > .card:not(.building-note), .is-building > .grid-3, .is-building > .toolbar,
 .is-building > .team-pick, .is-building > .grid-people { opacity: .55; }
+
+/* ---------- Shift buttons and Bot settings ---------- */
+.shift-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.shift-actions .refresh, .shift-actions .ghost { padding: 10px 18px; }
+.shift-actions .ghost { color: var(--text); }
+.sh-dept { font: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--text); }
+.setting { flex-wrap: wrap; align-items: center; }
+.setting-ctl { display: flex; align-items: center; gap: 8px; }
+.set-in { font: inherit; width: 150px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--text); }
+.set-in:focus { outline: 2px solid rgba(58, 130, 208, .35); border-color: var(--blue); }
+.set-msg { width: 100%; }
+.set-msg.ok { color: var(--teal-ink); font-weight: 600; }
+@media (max-width: 560px) { .setting-ctl { width: 100%; } .set-in { flex: 1; width: auto; } .shift-actions > * { flex: 1; } }
