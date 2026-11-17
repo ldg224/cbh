@@ -788,3 +788,28 @@ function crItemClick(it, ds) {
   }
   return false;
 }
+
+// ---------- My courses (sidebar "My stuff") ----------
+// One department: its Courses tab. Several: #courses lists my courses from each of them.
+const crMyDepts = () => DEPARTMENTS.filter((d) => crMember(d.name));
+function crMyCoursesHref() {
+  const ds = crMyDepts();
+  return ds.length === 1 ? `#directors/${ds[0].id}/courses` : ds.length > 1 ? '#courses' : null;
+}
+PAGES.push({ id: 'courses', aud: 'everyone', title: 'My courses', icon: 'graduation-cap', layout: 'mycourses' });
+LIVE.mycourses = async (body) => {
+  const ds = crMyDepts();
+  if (ds.length === 1) { location.replace(`#directors/${ds[0].id}/courses`); return; }
+  body.innerHTML = '<div class="card"><p class="muted small">Loading your courses…</p></div>';
+  const lists = await Promise.all(ds.map(async (d) => { await crLoadRanks(d.name); return { d, list: ((await sb.rpc('course_list', { dept: d.name })).data || []).filter((c) => c.mine) }; }));
+  const any = lists.some((x) => x.list.length);
+  body.innerHTML = any ? lists.filter((x) => x.list.length).map(({ d, list }) => `<section class="cr-sec"><h2 class="ma-day">${esc(d.name)}</h2><div class="cr-grid">${list.map((c) => {
+      const pct = c.counts && c.counts.total ? Math.round((c.counts.done / c.counts.total) * 100) : 0;
+      return `<a class="cr-block${c.lock ? ' locked' : ''}" href="#directors/${d.id}/courses/${esc(c.id)}" style="--c:${esc(c.color || '#2ED3C6')};--dept:${d.color}">
+        <span class="cr-top"><span class="cr-kind">${esc(c.kind || 'Course')}</span></span>
+        <span class="cr-body"><span class="cr-pills">${crAudience(c, d.name)}${c.complete ? '<span class="cr-pill done">Completed</span>' : c.lock === 'date' ? `<span class="cr-pill soon">Opens ${esc(crDate(c.opens_at))}</span>` : c.lock === 'prereq' ? `<span class="cr-pill soon">Finish ${esc(c.prereq || 'another course')} first</span>` : '<span class="cr-pill open">Open</span>'}</span>
+          <strong class="cr-title">${esc(c.title)}</strong>${c.lock ? '' : `<span class="cr-progress"><i style="width:${pct}%"></i></span>`}
+          <span class="cr-foot"><span>${c.counts?.done || 0} of ${c.counts?.total || 0} steps</span><span>${c.lock ? 'Locked' : 'Open ›'}</span></span></span></a>`;
+    }).join('')}</div></section>`).join('')
+    : '<div class="card ma-empty"><strong>You have no courses yet.</strong><span>Your department will add them here.</span></div>';
+};

@@ -20,6 +20,7 @@
 
 /* course blocks */
 .cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 12px; }
+a.cr-block { text-decoration: none; }
 .cr-block { display: grid; grid-template-rows: 72px auto; font: inherit; color: inherit; text-align: left; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; cursor: pointer; min-width: 0; }
 .cr-block:hover { border-color: var(--blue); }
 .cr-block:focus-visible { outline: 3px solid rgba(58, 130, 208, .4); }

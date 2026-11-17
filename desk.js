@@ -38,7 +38,7 @@
     return [
       canSee('staff') && myDepartments.length && { href: '#shifts', label: 'My shift', icon: 'clock' },
       sessionsHref() && { href: sessionsHref(), label: 'Sessions', icon: 'calendar' },
-      { label: 'My courses', icon: 'graduation-cap', soon: true },
+      typeof crMyCoursesHref === 'function' && crMyCoursesHref() && { href: crMyCoursesHref(), label: 'My courses', icon: 'graduation-cap' },   // courses.js
       { href: '#contact', label: 'Contact a team', icon: 'chat' },
       canSee('leads') && { href: '#tickets', label: 'Team tickets', icon: 'inbox' },
       { href: '#apply', label: 'Apply', icon: 'resume' },
