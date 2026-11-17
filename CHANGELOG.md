@@ -3,6 +3,19 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.7.0 (2026-11-17)
+
+**Added:**
+- **Apply:** apply for the Administration or Community Engagement team on the website (and admins can file an **Incident Report**). See the status of what you've sent; you also get a DM when it's reviewed.
+- **Applications** for execs and the leads of those teams: read each application, then **Accept** or **Deny** with an optional note (reports are marked **Reviewed**). Also posted to #form-submissions with buttons.
+- **Shifts:** whether you're on shift, your hours this week, who's on now (and on a break), and your recent shifts. Shifts are started and ended in Discord with `/shift start | break | end | status`.
+- **Reports** (Executive hub): hours this week, last week or the last 30 days, by department and by person.
+- **Staff & roster:** everyone in a department or leadership, grouped by department with photos and badges, filterable.
+
+**Changed:** Commands lists the `/shift` commands. The form questions are placeholders until the real ones are added.
+Bot (by Bravo): forms and shifts cogs (auto-ending forgotten shifts), application posts with Accept/Deny buttons.
+Database change: yes, migration 0006 (forms, form submissions, shifts, shift report, roster).
+
 ## 0.6.0 (2026-11-17)
 
 **Added:**

@@ -365,7 +365,7 @@ const AUDIENCES = [
 // id = route (#id); hubs hold tools (#hub/tool). `photo`: a Roblox screenshot in assets/photos/ (tinted by CSS).
 const PAGES = [
   { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
-    { id: 'reports',  title: 'Reports',       icon: 'bar-chart', layout: 'stats' },
+    { id: 'reports',  title: 'Reports',       icon: 'bar-chart', layout: 'reports' },
     { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list' },
     { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form' },
     { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
@@ -374,14 +374,15 @@ const PAGES = [
     { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'cases' },
     { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'logs' },
     { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'tickets' },
-    { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'list', aud: 'exec' },
+    { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'review', aud: 'reviewer' },
   ] },
   { id: 'shifts',   aud: 'staff',    title: 'Shifts',         icon: 'clock',   layout: 'shifts' },
   { id: 'roster',   aud: 'staff',    title: 'Staff & roster', icon: 'people',  layout: 'people' },
   { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'doc' },
   { id: 'tickets',  aud: 'leads',    title: 'Team tickets',   icon: 'inbox',   layout: 'tickets' },   // leads who aren't admins
+  { id: 'review',   aud: 'reviewer-lead', title: 'Applications', icon: 'resume', layout: 'review' },   // review-team leads who aren't admins
   { id: 'contact',  aud: 'everyone', title: 'Contact a team', icon: 'chat',    layout: 'contact' },
-  { id: 'apply',    aud: 'everyone', title: 'Apply',          icon: 'resume',  layout: 'form' },
+  { id: 'apply',    aud: 'everyone', title: 'Apply',          icon: 'resume',  layout: 'apply' },
   { id: 'commands', aud: 'everyone', title: 'Commands',       icon: 'console', layout: 'commands' },
 ];
 // Who can see what. Derived from role kinds (cbh/roles.py): exec = leadership or Executive; admin = the
@@ -391,7 +392,9 @@ let myDiscordId = null;
 function setAccess(me, roles, acc) {
   if (acc) {   // my_access() in Supabase: the same rules the database uses (RLS)
     access = { exec: !!acc.exec, admin: !!acc.admin, staff: !!acc.team || !!me.is_staff, everyone: true,
-      leads: !acc.admin && (acc.leads || []).length > 0 };
+      leads: !acc.admin && (acc.leads || []).length > 0,
+      reviewer: !!acc.exec || (acc.leads || []).some((d) => ['Administration', 'Community Engagement'].includes(d)) };
+    access['reviewer-lead'] = access.reviewer && !acc.admin;
     return;
   }
   const exec = roles.some((r) => r.kind === 'leadership' || r.kind === 'executive');
@@ -427,7 +430,7 @@ function buildMenu() {
   const nav = $('menu');
   nav.replaceChildren();
   for (const aud of AUDIENCES) {
-    const pages = PAGES.filter((p) => (p.aud === aud.id && canSee(p.aud)) || (aud.id === 'staff' && p.aud === 'leads' && canSee('leads')));
+    const pages = PAGES.filter((p) => (p.aud === aud.id && canSee(p.aud)) || (aud.id === 'staff' && ['leads', 'reviewer-lead'].includes(p.aud) && canSee(p.aud)));
     if (!pages.length) continue;
     const group = document.createElement('section');
     group.className = `menu-group aud-${aud.id}`;
@@ -469,6 +472,12 @@ const COMMAND_GROUPS = [
   { aud: 'everyone', title: 'Everyone', cmds: [
     ['/login', 'code', 'Log in to this website with the code from "Log in with a code".'],
     ['/contact', 'team subject message', 'Contact a team: Administration (support), Nursing, Paramedicine or Community Engagement (partnerships). Replies come by DM; reply by DMing the bot.'],
+  ] },
+  { aud: 'staff', title: 'Department members · shifts', cmds: [
+    ['/shift start', '[department]', 'Start a shift (pick a department if you’re in more than one).'],
+    ['/shift break', '', 'Start or end a break.'],
+    ['/shift end', '', 'End your shift.'],
+    ['/shift status', '', 'Your current shift and this week’s hours.'],
   ] },
   { aud: 'admin', title: 'Admins · sessions', cmds: [
     ['/session start', '[note]', 'Announce a session now in #server-starts with Session Ping, the join code and host.'],
@@ -534,22 +543,22 @@ function route() {
   back.lastChild.textContent = tool ? page.title : 'Menu';
   const body = $('page-body');
   if (tool) {
-    setPageTitle(tool.icon, tool.title, tool.aud || page.aud);
+    setPageTitle(tool.icon, tool.title, tool.aud === 'reviewer' ? 'exec' : (tool.aud || page.aud));
     if (LIVE[tool.layout]) LIVE[tool.layout](body); else body.innerHTML = LAYOUTS[tool.layout]();
   } else if (page.tools) {
     setPageTitle(page.icon, page.title, page.aud);
     const grid = document.createElement('div');
     grid.className = 'hub-grid';
     for (const t of page.tools.filter((x) => canSee(x.aud || page.aud))) {
-      const a = tileEl(`#${page.id}/${t.id}`, t, t.aud || page.aud, 'tool');
+      const a = tileEl(`#${page.id}/${t.id}`, t, t.aud === 'reviewer' ? 'exec' : (t.aud || page.aud), 'tool');
       if (t.aud && t.aud !== page.aud) {
-        a.insertAdjacentHTML('beforeend', `<span class="tile-flag">${AUDIENCES.find((x) => x.id === t.aud).label} only</span>`);
+        a.insertAdjacentHTML('beforeend', `<span class="tile-flag">${t.aud === 'reviewer' ? 'Execs & team leads' : AUDIENCES.find((x) => x.id === t.aud).label + ' only'}</span>`);
       }
       grid.append(a);
     }
     body.replaceChildren(grid);
   } else {
-    setPageTitle(page.icon, page.title, page.aud === 'leads' ? 'staff' : page.aud);
+    setPageTitle(page.icon, page.title, ['leads', 'reviewer-lead'].includes(page.aud) ? 'staff' : page.aud);
     if (LIVE[page.layout]) LIVE[page.layout](body); else body.innerHTML = LAYOUTS[page.layout]();
   }
   document.title = (tool ? tool.title : page.title) + ' · CareBeyond';
@@ -881,6 +890,293 @@ async function renderTeamTickets(body) {
 
 LIVE.contact = renderContact;
 LIVE.tickets = renderTeamTickets;
+
+// ----- Apply (#apply) and Applications review (#admin/applications, #review) — back end: Bravo, migration 0006 -----
+// Questions come from the forms table (placeholders until the owner sends the real ones), never hard-coded here.
+const SUB_STATUS = { pending: 'Waiting', accepted: 'Accepted', denied: 'Not accepted', reviewed: 'Reviewed' };
+const formAllowed = (f) => f.open && (f.audience === 'member' || (f.audience === 'team' && access.staff) || (f.audience === 'admin' && access.admin));
+
+function questionField(q) {
+  const id = `q-${esc(q.id)}`, req = q.required ? 'required' : '';
+  const label = `<span>${esc(q.label)}${q.required ? '' : ' <em>(optional)</em>'}</span>`;
+  switch (q.type) {
+    case 'long': return `<label class="f">${label}<textarea id="${id}" rows="4" maxlength="4000" ${req}></textarea></label>`;
+    case 'number': return `<label class="f">${label}<input id="${id}" type="number" ${req}></label>`;
+    case 'choice': return `<label class="f">${label}<select id="${id}" ${req}><option value="">Choose…</option>${(q.options || []).map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`;
+    case 'yesno': return `<div class="f">${label}<div class="seg" data-yesno="${id}"><button type="button" class="seg-btn" data-v="Yes">Yes</button><button type="button" class="seg-btn" data-v="No">No</button></div></div>`;
+    default: return `<label class="f">${label}<input id="${id}" maxlength="300" ${req}></label>`;
+  }
+}
+
+async function renderApply(body) {
+  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const [{ data: forms, error }, { data: mine }] = await Promise.all([
+    sb.from('forms').select('*').order('sort'),
+    sb.from('form_submissions').select('id, form_key, status, review_note, created_at').eq('submitter_discord_id', myDiscordId).order('created_at', { ascending: false }),
+  ]);
+  if (error) { body.innerHTML = ''; return liveError(body, error); }
+  const list = forms.filter(formAllowed);
+  const title = (k) => (forms.find((f) => f.key === k) || {}).title || k;
+  body.innerHTML = `
+    <div class="form-list">${list.map((f) => `
+      <button class="card form-card" data-k="${esc(f.key)}">
+        <span class="t-ico" style="--c:${f.kind === 'report' ? '#5c72ff' : '#3a82d0'};--icon:${iconUrl(f.kind === 'report' ? 'law' : 'resume')}" aria-hidden="true"></span>
+        <span class="case-main"><strong>${esc(f.title)}</strong>${f.description ? `<span class="muted small-meta">${esc(f.description)}</span>` : ''}</span>
+        <span class="go" aria-hidden="true">›</span>
+      </button>`).join('') || '<div class="card"><p class="muted small">Nothing open right now.</p></div>'}</div>
+    ${mine && mine.length ? `<h2 class="menu-label aud-everyone"><span class="aud-dot"></span>Your submissions</h2>
+      <div class="card">${mine.map((s) => `
+        <div class="row-item"><div class="case-main"><strong>${esc(title(s.form_key))}</strong>
+          <span class="muted small-meta">${when(s.created_at)}${s.review_note ? ` · “${esc(s.review_note)}”` : ''}</span></div>
+          <span class="st sub-${esc(s.status)}">${esc(SUB_STATUS[s.status] || s.status)}</span></div>`).join('')}</div>` : ''}`;
+  body.querySelector('.form-list').onclick = (e) => {
+    const b = e.target.closest('.form-card'); if (!b) return;
+    renderForm(body, list.find((f) => f.key === b.dataset.k));
+  };
+}
+
+function renderForm(body, form) {
+  body.innerHTML = `
+    <button class="back inline-back" type="button"><span class="back-ico" aria-hidden="true"></span>All forms</button>
+    <form class="card case-form" id="ap-form">
+      <div><h2 class="form-title">${esc(form.title)}</h2>${form.description ? `<p class="muted">${esc(form.description)}</p>` : ''}</div>
+      ${(form.questions || []).map(questionField).join('')}
+      <p class="error" id="ap-err" hidden></p>
+      <div class="f-actions"><button class="refresh" type="submit">${form.kind === 'report' ? 'Send report' : 'Send application'}</button></div>
+    </form>`;
+  body.querySelector('.inline-back').onclick = () => renderApply(body);
+  const yesno = {};
+  body.querySelectorAll('[data-yesno]').forEach((g) => g.addEventListener('click', (e) => {
+    const b = e.target.closest('.seg-btn'); if (!b) return;
+    yesno[g.dataset.yesno] = b.dataset.v;
+    g.querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('on', x === b));
+  }));
+  body.querySelector('#ap-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const err = body.querySelector('#ap-err'); err.hidden = true;
+    const answers = {};
+    for (const q of form.questions || []) {
+      const id = `q-${q.id}`;
+      const v = q.type === 'yesno' ? yesno[id] : body.querySelector('#' + CSS.escape(id))?.value.trim();
+      if (q.required && !v) { err.textContent = `Please answer “${q.label}”.`; err.hidden = false; return; }
+      if (v) answers[q.id] = q.type === 'number' ? Number(v) : v;
+    }
+    const { error } = await sb.from('form_submissions').insert({ form_key: form.key, submitter_discord_id: myDiscordId, submitter_name: $('name').textContent, answers });
+    if (error) { err.textContent = "Couldn't send: " + error.message; err.hidden = false; return; }
+    body.innerHTML = `<div class="card center sent"><span class="t-ico big" style="--c:#2ed3c6;--icon:${iconUrl('verified')}" aria-hidden="true"></span>
+      <h2 class="form-title">Sent</h2><p class="muted">${form.kind === 'report' ? 'The admin team has your report.' : 'You’ll get a DM from CareBeyond Helper when it’s been reviewed.'}</p>
+      <button class="ghost" id="ap-done">Done</button></div>`;
+    body.querySelector('#ap-done').onclick = () => renderApply(body);
+  };
+}
+
+async function renderReview(body) {
+  let filter = 'pending';
+  body.innerHTML = `
+    <div class="toolbar"><div class="chips" id="rv-filter"><button class="chip on" data-f="pending">Waiting</button><button class="chip" data-f="done">Done</button></div></div>
+    <div class="card" id="rv-list"><p class="muted small">Loading…</p></div>`;
+  const { data: forms } = await sb.from('forms').select('key, title, kind, questions');
+  const fmap = Object.fromEntries((forms || []).map((f) => [f.key, f]));
+  body.querySelector('#rv-filter').onclick = (e) => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    filter = b.dataset.f;
+    body.querySelectorAll('#rv-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
+    load();
+  };
+  const list = body.querySelector('#rv-list');
+  async function load() {
+    let q = sb.from('form_submissions').select('*').order('created_at', { ascending: false }).limit(100);
+    q = filter === 'pending' ? q.eq('status', 'pending') : q.neq('status', 'pending');
+    const { data, error } = await q;
+    if (error) { list.innerHTML = ''; return liveError(list, error); }
+    list.innerHTML = data.length ? data.map((s) => `
+      <button class="row-item ticket" data-id="${s.id}">
+        <span class="t-ico" style="--c:${fmap[s.form_key]?.kind === 'report' ? '#5c72ff' : '#3a82d0'};--icon:${iconUrl(fmap[s.form_key]?.kind === 'report' ? 'law' : 'resume')}" aria-hidden="true"></span>
+        <span class="case-main"><strong>${esc(s.submitter_name || 'Unknown')}</strong>
+          <span class="muted small-meta">${esc(fmap[s.form_key]?.title || s.form_key)} · ${when(s.created_at)}${s.reviewer_name ? ` · ${esc(s.reviewer_name)}` : ''}</span></span>
+        <span class="st sub-${esc(s.status)}">${esc(SUB_STATUS[s.status] || s.status)}</span>
+      </button>`).join('') : `<p class="muted small">${filter === 'pending' ? 'Nothing waiting.' : 'Nothing reviewed yet.'}</p>`;
+    list.onclick = (e) => {
+      const b = e.target.closest('.ticket'); if (!b) return;
+      const s = data.find((x) => String(x.id) === b.dataset.id);
+      renderSubmission(body, s, fmap[s.form_key] || { title: s.form_key, kind: 'application', questions: [] });
+    };
+  }
+  load();
+}
+
+function renderSubmission(body, s, form) {
+  const qs = form.questions || [];
+  const label = (id) => (qs.find((q) => q.id === id) || {}).label || id;
+  const isReport = form.kind === 'report';
+  body.innerHTML = `
+    <button class="back inline-back" type="button"><span class="back-ico" aria-hidden="true"></span>All submissions</button>
+    <div class="card thread-head"><div class="case-main"><strong class="thread-subject">${esc(s.submitter_name || 'Unknown')}</strong>
+      <span class="muted small-meta">${esc(form.title)} · ${when(s.created_at)}</span></div>
+      <span class="st sub-${esc(s.status)}">${esc(SUB_STATUS[s.status] || s.status)}</span></div>
+    <div class="card answers">${Object.entries(s.answers || {}).map(([k, v]) => `
+      <div class="answer"><div class="answer-q">${esc(label(k))}</div><div class="answer-a">${esc(v)}</div></div>`).join('') || '<p class="muted small">No answers.</p>'}</div>
+    ${s.status === 'pending' ? `<form class="card case-form" id="rv-form">
+      <label class="f"><span>Note to ${isReport ? 'the file' : 'the applicant'} <em>(optional)</em></span><textarea id="rv-note" rows="2" maxlength="1000"></textarea></label>
+      <p class="error" id="rv-err" hidden></p>
+      <div class="f-actions">${isReport ? '<button type="button" class="refresh" data-s="reviewed">Mark reviewed</button>'
+        : '<button type="button" class="ghost deny" data-s="denied">Deny</button><button type="button" class="refresh" data-s="accepted">Accept</button>'}</div>
+    </form>` : (s.review_note ? `<div class="card"><div class="answer-q">Note</div><div class="answer-a">${esc(s.review_note)}</div></div>` : '')}`;
+  body.querySelector('.inline-back').onclick = () => renderReview(body);
+  body.querySelector('#rv-form')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-s]'); if (!b) return;
+    const { data, error } = await sb.from('form_submissions').update({
+      status: b.dataset.s, reviewer_discord_id: myDiscordId, reviewer_name: $('name').textContent,
+      review_note: body.querySelector('#rv-note').value.trim() || null, reviewed_at: new Date().toISOString(),
+    }).eq('id', s.id).eq('status', 'pending').select();
+    const err = body.querySelector('#rv-err');
+    if (error) { err.textContent = "Couldn't save: " + error.message; err.hidden = false; return; }
+    if (!data || !data.length) { err.textContent = 'Someone else has already reviewed this.'; err.hidden = false; return; }
+    renderReview(body);
+  });
+}
+
+// ----- Shifts (#shifts): started and ended in Discord only; the page shows who's on and your hours -----
+const shiftSecs = (s, now = Date.now()) => Math.max(0, ((s.ended_at ? new Date(s.ended_at) : now) - new Date(s.started_at)) / 1000
+  - (s.break_seconds || 0) - (s.status === 'break' && s.break_started_at ? (now - new Date(s.break_started_at)) / 1000 : 0));
+const hrs = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m`; };
+function weekStartSydney() {
+  // Monday 00:00 in Sydney, as an ISO time.
+  const parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(new Date());
+  const get = (t) => parts.find((p) => p.type === t).value;
+  const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(get('weekday'));
+  const offsetMin = -new Date(new Date().toLocaleString('en-US', { timeZone: 'UTC' })).getTime() / 60000 + new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Sydney' })).getTime() / 60000;
+  const local = Date.UTC(+get('year'), +get('month') - 1, +get('day') - dow);
+  return new Date(local - offsetMin * 60000).toISOString();
+}
+
+async function renderShifts(body) {
+  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const week = weekStartSydney();
+  const [on, mine] = await Promise.all([
+    sb.from('shifts').select('*').neq('status', 'ended').order('started_at'),
+    sb.from('shifts').select('*').eq('discord_id', myDiscordId).order('started_at', { ascending: false }).limit(20),
+  ]);
+  if (on.error) { body.innerHTML = ''; return liveError(body, on.error); }
+  const myNow = (on.data || []).find((s) => s.discord_id === myDiscordId);
+  const weekSecs = (mine.data || []).filter((s) => s.started_at >= week).reduce((a, s) => a + shiftSecs(s), 0);
+  body.innerHTML = `
+    <div class="card shift-me">
+      <span class="t-ico big" style="--c:${myNow ? '#16b364' : '#9aa9c4'};--icon:${iconUrl('clock')}" aria-hidden="true"></span>
+      <div class="case-main"><strong class="thread-subject">${myNow ? (myNow.status === 'break' ? 'On a break' : 'On shift') : 'Off shift'}</strong>
+        <span class="muted small-meta">${myNow ? `${esc(myNow.department)} · ${hrs(shiftSecs(myNow))} so far` : 'Start a shift in Discord with /shift start'}</span></div>
+      <div class="stat-mini"><span class="muted small-meta">This week</span><strong>${hrs(weekSecs)}</strong></div>
+    </div>
+    <div class="cmd-strip">${['/shift start', '/shift break', '/shift end', '/shift status'].map((c) => `<code class="cmd">${c}</code>`).join('')}</div>
+    <h2 class="menu-label aud-staff"><span class="aud-dot"></span>On now</h2>
+    <div class="card">${(on.data || []).length ? on.data.map((s) => `
+      <div class="row-item"><span class="dot-status ${s.status === 'break' ? 'brk' : 'on'}"></span>
+        <div class="case-main"><strong>${esc(s.name)}</strong><span class="muted small-meta">${esc(s.department)}${s.status === 'break' ? ' · on a break' : ''}</span></div>
+        <span class="muted small-meta">${hrs(shiftSecs(s))}</span></div>`).join('') : '<p class="muted small">Nobody is on shift right now.</p>'}</div>
+    <h2 class="menu-label aud-staff"><span class="aud-dot"></span>Your shifts</h2>
+    <div class="card">${(mine.data || []).length ? mine.data.map((s) => `
+      <div class="row-item"><div class="case-main"><strong>${new Date(s.started_at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</strong>
+        <span class="muted small-meta">${esc(s.department)} · ${new Date(s.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${s.ended_at ? '–' + new Date(s.ended_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ' · now'}${s.ended_by === 'auto' ? ' · ended automatically' : ''}</span></div>
+        <strong>${hrs(shiftSecs(s))}</strong></div>`).join('') : '<p class="muted small">No shifts yet.</p>'}</div>`;
+}
+
+// ----- Reports (#exec/reports) -----
+async function renderReports(body) {
+  const ranges = {
+    week: () => [weekStartSydney(), new Date().toISOString()],
+    last: () => { const s = new Date(weekStartSydney()); return [new Date(s - 7 * 864e5).toISOString(), s.toISOString()]; },
+    d30: () => [new Date(Date.now() - 30 * 864e5).toISOString(), new Date().toISOString()],
+  };
+  let range = 'week';
+  body.innerHTML = `
+    <div class="toolbar"><div class="chips" id="rp-range"><button class="chip on" data-r="week">This week</button><button class="chip" data-r="last">Last week</button><button class="chip" data-r="d30">Last 30 days</button></div></div>
+    <div id="rp-body"><div class="card"><p class="muted small">Loading…</p></div></div>`;
+  body.querySelector('#rp-range').onclick = (e) => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    range = b.dataset.r;
+    body.querySelectorAll('#rp-range .chip').forEach((x) => x.classList.toggle('on', x === b));
+    load();
+  };
+  async function load() {
+    const out = body.querySelector('#rp-body');
+    const [from_ts, to_ts] = ranges[range]();
+    const { data, error } = await sb.rpc('shift_report', { from_ts, to_ts });
+    if (error) { out.innerHTML = ''; return liveError(out, error); }
+    const rows = (data || []).slice().sort((a, b) => b.hours - a.hours);
+    const total = rows.reduce((a, r) => a + Number(r.hours || 0), 0), shifts = rows.reduce((a, r) => a + Number(r.shifts || 0), 0);
+    const depts = {};
+    rows.forEach((r) => { depts[r.department] = (depts[r.department] || 0) + Number(r.hours || 0); });
+    const max = Math.max(1, ...Object.values(depts));
+    out.innerHTML = `
+      <div class="grid-3">
+        <div class="card tight stat"><span class="muted small-meta">Hours</span><strong>${total.toFixed(1)}</strong></div>
+        <div class="card tight stat"><span class="muted small-meta">Shifts</span><strong>${shifts}</strong></div>
+        <div class="card tight stat"><span class="muted small-meta">People</span><strong>${rows.length}</strong></div>
+      </div>
+      ${Object.keys(depts).length ? `<div class="card bars">${Object.entries(depts).sort((a, b) => b[1] - a[1]).map(([d, h]) => {
+        const t = TEAMS.find((x) => x.id === d);
+        return `<div class="bar-row"><span class="bar-label">${esc(d)}</span><span class="meter"><span style="width:${(h / max) * 100}%;--c:${t ? hex(t.color) : '#3a82d0'}"></span></span><span class="bar-val">${h.toFixed(1)}h</span></div>`;
+      }).join('')}</div>` : ''}
+      <div class="card">${rows.length ? rows.map((r, i) => `
+        <div class="row-item"><span class="rank-n">${i + 1}</span><div class="case-main"><strong>${esc(r.name)}</strong><span class="muted small-meta">${esc(r.department)} · ${r.shifts} shift${r.shifts == 1 ? '' : 's'}</span></div>
+          <strong>${Number(r.hours).toFixed(1)}h</strong></div>`).join('') : '<p class="muted small">No shifts in this period.</p>'}</div>`;
+  }
+  load();
+}
+
+// ----- Staff & roster (#roster) -----
+// Compact badges for person cards: a department + its rank stay one block ("Nursing · Year 5" style, shortened).
+function personBadges(badges) {
+  const one = (b) => `<span class="rbadge${b.joined ? ' joined' : ''}" style="--c:${b.color ? hex(b.color) : '#9aa9c4'}">${b.icon ? `<span class="ri" style="--icon:${iconUrl(b.icon)}"></span>` : ''}<span class="rl">${esc(b.label.replace(/ Department$/, ''))}</span></span>`;
+  let html = '';
+  for (let i = 0; i < badges.length; i++) {
+    if (badges[i + 1] && badges[i + 1].joined) { html += `<span class="pair">${one(badges[i])}${one(badges[i + 1])}</span>`; i++; }
+    else html += one(badges[i]);
+  }
+  return html;
+}
+async function renderRoster(body) {
+  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const [{ data: people, error }, { data: allRoles }] = await Promise.all([
+    sb.rpc('roster'), sb.from('roles').select('id, name, color, position, kind, department, rank_label, rank_order, badge_color'),
+  ]);
+  if (error) { body.innerHTML = ''; return liveError(body, error); }
+  const byId = Object.fromEntries((allRoles || []).map((r) => [r.id, r]));
+  const depts = (allRoles || []).filter((r) => r.kind === 'department');
+  const groups = {};
+  for (const p of people || []) {
+    const roles = (p.role_ids || []).map((id) => byId[id]).filter(Boolean);
+    const lead = roles.some((r) => r.kind === 'leadership');
+    const ranks = roles.filter((r) => r.kind === 'rank').sort((a, b) => b.rank_order - a.rank_order);
+    const dept = lead ? 'Leadership' : (ranks[0]?.department || roles.find((r) => r.kind === 'department')?.department || 'Other');
+    (groups[dept] ||= []).push({ ...p, roles, order: lead ? Math.max(...roles.filter((r) => r.kind === 'leadership').map((r) => r.position)) : (ranks[0]?.rank_order || 0) });
+  }
+  const order = ['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'].filter((d) => groups[d]);
+  let pick = 'all';
+  const draw = () => {
+    body.querySelector('#ro-list').innerHTML = order.filter((d) => pick === 'all' || pick === d).map((d) => `
+      <h2 class="menu-label aud-staff"><span class="aud-dot"></span>${esc(d)} <span class="muted count">${groups[d].length}</span></h2>
+      <div class="grid-people">${groups[d].sort((a, b) => b.order - a.order || a.display_name.localeCompare(b.display_name)).map((p) => {
+        const all = buildBadges(p.roles, depts).filter((b) => b.label !== 'Verified' && b.label !== 'Member');
+        const badges = all.slice(0, all[1] && all[1].joined ? 2 : 1).concat(all[1] && !all[1].joined ? [all[1]] : []);
+        return `<div class="card person">
+          <img class="avatar big" src="${esc(sized(p.avatar_url || '', 128))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+          <strong class="person-name">${esc(cleanName(p.display_name))}</strong>
+          <div class="person-badges">${personBadges(badges)}</div>
+        </div>`;
+      }).join('')}</div>`).join('') || '<div class="card"><p class="muted small">Nobody to show.</p></div>';
+  };
+  body.innerHTML = `<div class="toolbar"><div class="chips" id="ro-filter"><button class="chip on" data-d="all">Everyone</button>${order.map((d) => `<button class="chip" data-d="${esc(d)}">${esc(d)}</button>`).join('')}</div></div><div id="ro-list" class="page-body"></div>`;
+  body.querySelector('#ro-filter').onclick = (e) => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    pick = b.dataset.d;
+    body.querySelectorAll('#ro-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
+    draw();
+  };
+  draw();
+}
+
+Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, reports: renderReports, people: renderRoster });
 
 // ---------- session banner ----------
 // Under the Welcome card: the Maple Hospital custom server and its join code (pinned; the owner will say if it
