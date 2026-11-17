@@ -1,0 +1,42 @@
+/* Session history (Alpha, 0.16.0): past sessions on Bravo's Sessions page, grouped by week.
+   Uses site tokens and the shared .face styles (cases.css). */
+.sh-history { display: grid; gap: 12px; margin-top: 26px; }
+.sh-htitle { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--teal-ink); }
+.sh-hbody { display: grid; gap: 16px; }
+.sh-hweek { display: grid; gap: 8px; }
+.sh-hweekh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sh-hweekh h3 { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: normal; text-transform: none; color: var(--text); }
+.sh-hweekh span { font-size: 12.5px; color: var(--muted); }
+.sh-hlist { padding: 2px 18px; }
+.sh-hrow { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+.sh-hrow:first-child { border-top: 0; }
+.sh-hwhen { display: grid; gap: 1px; }
+.sh-hwhen strong { font-size: 14px; }
+.sh-hwhen span { white-space: nowrap; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sh-hmain { display: grid; gap: 4px; min-width: 0; }
+.sh-hline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sh-htag { --c: #2ed3c6; font-size: 11.5px; font-weight: 700; color: var(--text); border-radius: 999px; padding: 2px 10px; white-space: nowrap;
+  background: color-mix(in srgb, var(--c) 18%, #fff); border: 1px solid color-mix(in srgb, var(--c) 55%, #fff); }
+.sh-hhost { font-size: 13.5px; font-weight: 600; }
+.sh-hnote { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.sh-hstats { display: grid; justify-items: end; gap: 5px; text-align: right; }
+.sh-hlen { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sh-hstaff { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.sh-hfaces { display: flex; }
+.sh-hfaces .face { width: 24px; height: 24px; font-size: 10.5px; border: 2px solid var(--panel); margin-left: -7px; }
+.sh-hfaces .face:first-child { margin-left: 0; }
+.sh-hempty { display: grid; gap: 6px; justify-items: start; }
+.sh-hempty span { color: var(--muted); font-size: 14px; }
+.sh-hmore { display: flex; justify-content: center; }
+.sh-hmore .ghost { padding: 9px 18px; color: var(--text); }
+@media (max-width: 560px) {
+  .sh-hlist { padding: 2px 14px; }
+  .sh-hrow { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .sh-hmain { grid-column: 1 / -1; grid-row: 2; }
+  .sh-hstats { grid-row: 1; grid-column: 2; }
+}
+/* 0022: location and every host */
+.sh-hloc { font-size: 12.5px; font-weight: 600; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+.sh-hloc:empty { display: none; }
+.sh-hhosts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sh-hlead { font-weight: 500; color: var(--muted); }
