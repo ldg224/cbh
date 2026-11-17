@@ -7,6 +7,7 @@
 const sb = supabase.createClient(CBH_CONFIG.supabaseUrl, CBH_CONFIG.supabaseKey);
 const $ = (id) => document.getElementById(id);
 const CHECK_EVERY_MS = 30_000;
+$('version').textContent = 'v' + window.CBH_VERSION;
 
 let currentUserId;        // whose data is on screen (undefined until the first login check)
 let shownSig = null;      // fingerprint of what is on screen
