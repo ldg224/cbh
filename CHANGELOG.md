@@ -3,6 +3,21 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.2.0 (2026-11-17)
+
+**Added:** badges under your name that show who you are, each in its role's colour:
+- leadership titles such as **Hospital Director**, in their Discord colours
+- **Executive**
+- your **department** (e.g. **Nursing Department**, in Nursing's colour) with your **year or rank** joined on in that rank's own colour (e.g. **Year 5**, **Leader**, **Director**)
+- **Verified**, with a tick
+
+Someone with none of these gets a **Member** badge.
+
+**Changed:** the **Staff** badge is replaced by these badges.
+
+Bot: CareBeyond Helper now knows what every server role means (leadership, department, rank and year, status, pings, office keys) and saves that with each role, ready for future pages.
+Database change: new columns on `roles` (kind, department, rank label and order, badge colour).
+
 ## 0.1.1 (2026-11-17)
 
 **Removed:** the "Loaded … You'll see a Refresh button here if anything changes" line under your roles. Notes there now only appear while loading, when something goes wrong, or when you have no roles.

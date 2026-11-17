@@ -16,21 +16,75 @@ let checking = false;
 
 // ---------- data ----------
 
-// Your own member row (the database only returns yours) and your roles, highest first.
+const ROLE_FIELDS = 'id, name, color, position, kind, department, rank_label, rank_order, badge_color';
+
+// Your own member row (the database only returns yours), your roles (highest first) and the department roles
+// (for department colours, in case someone has a rank but not the hidden division role).
 async function fetchMine() {
   const { data: me, error } = await sb.from('members').select('display_name, role_ids, is_staff').maybeSingle();
   if (error) throw error;
-  if (!me) return { me: null, roles: [] };
-  const { data: roles, error: e2 } = await sb.from('roles').select('id, name, color, position').in('id', me.role_ids);
+  if (!me) return { me: null, roles: [], departments: [] };
+  const ids = me.role_ids.length ? me.role_ids.join(',') : '0';
+  const { data: rows, error: e2 } = await sb.from('roles').select(ROLE_FIELDS).or(`id.in.(${ids}),kind.eq.department`);
   if (e2) throw e2;
-  roles.sort((a, b) => b.position - a.position);
-  return { me, roles };
+  const mine = new Set(me.role_ids);
+  const roles = rows.filter((r) => mine.has(r.id)).sort((a, b) => b.position - a.position);
+  const departments = rows.filter((r) => r.kind === 'department');
+  return { me, roles, departments };
 }
 
 // Only what the page shows, so timestamps from the bot's routine resync don't count as a change.
-function fingerprint({ me, roles }) {
+function fingerprint({ me, roles, departments }) {
   if (!me) return 'not-in-server';
-  return JSON.stringify([me.display_name, me.is_staff, roles.map((r) => [r.id, r.name, r.color, r.position])]);
+  const r = (x) => [x.id, x.name, x.color, x.position, x.kind, x.department, x.rank_label, x.rank_order, x.badge_color];
+  return JSON.stringify([me.display_name, roles.map(r), departments.map(r)]);
+}
+
+// ---------- badges ----------
+// Who someone is, at a glance, from their roles (the bot labels every role; see cbh/roles.py in the bot):
+//   leadership titles (Hospital Director...) > Executive > each department + its rank (Nursing Department, Year 5)
+//   > Verified. Someone with none of these gets a plain "Member" badge.
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+
+function buildBadges(roles, departments) {
+  const out = [];
+  for (const r of roles.filter((x) => x.kind === 'leadership')) out.push({ label: r.name, color: r.badge_color });
+  if (roles.some((x) => x.kind === 'executive')) {
+    const r = roles.find((x) => x.kind === 'executive');
+    out.push({ label: 'Executive', color: r.badge_color });
+  }
+  const deptColour = Object.fromEntries(departments.map((d) => [d.department, d.badge_color]));
+  const depts = [...new Set(roles.filter((x) => x.department).map((x) => x.department))];
+  // most senior department first (by best rank held)
+  const best = (d) => Math.max(0, ...roles.filter((x) => x.kind === 'rank' && x.department === d).map((x) => x.rank_order));
+  depts.sort((a, b) => best(b) - best(a));
+  for (const d of depts) {
+    out.push({ label: d + ' Department', color: deptColour[d] });
+    const rank = roles.filter((x) => x.kind === 'rank' && x.department === d).sort((a, b) => b.rank_order - a.rank_order)[0];
+    if (rank) out.push({ label: rank.rank_label, color: rank.badge_color, joined: true });
+  }
+  if (roles.some((x) => x.kind === 'verified')) {
+    out.push({ label: 'Verified', color: roles.find((x) => x.kind === 'verified').badge_color, tick: true });
+  }
+  if (!out.length) out.push({ label: 'Member', color: null });
+  return out;
+}
+
+function drawBadges(badges) {
+  const row = $('badges');
+  row.replaceChildren();
+  for (const b of badges) {
+    const el = document.createElement('span');
+    el.className = 'rbadge' + (b.joined ? ' joined' : '');
+    if (b.color) el.style.setProperty('--c', hex(b.color));
+    if (b.tick) {
+      el.insertAdjacentHTML('beforeend',
+        '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    }
+    el.append(document.createTextNode(b.label));
+    row.append(el);
+  }
+  row.hidden = false;
 }
 
 // ---------- drawing ----------
@@ -41,19 +95,16 @@ function draw(data) {
   $('changed').hidden = true;
   pending = null;
   shownSig = fingerprint(data);
-  const { me, roles } = data;
+  const { me, roles, departments } = data;
   if (!me) {
-    $('status-badge').hidden = true;
+    $('badges').hidden = true;
     note("We couldn't find you in the CareBeyond - Hospital server. Join it with this Discord account, then refresh.");
     return;
   }
   $('welcome-name').textContent = me.display_name;
   $('name').textContent = me.display_name;
-  // Status is shown only by the badge next to the name (never as a sentence like "CareBeyond staff").
-  const badge = $('status-badge');
-  badge.textContent = me.is_staff ? 'Staff' : 'Member';
-  badge.className = me.is_staff ? 'badge' : 'badge badge-member';
-  badge.hidden = false;
+  // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
+  drawBadges(buildBadges(roles, departments));
   for (const r of roles) {
     const li = document.createElement('li');
     li.className = 'role';
@@ -75,7 +126,7 @@ function note(text) {
 async function loadAndDraw() {
   $('roles').replaceChildren();
   note('Loading your roles…');
-  $('status-badge').hidden = true;
+  $('badges').hidden = true;
   try {
     draw(await fetchMine());
   } catch (err) {
