@@ -168,7 +168,7 @@ function drawHome() {
 // tickets), each with a button that goes straight to it. Phase 3 adds each department's To do (promotions,
 // observations, attendance, inactive members) from a database summary.
 function drawNeeds() {
-  const h = HC || {}, out = [];
+  const h = HC || {}, out = [], notes = [];
   // Per department, from my_todo() (desk.js, migration 0045): only what this person may act on.
   const todo = window.deskTodo || {};
   for (const d of DEPARTMENTS) {
@@ -177,8 +177,11 @@ function drawNeeds() {
     if (n0(t.apps)) out.push({ ico: 'resume', c, t: `${plural(n0(t.apps), 'application')} to review`, s: d.name + (t.apps_oldest ? ' \u00b7 oldest ' + when(t.apps_oldest) : ''), b: 'Review', href: base + '/applications' });
     for (const m of (t.attendance_list || []).slice(0, 2)) out.push({ ico: 'calendar', c, t: `Take attendance for ${m.title}`, s: d.name + ' \u00b7 ' + when(m.at), b: 'Take attendance', href: base + '/meetings' });
     if (n0(t.attendance) > 2) out.push({ ico: 'calendar', c, t: `${n0(t.attendance) - 2} more meetings need attendance`, s: d.name, b: 'Open', href: base + '/meetings' });
-    if (n0(t.inactive)) { const names = (t.inactive_list || []).slice(0, 3).map((x) => cleanName(x.name)).join(', ');
-      out.push({ ico: 'clock', c, t: `${plural(n0(t.inactive), 'member')} inactive for 14 days`, s: d.name + (names ? ' \u00b7 ' + names + (n0(t.inactive) > 3 ? '\u2026' : '') : ''), b: 'See who', href: base + '/members' }); }
+    // Inactivity: red only after a long gap (60+ days); 14-59 days is an orange note, listed separately below.
+    const names = (list) => list.slice(0, 3).map((x) => cleanName(x.name)).join(', ');
+    const longGone = (t.inactive_list || []).filter((x) => n0(x.days) >= n0(t.alert_days || 60)), recent = (t.inactive_list || []).filter((x) => n0(x.days) < n0(t.alert_days || 60));
+    if (n0(t.inactive_alert)) out.push({ ico: 'clock', c, t: `${plural(n0(t.inactive_alert), 'member')} inactive for ${n0(t.alert_days || 60)}+ days`, s: d.name + (longGone.length ? ' \u00b7 ' + names(longGone) + (n0(t.inactive_alert) > 3 ? '\u2026' : '') : ''), b: 'See who', href: base + '/members' });
+    if (n0(t.inactive_note)) notes.push({ ico: 'clock', c: '#e8890c', t: `${plural(n0(t.inactive_note), 'member')} quiet for ${n0(t.note_days || 14)}+ days`, s: d.name + (recent.length ? ' \u00b7 ' + names(recent) + (n0(t.inactive_note) > 3 ? '\u2026' : '') : ''), b: 'See who', href: base + '/members' });
     if (n0(t.failed)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(t.failed), 'rank change')} didn\u2019t go through`, s: d.name, b: 'See why', href: base + '/history' });
   }
   if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: '#admin/cases' });
@@ -186,9 +189,11 @@ function drawNeeds() {
   if (n0(h.tickets_open) && tk) out.push({ ico: 'inbox', c: '#3a82d0', t: `${plural(n0(h.tickets_open), 'ticket')} open`,
     s: h.tickets_latest && h.tickets_latest.name ? `Latest from ${cleanName(h.tickets_latest.name)}${h.tickets_latest.team ? ' · ' + h.tickets_latest.team : ''}` : 'Waiting for a reply', b: 'Reply', href: tk });
   const sec = $('h-need-sec');
-  sec.innerHTML = out.length ? `<h2 class="h-label">Needs you</h2><div class="hd-list">${out.map((x) => `<a class="hd-item" href="${x.href}" style="--c:${x.c}">
+  const row = (x, note) => `<a class="hd-item" href="${x.href}" style="--c:${x.c}">
       <span class="hd-ico" style="--icon:${iconUrl(x.ico)}" aria-hidden="true"></span><span class="hd-txt"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></span>
-      <span class="hd-go">${esc(x.b)}</span></a>`).join('')}</div>` : '';
+      <span class="hd-go${note ? ' note' : ''}">${esc(x.b)}</span></a>`;
+  sec.innerHTML = (out.length ? `<h2 class="h-label">Needs you</h2><div class="hd-list">${out.map((x) => row(x)).join('')}</div>` : '')
+    + (notes.length ? `<h2 class="h-label" style="margin-top:${out.length ? '22px' : '0'}">Notes</h2><div class="hd-list hd-notes">${notes.map((x) => row(x, true)).join('')}</div>` : '');
 }
 function drawDeptCards() {
   const h = HC || {};

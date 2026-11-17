@@ -45,17 +45,34 @@
       canSee('staff') && { href: '#roster', label: 'Staff directory', icon: 'people' },
     ].filter(Boolean);
   }
+  // What each department page has waiting (my_todo, migration 0046): red = needs action now (applications,
+  // attendance, failed rank changes, inactivity of 60+ days); orange = a note (inactivity of 14-59 days).
+  function pageCounts(d) {
+    const t = window.deskTodo[d.name] || {}, n = (v) => Number(v || 0);
+    return {
+      members: n(t.inactive_alert) ? { n: n(t.inactive_alert), sev: 'red' } : n(t.inactive_note) ? { n: n(t.inactive_note), sev: 'orange' } : null,
+      meetings: n(t.attendance) ? { n: n(t.attendance), sev: 'red' } : null,
+      applications: n(t.apps) ? { n: n(t.apps), sev: 'red' } : null,
+      history: n(t.failed) ? { n: n(t.failed), sev: 'red' } : null,
+    };
+  }
+  // A collapsed folder's badge: its red count, or an orange count if there are only notes.
+  function folderBadge(d) {
+    const t = window.deskTodo[d.name] || {};
+    const red = Number(t.red ?? (Number(t.apps || 0) + Number(t.attendance || 0) + Number(t.failed || 0))), orange = Number(t.orange || 0);
+    return red ? { n: red, sev: 'red' } : orange ? { n: orange, sev: 'orange' } : null;
+  }
   function deptPages(d) {
     const can = (p) => hasPerm(p, d.name), director = !!access.exec || myDirects.includes(d.name);
-    const base = `#directors/${d.id}`;
+    const base = `#directors/${d.id}`, pc = pageCounts(d), cnt = (k) => pc[k] || {};
     const ext = (window.DEPT_TABS || []).filter((x) => { try { return x.show(d.name); } catch { return false; } });
     return [
       can('dept.view') && { href: base, label: 'Overview', icon: 'home', tab: 'overview' },
-      can('dept.view') && { href: base + '/members', label: 'Members', icon: 'people', tab: 'members' },
+      can('dept.view') && { href: base + '/members', label: 'Members', icon: 'people', tab: 'members', ...cnt('members') },
       (can('dept.view') || can('courses.manage')) && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', tag: 'Soon' },
-      (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && { href: base + '/meetings', label: 'Meetings', icon: 'calendar', tab: 'meetings' },
-      ...ext.map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.id === 'applications' ? 'resume' : 'clipboard', tab: x.id })),
-      can('history.view') && { href: base + '/history', label: 'History', icon: 'history', tab: 'history' },
+      (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && { href: base + '/meetings', label: 'Meetings', icon: 'calendar', tab: 'meetings', ...cnt('meetings') },
+      ...ext.map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.id === 'applications' ? 'resume' : 'clipboard', tab: x.id, ...cnt(x.id) })),
+      can('history.view') && { href: base + '/history', label: 'History', icon: 'history', tab: 'history', ...cnt('history') },
       director && { href: base + '/ranks', label: 'Ranks & permissions', icon: 'star', tab: 'ranks' },
     ].filter(Boolean);
   }
@@ -78,7 +95,7 @@
   // ---------- drawing ----------
   const link = (it, c) => it.soon
     ? `<span class="ds-link soon" aria-disabled="true"><span class="ds-i" style="${icon(it.icon)}"></span><span class="ds-lab">${esc(it.label)}</span><span class="ds-tag">Soon</span></span>`
-    : `<a class="ds-link" href="${it.href}"${isHere(it) ? ' aria-current="page"' : ''}><span class="ds-i" style="${icon(it.icon)}"></span><span class="ds-lab">${esc(it.label)}</span>${it.tag ? `<span class="ds-tag">${esc(it.tag)}</span>` : ''}${it.n ? `<span class="ds-n">${it.n}</span>` : ''}</a>`;
+    : `<a class="ds-link" href="${it.href}"${isHere(it) ? ' aria-current="page"' : ''}><span class="ds-i" style="${icon(it.icon)}"></span><span class="ds-lab">${esc(it.label)}</span>${it.tag ? `<span class="ds-tag">${esc(it.tag)}</span>` : ''}${it.n ? `<span class="ds-n${it.sev === 'orange' ? ' orange' : ''}" title="${it.sev === 'orange' ? 'A note' : 'Needs you'}">${it.n}</span>` : ''}</a>`;
   function isHere(it) {
     const h = hash();
     if (it.tab) {   // department page: #directors/<id>[/<tab>[/<sub>]]
@@ -88,10 +105,11 @@
     if (it.href === '#') return h === '#' || h === '';
     return h === it.href || h.startsWith(it.href + '/');
   }
-  function folder(key, name, small, ic, color, items, n) {
+  function folder(key, name, small, ic, color, items, badge) {
     const here = items.some(isHere), isOpen = open[key] ?? here;
-    return `<button class="ds-dept${isOpen ? ' open' : ''}" type="button" data-fold="${key}" aria-expanded="${isOpen}" aria-label="${esc(name)}${n ? `, ${n} waiting` : ''}" style="--c:${color};${icon(ic)}">
-        <span class="ds-tile"></span><span class="ds-dname"><b>${esc(name)}</b>${small ? `<small>${esc(small)}</small>` : ''}</span>${n ? `<span class="ds-n">${n}</span>` : ''}${chev}</button>
+    const b = !isOpen && badge;   // opened: the counts move onto the pages inside
+    return `<button class="ds-dept${isOpen ? ' open' : ''}" type="button" data-fold="${key}" aria-expanded="${isOpen}" aria-label="${esc(name)}${badge ? `, ${badge.n} ${badge.sev === 'orange' ? 'notes' : 'waiting'}` : ''}" style="--c:${color};${icon(ic)}">
+        <span class="ds-tile"></span><span class="ds-dname"><b>${esc(name)}</b>${small ? `<small>${esc(small)}</small>` : ''}</span>${b ? `<span class="ds-n${b.sev === 'orange' ? ' orange' : ''}">${b.n}</span>` : ''}${chev}</button>
       ${isOpen ? `<div class="ds-sub" style="--c:${color}">${items.map((it) => link(it, color)).join('')}</div>` : ''}`;
   }
   function drawSide() {
@@ -105,7 +123,7 @@
         <div class="ds-cat">My stuff</div>
         ${myStuff().map((it) => link(it)).join('')}
         ${depts.length ? `<div class="ds-cat">Departments</div>` : ''}
-        ${depts.map((d) => folder(d.id, d.name, rankIn(d), d.icon, d.color, deptPages(d), (window.deskTodo[d.name] || {}).total || 0)).join('')}
+        ${depts.map((d) => folder(d.id, d.name, rankIn(d), d.icon, d.color, deptPages(d), folderBadge(d))).join('')}
         ${hosp.length ? `<div class="ds-cat">Hospital</div>${folder('hospital', 'Hospital tools', access.exec ? 'Executive' : 'Administration', 'shield', '#22579f', hosp)}` : ''}
         <div class="ds-cat">Help</div>
         ${link({ href: '#rules', label: 'Rules & info', icon: 'book' })}${link({ href: '#commands', label: 'Commands', icon: 'console' })}
@@ -142,8 +160,8 @@
       canSee('staff') && myDepartments.length ? { href: '#shifts', label: 'Shift', icon: 'clock' } : { href: '#contact', label: 'Contact', icon: 'chat' },
     ];
     const cur = (it) => (it.dept ? hash().startsWith(it.href) : it.href === '#' ? hash() === '#' : hash() === it.href);
-    tabs.innerHTML = items.map((it) => { const n = it.dept ? (window.deskTodo[it.dept.name] || {}).total : 0;
-      return `<a href="${it.href}"${cur(it) ? ' aria-current="page"' : ''}><span class="dt-i" style="${icon(it.icon)}"></span>${esc(it.label)}${n ? `<span class="ds-n">${n}</span>` : ''}</a>`; }).join('')
+    tabs.innerHTML = items.map((it) => { const b = it.dept ? folderBadge(it.dept) : null;
+      return `<a href="${it.href}"${cur(it) ? ' aria-current="page"' : ''}><span class="dt-i" style="${icon(it.icon)}"></span>${esc(it.label)}${b ? `<span class="ds-n${b.sev === 'orange' ? ' orange' : ''}">${b.n}</span>` : ''}</a>`; }).join('')
       + `<button type="button" data-desk="drawer"><span class="dt-i" style="${icon('menu')}"></span>Menu</button>`;
   }
   function drawAll() { if (!document.body.classList.contains('desk')) return; drawSide(); drawTabs(); }

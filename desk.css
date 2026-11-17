@@ -36,6 +36,7 @@ body.desk .desk-side { display: flex; }
 .ds-link.soon:hover { background: none; color: var(--muted); }
 .ds-tag { margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--blue-deep); background: #e8f0fb; border-radius: 6px; padding: 1px 6px; flex: none; }
 .ds-n { margin-left: auto; min-width: 19px; height: 19px; padding: 0 6px; border-radius: 999px; background: var(--desk-red); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; flex: none; }
+.ds-n.orange { background: #e8890c; }   /* a note, not an alarm (e.g. 14-59 days inactive) */
 
 /* department folders */
 .ds-dept { display: flex; align-items: center; gap: 11px; padding: 7px 9px; border-radius: 11px; border: 0; background: none; width: 100%;
@@ -138,3 +139,9 @@ body.desk .h-sec { margin-top: 26px; }
   .desk-tabs .ds-n { position: absolute; top: 6px; left: 54%; margin: 0; height: 17px; min-width: 17px; font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .desk-side, .ds-chev { transition: none; } }
+
+/* Home: notes (orange) are quieter than Needs you (red) */
+.hd-notes .hd-item { padding: 11px 16px; }
+.hd-notes .hd-txt b { font-weight: 600; }
+.hd-go.note { background: #fff3e2; color: #8a4b00; }
+.hd-list.hd-notes { border-color: #f3dcb8; }
