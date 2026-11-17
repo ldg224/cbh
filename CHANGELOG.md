@@ -3,6 +3,11 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.1.1 (2026-11-17)
+
+**Removed:** the "Loaded … You'll see a Refresh button here if anything changes" line under your roles. Notes there now only appear while loading, when something goes wrong, or when you have no roles.
+Database change: none.
+
 ## 0.1.0 (2026-11-17)
 
 The first version of the rebuilt CareBeyond Hospital tools.
