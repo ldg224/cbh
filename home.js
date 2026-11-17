@@ -256,12 +256,22 @@ function drawPins(tools) {
   }
   const pins = pinnedTools(tools);
   sec.innerHTML = `<div class="h-sec-head"><h2 class="h-label">Pinned</h2><button class="linkish" id="h-pins-edit">Edit pins</button></div>
-    <div class="h-pins" style="--n:${Math.max(pins.length, 2)}">${pins.map((t) => {
-      const i = liveInfo(t);
-      return `<a class="h-pin" href="${t.href}" style="background:${toolGrad(t)}">
-        <span class="h-pin-flag">${i.live ? '<span class="h-pill live">Live now</span>' : i.badge ? `<span class="h-pill glass">${esc(i.badge)}</span>` : i.clock ? `<span class="h-pill glass" data-tick="pin-clock">${esc(clock(shiftSecs(HC.my_shift)))}</span>` : ''}</span>
-        <strong>${esc(t.def.title)}</strong></a>`;
-    }).join('')}</div>`;
+    <div class="h-pins" style="--n:${Math.max(pins.length, 2)}"></div>`;
+  // Pins are the classic home tiles (tileEl in app.js): frosted icon square, big faint icon, gradient and shade.
+  // (0.14.4: 0.14.0 drew them as plain gradient links and lost the icons.)
+  const grid = sec.querySelector('.h-pins');
+  for (const t of pins) {
+    const i = liveInfo(t);
+    const f = FOLDERS.find((x) => x.id === t.folder);
+    const a = tileEl(t.href, t.def, 'everyone', 'h-pin-tile');
+    if (t.def.color) a.style.setProperty('--dept', t.def.color);
+    else { a.style.setProperty('--g1', f.g[0]); a.style.setProperty('--g2', f.g[1]); a.style.setProperty('--g3', f.g[1]); }
+    a.querySelector('.tile-flag')?.remove();   // "Being built" is never pinned-worthy noise; live flags below instead
+    if (i.live) a.insertAdjacentHTML('beforeend', '<span class="tile-flag live">Live now</span>');
+    else if (i.badge) a.insertAdjacentHTML('beforeend', `<span class="tile-flag">${esc(i.badge)}</span>`);
+    else if (i.clock) a.insertAdjacentHTML('beforeend', `<span class="tile-flag" data-tick="pin-clock">${esc(clock(shiftSecs(HC.my_shift)))}</span>`);
+    grid.append(a);
+  }
   sec.querySelector('#h-pins-edit').onclick = () => openPinSettings(tools);
 }
 function openPinSettings(tools, turnOn) {

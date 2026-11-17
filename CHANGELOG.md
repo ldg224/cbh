@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.14.4 (2026-11-17)
+
+**Fixed:** **Pinned** tiles look like the CareBeyond tiles again: each has its icon in a frosted square, a big faint icon in the background and its gradient (each folder's colour, or the department's colour for department pages). Live badges such as **Live now**, **3 waiting** or your shift time sit in the top corner. 0.14.0 had drawn them as plain coloured blocks with just a title.
+
+Bot: no change.
+Database change: none.
+
 ## 0.14.3 (2026-11-17)
 
 **Changed:** three home headings were reworded to sound calmer and more professional: "What would you like to review, …?", "Which record do you need, …?" and "What can I open for you, …?". There are still 50 in total.

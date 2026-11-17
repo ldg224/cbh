@@ -852,3 +852,8 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 @media (prefers-reduced-motion: reduce) { .h-title.typing .h-type::after { animation: none; } }
 /* Links styled as buttons get the same shape as real buttons (the base rule only targets <button>). */
 a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8px; text-decoration: none; font-weight: 600; }
+/* Pins (0.14.4): the classic home tile, sized for the pins row. */
+.h-pins .tile { aspect-ratio: auto; height: 118px; }
+.h-pins .tile-title { font-size: 17px; }
+.h-pins .tile-mark { width: auto; height: 120%; right: -6%; bottom: -24%; }
+@media (max-width: 560px) { .h-pins .tile { height: 100px; } .h-pins .tile-title { font-size: 15px; } }
