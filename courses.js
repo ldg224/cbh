@@ -267,8 +267,12 @@ async function crStep(el, dept, c, it) {
     io.observe(body.querySelector('.cr-end'));
   } else if (it.kind === 'slides') {
     const id = crSlidesId(it.url);
-    body.innerHTML = `<div class="cr-frame"><iframe src="https://docs.google.com/presentation/d/${esc(id)}/embed?rm=minimal&start=false&loop=false" allowfullscreen loading="lazy" title="${esc(it.title)}"></iframe></div>
-      <p class="muted small">Use the arrows under the slides, or <a href="https://docs.google.com/presentation/d/${esc(id)}/present" target="_blank" rel="noopener">open full screen</a>. Press I’ve finished when you reach the end.</p>`;
+    body.innerHTML = `<div class="vw vw-slides" tabindex="-1"><div class="vw-stage vw-embed"><iframe src="https://docs.google.com/presentation/d/${esc(id)}/embed?start=false&loop=false&delayms=60000" allowfullscreen loading="lazy" title="${esc(it.title)}"></iframe></div>
+      <div class="vw-bar" role="toolbar" aria-label="Slide controls"><span class="vw-note">Move between slides with the arrows under them.</span><span class="vw-gap"></span>
+        <a class="vw-btn ghost" href="https://docs.google.com/presentation/d/${esc(id)}/present" target="_blank" rel="noopener">Open in Google Slides</a>
+        <button type="button" class="vw-btn ghost" data-fs aria-label="Full screen"><span class="vw-fs-ico" aria-hidden="true"></span><span class="vw-lab">Full screen</span></button></div></div>
+      <p class="muted small">Press I’ve finished when you reach the last slide.</p>`;
+    crViewerChrome(body.querySelector('.vw'));
     finishBtn();
   } else if (it.kind === 'video') {
     const id = crYouTubeId(it.url);
@@ -284,7 +288,7 @@ async function crStep(el, dept, c, it) {
     let url;
     try { url = await crSigned(it.path); } catch (e) { body.innerHTML = `<p class="error">Couldn’t open the file: ${esc(e.message)}</p>`; return; }
     if (/pdf$/i.test(it.mime || it.path)) crPdf(body, url, markDone);
-    else if (/^image\//.test(it.mime || '') || /\.(png|jpe?g|webp|gif)$/i.test(it.path)) { body.innerHTML = `<img class="cr-img" src="${esc(url)}" alt="${esc(it.title)}">`; markDone(); }
+    else if (/^image\//.test(it.mime || '') || /\.(png|jpe?g|webp|gif)$/i.test(it.path)) { crImage(body, url, it.title); markDone(); }
     else { body.innerHTML = `<p><a class="refresh cr-open" href="${esc(url)}" target="_blank" rel="noopener">Download ${esc(it.name || 'the file')}</a></p><p class="muted small">PowerPoint files can’t be shown inside the site. Open it, go through it, then press I’ve finished.</p>`; finishBtn(); }
   } else if (it.kind === 'quiz') {
     crQuiz(el, body, dept, c, it);
@@ -325,34 +329,138 @@ function crLoadPdfJs() {
   });
   return crPdfLib;
 }
+// A proper viewer (owner, 0.24.1): an always-visible control bar on a dark strip under the page, with ◀ ▶,
+// "Page 3 of 12" with a page box to jump, zoom out / Fit / zoom in, and full screen. Arrow keys, Page Up/Down,
+// Home/End and +/- work while it's on screen, and swiping works on phones (at Fit).
+const crSvg = {
+  prev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 4.5 8 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  next: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 4.5 16 12l-7.5 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+// Full screen: the real thing where the browser allows it, otherwise the viewer fills the window (iPhone).
+function crViewerChrome(vw, onResize) {
+  const fs = vw.querySelector('[data-fs]');
+  const isFull = () => document.fullscreenElement === vw || document.webkitFullscreenElement === vw || vw.classList.contains('vw-max');
+  const label = () => {
+    if (!fs) return;
+    const on = isFull();
+    fs.querySelector('.vw-lab').textContent = on ? 'Exit full screen' : 'Full screen';
+    fs.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+    vw.classList.toggle('vw-full', on);
+  };
+  if (fs) fs.onclick = async () => {
+    if (isFull()) {
+      if (vw.classList.contains('vw-max')) { vw.classList.remove('vw-max'); document.body.classList.remove('vw-lock'); }
+      else await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else if (vw.requestFullscreen || vw.webkitRequestFullscreen) {
+      try { await (vw.requestFullscreen || vw.webkitRequestFullscreen).call(vw); } catch { vw.classList.add('vw-max'); document.body.classList.add('vw-lock'); }
+    } else { vw.classList.add('vw-max'); document.body.classList.add('vw-lock'); }
+    label(); if (onResize) setTimeout(onResize, 60);
+  };
+  const changed = () => { if (!vw.isConnected) return; label(); if (onResize) setTimeout(onResize, 60); };
+  document.addEventListener('fullscreenchange', changed);
+  document.addEventListener('webkitfullscreenchange', changed);
+  let rt;
+  window.addEventListener('resize', () => { if (vw.isConnected && onResize) { clearTimeout(rt); rt = setTimeout(onResize, 120); } });
+  document.addEventListener('keydown', function esc_(e) {
+    if (!vw.isConnected) return document.removeEventListener('keydown', esc_);
+    if (e.key === 'Escape' && vw.classList.contains('vw-max')) fs.click();
+  });
+}
+
+function crImage(box, url, title) {
+  box.innerHTML = `<div class="vw vw-image" tabindex="-1"><div class="vw-stage"><img src="${esc(url)}" alt="${esc(title)}"></div>
+    <div class="vw-bar" role="toolbar" aria-label="Picture controls"><span class="vw-gap"></span>
+      <span class="vw-zoom"><button type="button" class="vw-btn ghost" data-z="-1" aria-label="Zoom out">−</button><button type="button" class="vw-btn ghost vw-fit" data-z="0" aria-label="Fit to the screen">Fit</button><button type="button" class="vw-btn ghost" data-z="1" aria-label="Zoom in">+</button></span>
+      <button type="button" class="vw-btn ghost" data-fs aria-label="Full screen"><span class="vw-fs-ico" aria-hidden="true"></span><span class="vw-lab">Full screen</span></button></div></div>`;
+  const vw = box.querySelector('.vw'), img = vw.querySelector('img'), stage = vw.querySelector('.vw-stage');
+  let zoom = 1;
+  const apply = () => {
+    img.style.width = zoom === 1 ? '' : `${zoom * 100}%`;
+    img.style.maxWidth = zoom === 1 ? '100%' : 'none';
+    stage.classList.toggle('zoomed', zoom > 1);
+    vw.querySelector('[data-z="-1"]').disabled = zoom <= 1;
+    vw.querySelector('[data-z="1"]').disabled = zoom >= 4;
+    vw.querySelector('.vw-fit').classList.toggle('on', zoom === 1);
+  };
+  vw.querySelector('.vw-bar').addEventListener('click', (e) => {
+    const z = e.target.closest('[data-z]'); if (!z || z.disabled) return;
+    zoom = +z.dataset.z === 0 ? 1 : Math.max(1, Math.min(4, zoom * (+z.dataset.z > 0 ? 1.5 : 1 / 1.5)));
+    if (zoom < 1.05) zoom = 1;
+    apply();
+  });
+  crViewerChrome(vw); apply();
+}
+
 async function crPdf(box, url, onLast) {
-  box.innerHTML = '<div class="cr-pdf"><canvas></canvas></div><div class="cr-pager"><button type="button" class="ghost small-btn" data-p="-1">‹ Back</button><span class="bar"><i></i></span><span class="muted small cr-pno"></span><button type="button" class="refresh small-btn" data-p="1">Next ›</button></div>';
+  box.innerHTML = `<div class="vw vw-pdf" tabindex="0" aria-label="Slides">
+    <div class="vw-stage"><canvas hidden></canvas><p class="vw-loading">Loading the slides…</p></div>
+    <div class="vw-track" aria-hidden="true"><i></i></div>
+    <div class="vw-bar" role="toolbar" aria-label="Slide controls">
+      <button type="button" class="vw-btn nav" data-p="-1" aria-label="Previous page">${crSvg.prev}</button>
+      <label class="vw-pageno"><span class="vw-word">Page</span> <input class="vw-page" type="number" min="1" value="1" inputmode="numeric" aria-label="Go to page"> <span class="vw-of">of <b class="vw-total">–</b></span></label>
+      <button type="button" class="vw-btn nav" data-p="1" aria-label="Next page">${crSvg.next}</button>
+      <span class="vw-gap"></span>
+      <span class="vw-zoom"><button type="button" class="vw-btn ghost" data-z="-1" aria-label="Zoom out">−</button><button type="button" class="vw-btn ghost vw-fit" data-z="0" aria-label="Fit to the screen">Fit</button><button type="button" class="vw-btn ghost" data-z="1" aria-label="Zoom in">+</button></span>
+      <button type="button" class="vw-btn ghost" data-fs aria-label="Full screen"><span class="vw-fs-ico" aria-hidden="true"></span><span class="vw-lab">Full screen</span></button>
+    </div></div>`;
+  const vw = box.querySelector('.vw'), stage = vw.querySelector('.vw-stage'), canvas = vw.querySelector('canvas'), inp = vw.querySelector('.vw-page');
   let lib;
   try { lib = await crLoadPdfJs(); } catch { box.innerHTML = `<p><a class="refresh cr-open" href="${esc(url)}" target="_blank" rel="noopener">Open the PDF</a></p>`; return; }
-  const doc = await lib.getDocument(url).promise;
-  const canvas = box.querySelector('canvas'), wrap = box.querySelector('.cr-pdf');
-  let page = 1, busy = false;
+  let doc;
+  try { doc = await lib.getDocument(url).promise; } catch (e) { stage.innerHTML = `<p class="vw-loading">Couldn’t open the PDF: ${esc(e.message || 'unknown error')}</p>`; return; }
+  vw.querySelector('.vw-loading').remove(); canvas.hidden = false;
+  const N = doc.numPages;
+  vw.querySelector('.vw-total').textContent = N;
+  inp.max = N; inp.style.width = `${String(N).length + 2.4}em`;
+  let page = 1, zoom = 1, busy = false, again = false, reached = false;
   async function draw() {
-    if (busy) return; busy = true;
+    if (busy) { again = true; return; }
+    busy = true;
     const p = await doc.getPage(page);
-    const w = Math.min(wrap.clientWidth || 800, 1200), vp0 = p.getViewport({ scale: 1 }), scale = (w / vp0.width) * (window.devicePixelRatio || 1);
-    const vp = p.getViewport({ scale });
-    canvas.width = vp.width; canvas.height = vp.height; canvas.style.width = '100%';
+    const vp0 = p.getViewport({ scale: 1 });
+    const full = vw.classList.contains('vw-full');
+    const availW = stage.clientWidth || 800, availH = full ? (stage.clientHeight || window.innerHeight - 90) : Infinity;
+    const fit = Math.min(availW / vp0.width, availH / vp0.height);
+    const css = fit * zoom, dpr = window.devicePixelRatio || 1, vp = p.getViewport({ scale: css * dpr });
+    canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+    canvas.style.width = `${Math.floor(vp0.width * css)}px`; canvas.style.height = `${Math.floor(vp0.height * css)}px`;
     await p.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-    box.querySelector('.cr-pno').textContent = `Page ${page} of ${doc.numPages}`;
-    box.querySelector('.bar i').style.width = `${Math.round((page / doc.numPages) * 100)}%`;
-    box.querySelector('[data-p="-1"]').disabled = page === 1;
-    box.querySelector('[data-p="1"]').disabled = page === doc.numPages;
-    if (page === doc.numPages) onLast();
+    inp.value = page;
+    vw.querySelector('.vw-track i').style.width = `${(page / N) * 100}%`;
+    vw.querySelector('[data-p="-1"]').disabled = page <= 1;
+    vw.querySelector('[data-p="1"]').disabled = page >= N;
+    vw.querySelector('[data-z="-1"]').disabled = zoom <= 1;
+    vw.querySelector('[data-z="1"]').disabled = zoom >= 4;
+    vw.querySelector('.vw-fit').classList.toggle('on', zoom === 1);
+    stage.classList.toggle('zoomed', zoom > 1);
+    if (page === N && !reached) { reached = true; onLast(); }
     busy = false;
+    if (again) { again = false; draw(); }
   }
-  const go = (d) => { const n = Math.max(1, Math.min(doc.numPages, page + d)); if (n !== page) { page = n; draw(); } };
-  box.querySelector('.cr-pager').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) go(+b.dataset.p); };
-  const key = (e) => { if (!box.isConnected) return document.removeEventListener('keydown', key); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); };
+  const go = (n) => { n = Math.max(1, Math.min(N, n)); if (n !== page) { page = n; stage.scrollTop = 0; draw(); } else inp.value = page; };
+  const setZoom = (d) => { zoom = d === 0 ? 1 : Math.max(1, Math.min(4, +(zoom * (d > 0 ? 1.25 : 0.8)).toFixed(2))); if (zoom < 1.05) zoom = 1; draw(); };
+  vw.querySelector('.vw-bar').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    if (b.dataset.p) go(page + Number(b.dataset.p));
+    else if (b.dataset.z !== undefined) setZoom(Number(b.dataset.z));
+  });
+  inp.addEventListener('change', () => go(parseInt(inp.value, 10) || page));
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(parseInt(inp.value, 10) || page); inp.select(); } e.stopPropagation(); });
+  const key = (e) => {
+    if (!vw.isConnected) return document.removeEventListener('keydown', key);
+    if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); go(page + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(page - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); go(1); }
+    else if (e.key === 'End') { e.preventDefault(); go(N); }
+    else if (e.key === '+' || e.key === '=') setZoom(1);
+    else if (e.key === '-') setZoom(-1);
+  };
   document.addEventListener('keydown', key);
   let x0 = null;
-  wrap.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
-  wrap.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; });
+  stage.addEventListener('touchstart', (e) => { x0 = zoom === 1 && e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
+  stage.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 45) go(page + (dx < 0 ? 1 : -1)); x0 = null; });
+  crViewerChrome(vw, draw);
   draw();
 }
 
