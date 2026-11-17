@@ -164,6 +164,36 @@
         "id": "10267",
         "commonName": "thumbs-down",
         "use": "Applications: reviewer thumbs down"
+      },
+      "home": {
+        "id": "2797",
+        "commonName": "home",
+        "use": "Desk: Home"
+      },
+      "search": {
+        "id": "7695",
+        "commonName": "search",
+        "use": "Desk: search"
+      },
+      "menu": {
+        "id": "dMz54mFbVirR",
+        "commonName": "menu",
+        "use": "Desk: phone menu"
+      },
+      "logout": {
+        "id": "8119",
+        "commonName": "logout",
+        "use": "Desk: log out"
+      },
+      "graduation-cap": {
+        "id": "11225",
+        "commonName": "graduation-cap",
+        "use": "Desk: My courses"
+      },
+      "todo": {
+        "id": "40902",
+        "commonName": "todo",
+        "use": "Desk: To do"
       }
     }
   }
