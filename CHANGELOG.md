@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.16.2 (2026-11-18)
+
+**Changed:**
+- **Discord logs** is now one plain, full list with a compact line per entry (time, what happened, who, channel, and the message text or before and after), newest first.
+- **Discord logs:** a small **Find** bar searches names, channels and message text, including edits.
+
+**Removed:**
+- **Discord logs:** photos, day headings, merged rows, filter chips and the new-entries bar.
+
+Bot: no change. Database change: no.
+
 ## 0.16.1 (2026-11-18)
 
 **Added:**
