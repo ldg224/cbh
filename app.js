@@ -15,6 +15,48 @@ function render(session) {
   $('name').textContent = name;
   $('welcome-name').textContent = name;
   if (meta.avatar_url) $('avatar').src = meta.avatar_url; else $('avatar').hidden = true;
+  loadRoles();
+}
+
+// Your own member row (the database only returns yours) and the server's roles, highest first.
+let rolesLoading = false;
+async function loadRoles() {
+  if (rolesLoading) return;
+  rolesLoading = true;
+  const list = $('roles');
+  list.replaceChildren();
+  $('roles-note').textContent = 'Loading your roles…';
+  $('staff-line').textContent = '';
+  try {
+    const { data: me, error } = await sb.from('members').select('display_name, role_ids, is_staff, updated_at').maybeSingle();
+    if (error) throw error;
+    if (!me) {
+      $('roles-note').textContent = "We couldn't find you in the CareBeyond - Hospital server. Join it with this Discord account, then refresh.";
+      return;
+    }
+    $('welcome-name').textContent = me.display_name;
+    $('name').textContent = me.display_name;
+    $('staff-line').innerHTML = me.is_staff ? 'CareBeyond staff <span class="badge">Staff</span>' : 'CareBeyond member';
+    const { data: roles, error: e2 } = await sb.from('roles').select('id, name, color, position').in('id', me.role_ids);
+    if (e2) throw e2;
+    roles.sort((a, b) => b.position - a.position);
+    for (const r of roles) {
+      const li = document.createElement('li');
+      li.className = 'role';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      if (r.color) dot.style.setProperty('--role', '#' + r.color.toString(16).padStart(6, '0'));
+      li.append(dot, document.createTextNode(r.name));
+      list.append(li);
+    }
+    $('roles-note').textContent = roles.length
+      ? 'Updated ' + new Date(me.updated_at).toLocaleString() + '. Role changes in Discord show here within a few seconds.'
+      : 'You have no roles in the server yet.';
+  } catch (err) {
+    $('roles-note').textContent = "Couldn't load your roles: " + (err.message || err);
+  } finally {
+    rolesLoading = false;
+  }
 }
 
 $('login').addEventListener('click', async () => {
