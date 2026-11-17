@@ -303,6 +303,8 @@ function onSession(session) {
   $('signed-in').hidden = !user;
   $('who').hidden = !user;
   $('changed').hidden = true;
+  stopCodeLogin();
+  showLoginView('main');
   if (!user) return;
   const meta = user.user_metadata || {};
   const name = meta.full_name || meta.custom_claims?.global_name || meta.name || 'staff member';
@@ -324,6 +326,117 @@ $('login').addEventListener('click', async () => {
     $('login-error').hidden = false;
   }
 });
+
+// ---------- log in with a code ----------
+// The site gets a short code from the login-code function; the person types /login CODE in the Discord server; the
+// bot confirms; the next poll hands back a session (once). The secret stays in memory only (never stored).
+const CODE_POLL_MS = 2000;
+let codeLogin = null;   // { code, secret, expiresAt, timer, poller }
+
+async function loginCodeApi(body) {
+  const r = await fetch(`${CBH_CONFIG.supabaseUrl}/functions/v1/login-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: CBH_CONFIG.supabaseKey },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { status: r.status, data };
+}
+
+function showLoginView(which) {
+  $('login-main').hidden = which !== 'main';
+  $('login-code').hidden = which !== 'code';
+}
+
+function stopCodeLogin() {
+  if (!codeLogin) return;
+  clearInterval(codeLogin.timer);
+  clearInterval(codeLogin.poller);
+  codeLogin = null;
+}
+
+function codeError(text, offerNew) {
+  stopCodeLogin();
+  $('code-box').classList.add('dead');
+  $('code-timer').textContent = '';
+  $('copy-cmd').disabled = true;
+  $('code-error').textContent = text;
+  $('code-error').hidden = false;
+  $('new-code').hidden = !offerNew;
+}
+
+async function startCodeLogin() {
+  stopCodeLogin();
+  showLoginView('code');
+  $('code-box').classList.remove('dead');
+  $('code-error').hidden = true;
+  $('new-code').hidden = true;
+  $('copy-cmd').disabled = true;
+  $('code-text').textContent = '···-···';
+  $('code-cmd').textContent = '/login';
+  $('code-timer').textContent = '';
+  let res;
+  try {
+    res = await loginCodeApi({ action: 'start' });
+  } catch {
+    return codeError("Couldn't reach CareBeyond. Check your connection and try again.", true);
+  }
+  if (res.status === 429) return codeError('Lots of people are logging in right now. Try again in a minute.', true);
+  if (res.status !== 200 || !res.data.code) return codeError("Couldn't get a code. Try again in a moment.", true);
+  const { code, secret, expires_in } = res.data;
+  $('code-text').textContent = code;
+  $('code-cmd').textContent = '/login ' + code;
+  $('copy-cmd').disabled = false;
+  $('copy-cmd').textContent = 'Copy';
+  codeLogin = { code, secret, expiresAt: Date.now() + expires_in * 1000 };
+  const tick = () => {
+    const left = Math.max(0, Math.round((codeLogin.expiresAt - Date.now()) / 1000));
+    $('code-timer').textContent = `Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    if (!left) codeError('This code has expired.', true);
+  };
+  tick();
+  codeLogin.timer = setInterval(tick, 1000);
+  codeLogin.poller = setInterval(pollCodeLogin, CODE_POLL_MS);
+}
+
+let polling = false;
+async function pollCodeLogin() {
+  if (!codeLogin || polling || document.hidden) return;
+  polling = true;
+  const { code, secret } = codeLogin;
+  try {
+    const { status, data } = await loginCodeApi({ action: 'poll', code, secret });
+    if (!codeLogin || codeLogin.code !== code) return;          // cancelled meanwhile
+    if (status !== 200) return;                                // a hiccup: try again next time
+    if (data.status === 'expired') return codeError('This code has expired.', true);
+    if (data.status === 'not_member') {
+      return codeError("We couldn't find you in the CareBeyond - Hospital server. Join it with your Discord account, then get a new code.", true);
+    }
+    if (data.status === 'done' && data.session) {
+      stopCodeLogin();
+      const { error } = await sb.auth.setSession(data.session);   // onSession then loads the dashboard
+      if (error) codeError("Couldn't log you in: " + error.message, true);
+    }
+  } catch {
+    // offline for a moment: keep trying until the code expires
+  } finally {
+    polling = false;
+  }
+}
+
+$('code-login').addEventListener('click', startCodeLogin);
+$('new-code').addEventListener('click', startCodeLogin);
+$('code-back').addEventListener('click', () => { stopCodeLogin(); showLoginView('main'); });
+$('copy-cmd').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('code-cmd').textContent);
+    $('copy-cmd').textContent = 'Copied';
+    setTimeout(() => { $('copy-cmd').textContent = 'Copy'; }, 1500);
+  } catch {
+    // clipboard blocked: the command is on screen to type
+  }
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden && codeLogin) pollCodeLogin(); });
 
 $('logout').addEventListener('click', async () => {
   await sb.auth.signOut();

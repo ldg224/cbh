@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.4.0 (2026-11-17)
+
+**Added:** **Log in with a code**, handy on a phone or a computer where you're not signed in to Discord in the browser. Press "Log in with a code" under "Log in with Discord", then type the command it shows (e.g. `/login K7P-4QX`) in the CareBeyond - Hospital server. CareBeyond Helper asks you to confirm, and the website logs you in by itself. Codes last 5 minutes and work once. There's a Copy button for the command, and "Get a new code" if one runs out.
+
+Behind it: the bot's new `/login` command, the `login-code` function and database migration 0003 (built by Bravo).
+Database change: yes, a new `login_codes` table (migration 0003).
+
 ## 0.3.0 (2026-11-17)
 
 **Added:**

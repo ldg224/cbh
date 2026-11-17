@@ -33,12 +33,36 @@
       <button id="refresh" class="refresh">Refresh</button>
     </div>
 
-    <section id="signed-out" class="card center" hidden>
+    <section id="signed-out" class="card center login" hidden>
       <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="88" height="88">
-      <h1>Welcome to CareBeyond</h1>
-      <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
-      <button id="login" class="discord">Log in with Discord</button>
-      <p id="login-error" class="error" hidden></p>
+
+      <div id="login-main">
+        <h1>Welcome to CareBeyond</h1>
+        <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
+        <div class="login-actions">
+          <button id="login" class="discord">Log in with Discord</button>
+          <button id="code-login" class="ghost">Log in with a code</button>
+        </div>
+        <p id="login-error" class="error" hidden></p>
+      </div>
+
+      <!-- Log in with a code: type /login CODE in Discord, the bot confirms, this page logs in by itself. -->
+      <div id="login-code" hidden>
+        <h1>Log in with a code</h1>
+        <div id="code-box" class="code-box" aria-live="polite">
+          <div id="code-text" class="code-text"></div>
+          <p class="code-how">Type <code id="code-cmd"></code> in the CareBeyond - Hospital server.</p>
+          <div class="code-row">
+            <button id="copy-cmd" class="ghost">Copy</button>
+            <span id="code-timer" class="code-timer"></span>
+          </div>
+        </div>
+        <p id="code-error" class="error" hidden></p>
+        <div class="login-actions">
+          <button id="new-code" class="refresh" hidden>Get a new code</button>
+          <button id="code-back" class="linkish">Back</button>
+        </div>
+      </div>
     </section>
 
     <!-- One fixed-size card: name, one line of badges (extra ones behind "+N"), and the Discord photo. -->
