@@ -38,7 +38,7 @@
     return [
       canSee('staff') && myDepartments.length && { href: '#shifts', label: 'My shift', icon: 'clock' },
       sessionsHref() && { href: sessionsHref(), label: 'Sessions', icon: 'calendar' },
-      { label: 'My courses', icon: 'graduation-cap', soon: true },
+      typeof crMyCoursesHref === 'function' && crMyCoursesHref() && { href: crMyCoursesHref(), label: 'My courses', icon: 'graduation-cap' },   // courses.js
       { href: '#contact', label: 'Contact a team', icon: 'chat' },
       canSee('leads') && { href: '#tickets', label: 'Team tickets', icon: 'inbox' },
       { href: '#apply', label: 'Apply', icon: 'resume' },
@@ -69,9 +69,9 @@
     return [
       can('dept.view') && { href: base, label: 'Overview', icon: 'home', tab: 'overview' },
       can('dept.view') && { href: base + '/members', label: 'Members', icon: 'people', tab: 'members', ...cnt('members') },
-      (can('dept.view') || can('courses.manage')) && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', tag: 'Soon' },
+      (can('dept.view') || can('courses.manage') || can('courses.assess')) && !ext.some((x) => x.id === 'courses') && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', tag: 'Soon' },
       (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && { href: base + '/meetings', label: 'Meetings', icon: 'calendar', tab: 'meetings', ...cnt('meetings') },
-      ...ext.map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.id === 'applications' ? 'resume' : 'clipboard', tab: x.id, ...cnt(x.id) })),
+      ...ext.map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.id === 'applications' ? 'resume' : x.id === 'courses' ? 'graduation-cap' : 'clipboard', tab: x.id, ...cnt(x.id) })),
       can('history.view') && { href: base + '/history', label: 'History', icon: 'history', tab: 'history', ...cnt('history') },
       director && { href: base + '/ranks', label: 'Ranks & permissions', icon: 'star', tab: 'ranks' },
     ].filter(Boolean);

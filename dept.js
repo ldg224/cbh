@@ -14,6 +14,11 @@ const dpTab = {};          // last tab per department, for this visit
 //   window.DEPT_TABS.push({ id, label, show(dept) -> boolean, render(el, dept), count?(dept) -> Promise<number> })
 // They appear after History (before Ranks & permissions). Deep link: #directors/<dept id>/<tab id>.
 window.DEPT_TABS = window.DEPT_TABS || [];
+// Extra cells on each Members row from other pages (e.g. course progress, courses.js):
+//   window.DEPT_MEMBER_EXTRAS.push({ id, label, load: async (dept) => Map(discord_id -> { html, sort, title }) })
+// `html` is drawn as a small chip before the rank (it must be safe HTML built by that page); `sort` (a number,
+// higher first) adds a "label" choice to the Sort menu. A failing load just leaves its chips out.
+window.DEPT_MEMBER_EXTRAS = window.DEPT_MEMBER_EXTRAS || [];
 let dpWatch = null;
 
 const dpDay = 864e5;
@@ -136,7 +141,8 @@ async function renderDept(body, tool) {
   // ---------- banner + tabs ----------
   const TABS = [
     ...(seeDept ? [{ id: 'overview', label: 'Overview' }, { id: 'members', label: 'Members', n: people.length }] : []),
-    ...(seeDept || can('courses.manage') ? [{ id: 'courses', label: 'Courses', soon: true }] : []),
+    // Courses: a placeholder until a page registers DEPT_TABS id 'courses' (Alpha's courses.js), which then replaces it.
+    ...((seeDept || can('courses.manage') || can('courses.assess')) && !window.DEPT_TABS.some((x) => x.id === 'courses') ? [{ id: 'courses', label: 'Courses', soon: true }] : []),
     ...(seeDept || manageMt || attMt ? [{ id: 'meetings', label: 'Meetings', n: upcoming.length || null }] : []),
     ...(seeHist ? [{ id: 'history', label: 'History', n: hist.length || null }] : []),
     ...window.DEPT_TABS.filter((x) => { try { return x.show(dept); } catch { return false; } }).map((x) => ({ id: x.id, label: x.label, ext: x })),
@@ -244,6 +250,14 @@ async function renderDept(body, tool) {
   // ---------- Members ----------
   const memState = { q: '', filter: 'all', sort: 'rank' };
   const SORTS = seeAct ? { rank: 'Year', hours: 'Hours', recent: 'Last shift', name: 'Name' } : { rank: 'Year', name: 'Name' };
+  const extras = {};   // DEPT_MEMBER_EXTRAS results for this render: id -> Map(discord_id -> { html, sort, title })
+  let extrasLoaded = null;
+  function loadExtras() {
+    if (!extrasLoaded) extrasLoaded = Promise.all(window.DEPT_MEMBER_EXTRAS.map(async (x) => {
+      try { const m = await x.load(dept); if (m && typeof m.get === 'function') { extras[x.id] = m; if (x.label) SORTS['x:' + x.id] = x.label; } } catch { /* leave it out */ }
+    }));
+    return extrasLoaded;
+  }
   if (word === 'rank') SORTS.rank = 'Rank';
   function drawMembers() {
     pane.innerHTML = `
@@ -268,6 +282,12 @@ async function renderDept(body, tool) {
     pane.querySelector('#dp-sort').onchange = (e) => { memState.sort = e.target.value; drawRows(); };
     if (editM) pane.querySelector('#dp-add-open').onclick = openAdd;
     drawRows();
+    if (window.DEPT_MEMBER_EXTRAS.length && !extrasLoaded) loadExtras().then(() => {
+      if (!pane.isConnected || tab !== 'members') return;
+      const sel = pane.querySelector('#dp-sort');
+      if (sel) sel.innerHTML = Object.entries(SORTS).map(([k, l]) => `<option value="${k}"${memState.sort === k ? ' selected' : ''}>${esc(l)}</option>`).join('');
+      drawRows();
+    });
   }
   function drawRows() {
     const list = pane.querySelector('#dp-list');
@@ -277,6 +297,10 @@ async function renderDept(body, tool) {
     const last = (p) => (p.on_shift ? Infinity : p.last_shift_at ? new Date(p.last_shift_at).getTime() : 0);
     if (memState.sort === 'hours') rows = rows.slice().sort((a, b) => Number(b.week_hours || 0) - Number(a.week_hours || 0));
     if (memState.sort === 'recent') rows = rows.slice().sort((a, b) => last(b) - last(a));
+    if (memState.sort.startsWith('x:') && extras[memState.sort.slice(2)]) {
+      const m = extras[memState.sort.slice(2)], v = (p) => Number(m.get(p.discord_id)?.sort ?? -Infinity);
+      rows = rows.slice().sort((a, b) => v(b) - v(a));
+    }
     if (memState.sort === 'name') rows = rows.slice().sort((a, b) => cleanName(a.display_name).localeCompare(cleanName(b.display_name)));
     if (!people.length) { list.innerHTML = `<p class="muted small">Nobody is in ${esc(dept)} yet. Use Add someone to bring people in.</p>`; return; }
     if (!rows.length) { list.innerHTML = `<p class="muted small">${term ? 'Nobody matches that name.' : memState.filter === 'on' ? 'Nobody is on shift.' : 'Nobody is inactive.'}</p>`; return; }
@@ -288,7 +312,7 @@ async function renderDept(body, tool) {
           <div class="dp-m"><strong>${esc(name)}</strong>
             <span>${seeAct ? `${esc(dpH(p.week_hours))} this week · ${Number(p.shifts_30d || 0)} shift${p.shifts_30d == 1 ? '' : 's'} in 30 days · ${esc(lastSeen(p))}${p.last_meeting_at ? ' · last meeting ' + esc(dpDayShort(p.last_meeting_at)) : ''}` : (p.on_shift ? 'On shift now' : '')}</span></div>
           ${seeAct ? spark(p.discord_id) : ''}
-          <span class="dp-tags">${pend ? `<span class="st sub-pending">Pending</span>` : seeAct && dpInactive(p) ? (cleared(p) ? `<span class="dp-flag dp-cleared" title="${esc((cleared(p).reason || 'Dealt with') + (cleared(p).dismissed_by_name ? ' by ' + cleanName(cleared(p).dismissed_by_name) : ''))}">${cleared(p).until ? esc((cleared(p).reason || 'Snoozed') + ' until ' + dpDayShort(cleared(p).until)) : 'Dealt with'}</span>` : `<button type="button" class="dp-flag warn dp-quiet" data-quiet="${esc(p.discord_id)}" title="Dealt with, snooze or on leave">Inactive</button>`) : ''}${rankBadge(p)}</span>
+          <span class="dp-tags">${pend ? `<span class="st sub-pending">Pending</span>` : seeAct && dpInactive(p) ? (cleared(p) ? `<span class="dp-flag dp-cleared" title="${esc((cleared(p).reason || 'Dealt with') + (cleared(p).dismissed_by_name ? ' by ' + cleanName(cleared(p).dismissed_by_name) : ''))}">${cleared(p).until ? esc((cleared(p).reason || 'Snoozed') + ' until ' + dpDayShort(cleared(p).until)) : 'Dealt with'}</span>` : `<button type="button" class="dp-flag warn dp-quiet" data-quiet="${esc(p.discord_id)}" title="Dealt with, snooze or on leave">Inactive</button>`) : ''}${Object.entries(extras).map(([id, m]) => { const e = m.get(p.discord_id); return e && e.html ? `<span class="dp-extra" data-extra="${esc(id)}"${e.title ? ` title="${esc(e.title)}"` : ''}>${e.html}</span>` : ''; }).join('')}${rankBadge(p)}</span>
           <div class="ma-side dp-side">${locked(p) || pend ? '<span class="dp-dots-gap"></span>' : `<button type="button" class="ma-dots" aria-label="More for ${esc(name)}" aria-haspopup="menu" aria-expanded="false" data-menu="${esc(p.discord_id)}"><span></span></button>`}</div>
         </div>
         <div class="dp-inline" hidden></div></div>`;
@@ -727,7 +751,8 @@ async function renderDept(body, tool) {
     ['meetings.attendance', 'Attendance', 'Attendance and notes'],
     ['applications.review', 'Review applications', 'Review and decide'],
     ['applications.settings', 'Edit applications', 'Forms, settings, stages'],
-    ['courses.manage', 'Edit courses', 'Coming soon'],
+    ['courses.manage', 'Edit courses', 'Create and edit courses'],
+    ['courses.assess', 'Assess courses', 'Practical evaluations'],
   ];
   function drawRanks() {
     const rows = ranks.filter((r) => r.rank_label !== 'Director');

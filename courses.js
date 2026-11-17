@@ -1,0 +1,815 @@
+// Courses (department pages, "Courses" tab). Owner-approved mockup, 19 Nov 2026. Back end: 0048 (courses, quizzes,
+// evaluations), 0051 (private course-files bucket). Answer keys never reach the page: quiz questions come from
+// quiz_start without keys, marking happens in the database, and a quiz with anything for a person to mark is held
+// ("Submitted") until it's all marked. Reading/watching steps are ticked by the page (progress, not proof).
+// Builders: courses.manage ("Edit courses"). Assessors: courses.assess ("Assess courses").
+// Loaded after app.js (hasPerm, myDepartments, DEPARTMENTS, iconUrl, sized), faces.js and applications.js
+// (appSetHash). Code is prefixed cr / CR_ to keep clear of other pages (one shared global scope).
+const CR_LEVELS = ['Not yet', 'Developing', 'Standard', 'Exceeding'];
+const CR_COLOURS = ['#2ED3C6', '#3A82D0', '#5C72FF', '#6A4FD6', '#FF3D7E', '#FF5533', '#FFAA00', '#0D7D74'];
+const CR_KINDS = { lesson: 'Written lesson', slides: 'Google Slides', link: 'Link', video: 'YouTube', file: 'File', quiz: 'Quiz', eval: 'Practical evaluation' };
+const CR_ICON = { lesson: '✎', slides: 'S', link: '↗', video: '▶', file: 'PDF', quiz: '?', eval: '★' };
+const crDept = (name) => DEPARTMENTS.find((d) => d.name === name) || { name, id: '', color: '#3a82d0' };
+const crRoute = (dept, rest = '') => `#directors/${crDept(dept).id}/courses${rest ? '/' + rest : ''}`;
+const crSetHash = (h) => { try { history.replaceState(null, '', h); } catch { /* fine */ } };
+const crCanEdit = (dept) => hasPerm('courses.manage', dept);
+const crCanAssess = (dept) => hasPerm('courses.assess', dept);
+const crMember = (dept) => (typeof inMyDept === 'function' ? inMyDept(dept) : (myDepartments || []).includes(dept));
+const crDate = (iso) => (iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' }) : '');
+const crUid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const crItems = (c) => (c.modules || []).flatMap((m) => m.items || []);
+
+// Safe little markdown for written lessons: # headings, - lists, **bold**, *italic*, [text](https://link), images
+// ![alt](https://…), blank-line paragraphs. Everything is escaped first.
+function crMarkdown(src) {
+  const inline = (t) => esc(t)
+    .replace(/!\[([^\]]*)\]\((https:\/\/[^\s)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
+    .replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  return String(src || '').split(/\n{2,}/).map((block) => {
+    const lines = block.split('\n');
+    if (/^#{1,3} /.test(block)) { const lv = block.match(/^#+/)[0].length + 1; return `<h${lv}>${inline(block.replace(/^#+ /, ''))}</h${lv}>`; }
+    if (lines.every((l) => /^\s*[-*] /.test(l))) return `<ul>${lines.map((l) => `<li>${inline(l.replace(/^\s*[-*] /, ''))}</li>`).join('')}</ul>`;
+    if (lines.every((l) => /^\s*\d+\. /.test(l))) return `<ol>${lines.map((l) => `<li>${inline(l.replace(/^\s*\d+\. /, ''))}</li>`).join('')}</ol>`;
+    return `<p>${lines.map(inline).join('<br>')}</p>`;
+  }).join('');
+}
+const crYouTubeId = (u) => (String(u).match(/(?:v=|embed\/|shorts\/|youtu\.be\/)([A-Za-z0-9_-]{6,})/) || [])[1];
+const crSlidesId = (u) => (String(u).match(/presentation\/d\/([A-Za-z0-9_-]+)/) || [])[1];
+const crDocEmbed = (u) => {
+  const m = String(u).match(/^https:\/\/docs\.google\.com\/(document|spreadsheets)\/d\/([A-Za-z0-9_-]+)/);
+  return m ? `https://docs.google.com/${m[1]}/d/${m[2]}/preview` : null;
+};
+async function crSigned(path) {
+  const { data, error } = await sb.storage.from('course-files').createSignedUrl(path, 600);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+// ===================================================================== the tab
+window.DEPT_TABS = window.DEPT_TABS || [];
+window.DEPT_TABS.push({
+  id: 'courses', label: 'Courses',
+  show: (dept) => crMember(dept) || hasPerm('dept.view', dept) || crCanEdit(dept) || crCanAssess(dept),
+  count: async (dept) => ((await sb.rpc('course_list', { dept })).data || []).filter((c) => c.mine && !c.lock && !c.complete).length,
+  render: (el, dept, sub) => crTab(el, dept, sub || ''),
+});
+window.DEPT_MEMBER_EXTRAS = window.DEPT_MEMBER_EXTRAS || [];
+window.DEPT_MEMBER_EXTRAS.push({
+  id: 'courses', label: 'Course progress',
+  load: async (dept) => {
+    const { data } = await sb.rpc('course_member_summary', { dept });
+    return new Map(Object.entries(data || {}).map(([id, s]) => [id, {
+      html: `<span class="cr-chip${s.done >= s.total ? ' done' : ''}">${s.done >= s.total ? 'Courses done' : `Courses ${s.done}/${s.total}`}</span>`,
+      sort: s.total ? s.done / s.total : 0, title: `${s.done} of ${s.total} courses finished` }]));
+  },
+});
+
+function crTab(el, dept, sub) {
+  const [a, b] = String(sub).split('/');
+  if (a === 'marking' && crCanAssess(dept)) return crMarking(el, dept);
+  if (a === 'edit' && b && crCanEdit(dept)) return crEditor(el, dept, b);
+  if (a === 'manage' && crCanEdit(dept)) return crManage(el, dept);
+  if (/^[0-9a-f-]{36}$/.test(a || '')) return crCourse(el, dept, a, b || '');
+  return crGrid(el, dept);
+}
+
+// ---------- course blocks ----------
+async function crGrid(el, dept) {
+  crSetHash(crRoute(dept));
+  el.innerHTML = '<div class="card"><p class="muted small">Loading courses…</p></div>';
+  const [{ data, error }, marking] = await Promise.all([sb.rpc('course_list', { dept }).then(async (r) => { await crLoadRanks(dept); return r; }),
+    crCanAssess(dept) ? sb.rpc('course_marking', { dept }).then((r) => r.data || [], () => []) : Promise.resolve([])]);
+  if (error) { el.innerHTML = ''; return liveError(el, error); }
+  const list = data || [];
+  const mine = list.filter((c) => c.mine), others = list.filter((c) => !c.mine);
+  el.innerHTML = `
+    <div class="cr-bar">
+      ${crCanAssess(dept) ? `<button type="button" class="ghost" data-go="marking">Marking${marking.length ? ` <span class="cr-n">${marking.length}</span>` : ''}</button>` : ''}
+      ${crCanEdit(dept) ? '<button type="button" class="ghost" data-go="manage">Manage courses</button><button type="button" class="refresh" data-go="new">New course</button>' : ''}
+    </div>
+    ${mine.length ? `<section class="cr-sec"><h2 class="ma-day">Your courses</h2><div class="cr-grid">${mine.map(crBlock).join('')}</div></section>` : ''}
+    ${others.length ? `<section class="cr-sec"><h2 class="ma-day">${mine.length ? 'Other' : 'All'} ${esc(dept)} courses</h2><div class="cr-grid">${others.map(crBlock).join('')}</div></section>` : ''}
+    ${!list.length ? `<div class="card ma-empty"><strong>No courses yet.</strong>${crCanEdit(dept) ? '<span>Create one with New course.</span>' : ''}</div>` : ''}`;
+  el.onclick = async (e) => {
+    const g = e.target.closest('[data-go]');
+    if (g) {
+      if (g.dataset.go === 'new') {
+        const { data: id, error: er } = await sb.rpc('course_create', { dept, title: 'New course' });
+        if (er) return el.insertAdjacentHTML('afterbegin', `<p class="error">${esc(er.message)}</p>`);
+        return crEditor(el, dept, id);
+      }
+      return crTab(el, dept, g.dataset.go);
+    }
+    const c = e.target.closest('[data-course]');
+    if (c) crCourse(el, dept, c.dataset.course, '');
+  };
+
+  function crBlock(c) {
+    const due = c.due_at && !c.complete ? new Date(c.due_at) : null;
+    const late = due && due < new Date(), soon = due && !late && due - new Date() < 3 * 864e5;
+    const pct = c.counts && c.counts.total ? Math.round((c.counts.done / c.counts.total) * 100) : 0;
+    const lock = c.mine ? c.lock : null;
+    return `<button type="button" class="cr-block${lock ? ' locked' : ''}" data-course="${esc(c.id)}" style="--c:${esc(c.color || '#2ED3C6')};--dept:${crDept(dept).color}">
+      <span class="cr-top"><span class="cr-kind">${esc(c.kind || 'Course')}</span></span>
+      <span class="cr-body">
+        <span class="cr-pills">${crAudience(c, dept)}${c.complete ? '<span class="cr-pill done">Completed</span>'
+          : lock === 'date' ? `<span class="cr-pill soon">Opens ${esc(crDate(c.opens_at))}</span>`
+            : lock === 'prereq' ? `<span class="cr-pill soon">Finish ${esc(c.prereq || 'another course')} first</span>`
+              : c.mine ? '<span class="cr-pill open">Open</span>' : ''}${due ? `<span class="cr-pill ${late ? 'late' : soon ? 'due' : 'soon'}">${late ? 'Overdue' : 'Due ' + esc(crDate(c.due_at))}</span>` : ''}</span>
+        <strong class="cr-title">${esc(c.title)}</strong>
+        ${c.mine && !lock ? `<span class="cr-progress"><i style="width:${pct}%"></i></span>` : ''}
+        <span class="cr-foot"><span>${c.mine ? `${c.counts?.done || 0} of ${c.counts?.total || 0} steps` : `${c.counts?.total || 0} steps`}</span><span>${lock ? 'Locked' : c.complete ? 'Review' : c.mine ? 'Continue ›' : 'Open ›'}</span></span>
+      </span>
+    </button>`;
+  }
+}
+function crAudience(c, dept) {
+  const ranks = c.audience_ranks || [];
+  if (!ranks.length) return '<span class="cr-pill aud">Everyone</span>';
+  const names = ranks.map((id) => (crRanksCache[dept] || []).find((r) => r.id === id)?.rank_label).filter(Boolean);
+  return `<span class="cr-pill aud">${esc(names.length ? names.join(', ') : 'Chosen ranks')}</span>`;
+}
+const crRanksCache = {};
+async function crLoadRanks(dept) {
+  if (!crRanksCache[dept]) crRanksCache[dept] = (await sb.rpc('app_dept_ranks', { dept })).data || [];
+  return crRanksCache[dept];
+}
+
+// ---------- inside a course ----------
+async function crCourse(el, dept, cid, stepId) {
+  await crLoadRanks(dept);
+  const { data: c, error } = await sb.rpc('course_view', { cid });
+  if (error || !c) { el.innerHTML = '<button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button><div class="card"><p class="muted small">This course isn’t available to you.</p></div>'; el.querySelector('#cr-back').onclick = () => crGrid(el, dept); return; }
+  if (stepId && !c.lock) { const it = crItems(c).find((x) => x.id === stepId); if (it) return crStep(el, dept, c, it); }
+  crSetHash(crRoute(dept, cid));
+  const staff = c.can_edit || c.can_assess;
+  const done = new Set(c.done || []);
+  const passedQuiz = (id) => (c.attempts || []).some((a) => a.item_id === id && a.passed);
+  const heldQuiz = (id) => (c.attempts || []).some((a) => a.item_id === id && a.status === 'marking');
+  const evalOf = (id) => (c.evaluations || []).find((e) => e.item_id === id);
+  const isDone = (it) => (it.kind === 'quiz' ? passedQuiz(it.id) : it.kind === 'eval' ? !!evalOf(it.id)?.passed : done.has(it.id));
+  const next = !c.lock && c.mine ? crItems(c).find((it) => !isDone(it)) : null;
+  const due = c.due_at ? new Date(c.due_at) : null;
+  let tab = 'contents';
+  el.innerHTML = `
+    <button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button>
+    <section class="cr-hero" style="--c:${esc(c.color || '#2ED3C6')};--dept:${crDept(dept).color}">
+      <div class="cr-pills">${crAudience(c, dept).replace('cr-pill aud', 'cr-pill hero')}<span class="cr-pill hero">${esc(c.kind || 'Course')}</span></div>
+      <h2>${esc(c.title)}</h2>
+      ${c.description ? `<p>${esc(c.description)}</p>` : ''}
+      <div class="cr-facts">
+        ${c.opens_at ? `<div class="cr-fact">${new Date(c.opens_at) > new Date() ? 'Opens' : 'Opened'}<b>${esc(crDate(c.opens_at))}</b></div>` : ''}
+        ${due ? `<div class="cr-fact">Due<b>${esc(crDate(c.due_at))}</b></div>` : ''}
+        ${c.mine ? `<div class="cr-fact">Your progress<b>${c.complete ? 'Completed' : `${c.counts.done} of ${c.counts.total} steps`}</b></div>` : ''}
+        ${c.prereq ? `<div class="cr-fact">Needs first<b>${esc(c.prereq.title)}</b></div>` : ''}
+      </div>
+      <div class="cr-hero-acts">
+        ${c.lock === 'date' ? `<span class="cr-pill hero">Opens ${esc(crDate(c.opens_at))}</span>` : c.lock === 'prereq' ? `<span class="cr-pill hero">Finish ${esc(c.prereq?.title || 'the course before')} first</span>`
+          : next ? `<button type="button" class="cr-continue" data-step="${esc(next.id)}">Continue: ${esc(next.title)}</button>` : ''}
+        ${c.can_edit ? '<button type="button" class="cr-ghost" id="cr-edit">Edit course</button>' : ''}
+      </div>
+    </section>
+    ${staff ? `<div class="dp-tabs cr-tabs" role="tablist"><button type="button" role="tab" data-ctab="contents" aria-selected="true">Contents</button><button type="button" role="tab" data-ctab="progress" aria-selected="false">Progress</button></div>` : ''}
+    <div id="cr-pane"></div>`;
+  const pane = el.querySelector('#cr-pane');
+  function drawContents() {
+    if (!c.modules) { pane.innerHTML = `<div class="card"><p class="muted small">${c.lock === 'date' ? `This course opens on ${esc(crDate(c.opens_at))}.` : `Finish ${esc(c.prereq?.title || 'the course before')} first.`}</p></div>`; return; }
+    pane.innerHTML = `<div class="cr-mods">${c.modules.map((m, mi) => {
+      const items = m.items || [], nDone = items.filter(isDone).length, all = items.length && nDone === items.length;
+      return `<details class="cr-mod${all ? ' done' : ''}"${all && c.mine ? '' : ' open'}>
+        <summary class="cr-mod-h">${all ? '<span class="cr-tick" aria-hidden="true">✓</span>' : ''}<span>${mi + 1}. ${esc(m.title)}</span><span class="cr-mod-n">${c.mine ? `${nDone} of ${items.length} done` : `${items.length} steps`}</span></summary>
+        <div class="cr-items">${items.map((it) => {
+          const d = isDone(it), held = it.kind === 'quiz' && heldQuiz(it.id), ev = it.kind === 'eval' ? evalOf(it.id) : null;
+          return `<button type="button" class="cr-item${next && next.id === it.id ? ' now' : ''}" data-step="${esc(it.id)}"${c.lock && !staff ? ' disabled' : ''}>
+            <span class="cr-ico${d ? ' done' : ''}" aria-hidden="true">${d ? '✓' : esc(CR_ICON[it.kind] || '•')}</span>
+            <span class="cr-item-main"><span class="cr-item-t">${esc(it.title)}</span><span class="cr-item-s">${esc(crStepNote(it))}</span></span>
+            <span class="cr-item-r">${d ? '<span class="cr-pill done">Done</span>' : held ? '<span class="cr-pill due">Submitted</span>' : ev ? '<span class="cr-pill due">Not passed yet</span>' : ''}</span>
+          </button>`;
+        }).join('') || '<p class="muted small cr-empty">No steps yet.</p>'}</div>
+      </details>`;
+    }).join('')}</div>`;
+  }
+  async function drawProgress() {
+    pane.innerHTML = '<div class="card"><p class="muted small">Loading progress…</p></div>';
+    const { data: rows, error: er } = await sb.rpc('course_progress_report', { cid });
+    if (er) { pane.innerHTML = ''; return liveError(pane, er); }
+    const quizzes = crItems(c).filter((i) => i.kind === 'quiz'), evals = crItems(c).filter((i) => i.kind === 'eval');
+    pane.innerHTML = (rows || []).length ? `<div class="card cr-table-wrap"><table class="cr-table"><thead><tr><th>Member</th><th>Rank</th><th>Progress</th>${quizzes.map((q) => `<th>${esc(q.title)}</th>`).join('')}${evals.map((e) => `<th>${esc(e.title)}</th>`).join('')}</tr></thead><tbody>
+      ${rows.map((r) => {
+        const pct = r.counts.total ? Math.round((r.counts.done / r.counts.total) * 100) : 0;
+        return `<tr><td><strong>${esc(cleanName(r.name || r.discord_id))}</strong></td><td>${esc(r.rank || '–')}</td>
+          <td><span class="cr-mini"><i style="width:${pct}%"></i></span>${r.counts.done} / ${r.counts.total}${r.complete ? ' <span class="cr-pill done">Done</span>' : ''}</td>
+          ${quizzes.map((q) => { const t = (r.quizzes || []).filter((x) => x.item_id === q.id); const best = t.filter((x) => x.status === 'marked').sort((x, y) => (y.score || 0) - (x.score || 0))[0];
+            return `<td>${t.some((x) => x.status === 'marking') ? '<span class="cr-pill due">To mark</span>' : best ? `${best.score} / ${best.max_score}${best.passed ? '' : ' <span class="cr-pill late">Not passed</span>'}` : '–'}${c.can_assess || c.can_edit ? ` <button type="button" class="linkish cr-try" data-try="${esc(q.id)}:${esc(r.discord_id)}" title="Give another try">+1 try</button>` : ''}</td>`; }).join('')}
+          ${evals.map((e) => { const ev = (r.evaluations || []).find((x) => x.item_id === e.id && x.status === 'submitted');
+            return `<td>${ev ? `<span class="cr-pill ${ev.passed ? 'done' : 'due'}">${ev.passed ? 'Passed' : 'Not yet'}</span>` : '–'}${c.can_assess ? ` <button type="button" class="linkish" data-eval="${esc(e.id)}:${esc(r.discord_id)}">${ev ? 'View' : 'Evaluate'}</button>` : ''}</td>`; }).join('')}
+        </tr>`;
+      }).join('')}</tbody></table></div>` : '<div class="card"><p class="muted small">Nobody is on this course yet.</p></div>';
+  }
+  drawContents();
+  el.querySelector('#cr-back').onclick = () => crGrid(el, dept);
+  el.onclick = async (e) => {
+    const t = e.target.closest('[data-ctab]');
+    if (t) { tab = t.dataset.ctab; el.querySelectorAll('[data-ctab]').forEach((x) => x.setAttribute('aria-selected', String(x === t))); return tab === 'progress' ? drawProgress() : drawContents(); }
+    if (e.target.closest('#cr-edit')) return crEditor(el, dept, cid);
+    const tr = e.target.closest('[data-try]');
+    if (tr) { const [iid, who] = tr.dataset.try.split(':'); const { error: er } = await sb.rpc('course_grant_try', { cid, iid, who }); tr.textContent = er ? er.message : 'Given'; return; }
+    const ev = e.target.closest('[data-eval]');
+    if (ev) { const [iid, who] = ev.dataset.eval.split(':'); return crEvalForm(el, dept, c, crItems(c).find((x) => x.id === iid), who); }
+    const s = e.target.closest('[data-step]');
+    if (s && !s.disabled) { const it = crItems(c).find((x) => x.id === s.dataset.step); if (it) crStep(el, dept, c, it); }
+  };
+}
+function crStepNote(it) {
+  switch (it.kind) {
+    case 'lesson': return 'Written lesson · read to the end';
+    case 'slides': return 'Google Slides';
+    case 'video': return 'YouTube · watch to the end';
+    case 'link': return 'Link';
+    case 'file': return /pdf$/i.test(it.mime || it.path || '') ? 'PDF · go to the last page' : /presentation/.test(it.mime || '') ? 'PowerPoint · download' : 'Image';
+    case 'quiz': return `${it.exam ? 'Exam' : 'Quiz'} · ${it.question_count || 0} questions · pass ${it.pass_pct ?? 80}% · ${it.tries ?? 3} ${(it.tries ?? 3) === 1 ? 'try' : 'tries'}`;
+    case 'eval': return 'Practical evaluation · marked by an assessor';
+    default: return '';
+  }
+}
+
+// ---------- one step ----------
+async function crStep(el, dept, c, it) {
+  crSetHash(crRoute(dept, c.id + '/' + it.id));
+  const all = crItems(c), idx = all.findIndex((x) => x.id === it.id), nxt = all[idx + 1];
+  const done = (c.done || []).includes(it.id);
+  el.innerHTML = `
+    <div class="cr-step-top"><button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>${esc(c.title)}</button>
+      <span class="muted small">Step ${idx + 1} of ${all.length}</span></div>
+    <section class="card cr-step"><h2 class="cr-step-h">${esc(it.title)}</h2><div id="cr-body"></div>
+      <div class="cr-step-foot"><span id="cr-done-flag" class="cr-pill done"${done ? '' : ' hidden'}>Done</span><span class="sp"></span>
+        <button type="button" class="ghost" id="cr-finish" hidden>I’ve finished</button>
+        ${nxt ? `<button type="button" class="refresh" id="cr-next">Next: ${esc(nxt.title)}</button>` : ''}</div>
+    </section>`;
+  const body = el.querySelector('#cr-body');
+  let marked = done;
+  const markDone = async () => {
+    if (marked || !c.mine || c.lock) return;
+    marked = true;
+    const { error } = await sb.rpc('course_item_done', { cid: c.id, iid: it.id });
+    if (error) { marked = false; return; }
+    (c.done = c.done || []).push(it.id);
+    el.querySelector('#cr-done-flag').hidden = false;
+    el.querySelector('#cr-finish').hidden = true;
+  };
+  const finishBtn = () => { const b = el.querySelector('#cr-finish'); if (c.mine && !marked) { b.hidden = false; b.onclick = markDone; } };
+  el.querySelector('#cr-back').onclick = () => crCourse(el, dept, c.id, '');
+  const nb = el.querySelector('#cr-next'); if (nb) nb.onclick = () => crStep(el, dept, c, nxt);
+  if (it.kind === 'lesson') {
+    body.innerHTML = `<div class="cr-lesson">${crMarkdown(it.body)}</div><div class="cr-end" aria-hidden="true"></div>`;
+    const io = new IntersectionObserver((ents) => { if (ents.some((x) => x.isIntersecting)) { io.disconnect(); markDone(); } });
+    io.observe(body.querySelector('.cr-end'));
+  } else if (it.kind === 'slides') {
+    const id = crSlidesId(it.url);
+    body.innerHTML = `<div class="cr-frame"><iframe src="https://docs.google.com/presentation/d/${esc(id)}/embed?rm=minimal&start=false&loop=false" allowfullscreen loading="lazy" title="${esc(it.title)}"></iframe></div>
+      <p class="muted small">Use the arrows under the slides, or <a href="https://docs.google.com/presentation/d/${esc(id)}/present" target="_blank" rel="noopener">open full screen</a>. Press I’ve finished when you reach the end.</p>`;
+    finishBtn();
+  } else if (it.kind === 'video') {
+    const id = crYouTubeId(it.url);
+    body.innerHTML = `<div class="cr-frame"><div id="cr-yt"></div></div>`;
+    crYouTube('cr-yt', id, markDone, finishBtn);
+  } else if (it.kind === 'link') {
+    const emb = crDocEmbed(it.url);
+    body.innerHTML = emb ? `<div class="cr-frame tall"><iframe src="${esc(emb)}" loading="lazy" title="${esc(it.title)}"></iframe></div><p class="muted small"><a href="${esc(it.url)}" target="_blank" rel="noopener">Open in Google</a></p>`
+      : `<p><a class="refresh cr-open" href="${esc(it.url)}" target="_blank" rel="noopener">Open the link</a></p><p class="muted small">${esc(it.url)}</p>`;
+    finishBtn();
+  } else if (it.kind === 'file') {
+    body.innerHTML = '<p class="muted small">Opening the file…</p>';
+    let url;
+    try { url = await crSigned(it.path); } catch (e) { body.innerHTML = `<p class="error">Couldn’t open the file: ${esc(e.message)}</p>`; return; }
+    if (/pdf$/i.test(it.mime || it.path)) crPdf(body, url, markDone);
+    else if (/^image\//.test(it.mime || '') || /\.(png|jpe?g|webp|gif)$/i.test(it.path)) { body.innerHTML = `<img class="cr-img" src="${esc(url)}" alt="${esc(it.title)}">`; markDone(); }
+    else { body.innerHTML = `<p><a class="refresh cr-open" href="${esc(url)}" target="_blank" rel="noopener">Download ${esc(it.name || 'the file')}</a></p><p class="muted small">PowerPoint files can’t be shown inside the site. Open it, go through it, then press I’ve finished.</p>`; finishBtn(); }
+  } else if (it.kind === 'quiz') {
+    crQuiz(el, body, dept, c, it);
+  } else if (it.kind === 'eval') {
+    const ev = (c.evaluations || []).find((x) => x.item_id === it.id);
+    body.innerHTML = ev ? crEvalResult(it, ev) : `<p class="muted">An assessor will observe you and fill in this evaluation. You’ll see the result here.</p>
+      <ul class="cr-comps">${(it.competencies || []).map((k) => `<li>${esc(k.text)}</li>`).join('')}</ul>`;
+    if (c.can_assess) body.insertAdjacentHTML('beforeend', '<p class="muted small">Assessors: open the Progress tab to evaluate someone.</p>');
+  }
+}
+
+// YouTube: watched to the end counts. Falls back to "I've finished" if the player can't load.
+function crYouTube(elId, vid, onEnd, fallback) {
+  const make = () => {
+    try {
+      // eslint-disable-next-line no-new
+      new window.YT.Player(elId, { videoId: vid, playerVars: { rel: 0, modestbranding: 1 }, events: { onStateChange: (e) => { if (e.data === 0) onEnd(); } } });
+    } catch { fallback(); }
+  };
+  if (window.YT && window.YT.Player) return make();
+  const prev = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = () => { if (prev) prev(); make(); };
+  if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; s.onerror = fallback; document.head.append(s);
+  }
+  setTimeout(() => { if (!(window.YT && window.YT.Player)) fallback(); }, 8000);
+}
+
+// PDF slides in our own viewer (pdf.js, loaded once): arrows, keys and swipe; done at the last page.
+let crPdfLib = null;
+function crLoadPdfJs() {
+  if (crPdfLib) return crPdfLib;
+  crPdfLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = rej; document.head.append(s);
+  });
+  return crPdfLib;
+}
+async function crPdf(box, url, onLast) {
+  box.innerHTML = '<div class="cr-pdf"><canvas></canvas></div><div class="cr-pager"><button type="button" class="ghost small-btn" data-p="-1">‹ Back</button><span class="bar"><i></i></span><span class="muted small cr-pno"></span><button type="button" class="refresh small-btn" data-p="1">Next ›</button></div>';
+  let lib;
+  try { lib = await crLoadPdfJs(); } catch { box.innerHTML = `<p><a class="refresh cr-open" href="${esc(url)}" target="_blank" rel="noopener">Open the PDF</a></p>`; return; }
+  const doc = await lib.getDocument(url).promise;
+  const canvas = box.querySelector('canvas'), wrap = box.querySelector('.cr-pdf');
+  let page = 1, busy = false;
+  async function draw() {
+    if (busy) return; busy = true;
+    const p = await doc.getPage(page);
+    const w = Math.min(wrap.clientWidth || 800, 1200), vp0 = p.getViewport({ scale: 1 }), scale = (w / vp0.width) * (window.devicePixelRatio || 1);
+    const vp = p.getViewport({ scale });
+    canvas.width = vp.width; canvas.height = vp.height; canvas.style.width = '100%';
+    await p.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    box.querySelector('.cr-pno').textContent = `Page ${page} of ${doc.numPages}`;
+    box.querySelector('.bar i').style.width = `${Math.round((page / doc.numPages) * 100)}%`;
+    box.querySelector('[data-p="-1"]').disabled = page === 1;
+    box.querySelector('[data-p="1"]').disabled = page === doc.numPages;
+    if (page === doc.numPages) onLast();
+    busy = false;
+  }
+  const go = (d) => { const n = Math.max(1, Math.min(doc.numPages, page + d)); if (n !== page) { page = n; draw(); } };
+  box.querySelector('.cr-pager').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) go(+b.dataset.p); };
+  const key = (e) => { if (!box.isConnected) return document.removeEventListener('keydown', key); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); };
+  document.addEventListener('keydown', key);
+  let x0 = null;
+  wrap.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  wrap.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; });
+  draw();
+}
+
+// ---------- quizzes and exams ----------
+async function crQuiz(el, body, dept, c, it) {
+  const tries = (c.attempts || []).filter((a) => a.item_id === it.id);
+  const last = tries[tries.length - 1];
+  const intro = (extra = '') => `<div class="cr-quiz-intro">
+      <p>${it.exam ? 'Exam' : 'Quiz'} · ${it.question_count || 0} questions · pass mark ${it.pass_pct ?? 80}% · ${it.tries ?? 3} ${(it.tries ?? 3) === 1 ? 'try' : 'tries'}${it.time_limit_min ? ` · ${it.time_limit_min} minutes` : ''}</p>
+      ${extra}${c.mine && !c.lock ? '<button type="button" class="refresh" id="cr-start">Start</button>' : ''}</div>`;
+  if (last && last.status === 'marking') {
+    body.innerHTML = `<div class="cr-held"><strong>Submitted.</strong><span>Results usually within ${esc(it.results_in || 'a few days')}. You’ll get a DM from CareBeyond Helper when it’s marked.</span></div>`;
+    return;
+  }
+  if (last && last.status === 'marked') {
+    const { data: r } = await sb.rpc('quiz_result', { attempt_id: last.id });
+    body.innerHTML = crResultHtml(r) + (r && !r.passed ? intro() : '');
+  } else if (last && last.status === 'in_progress') {
+    body.innerHTML = intro('<p class="muted small">You have a try in progress. Your answers were saved.</p>').replace('>Start<', '>Carry on<');
+  } else body.innerHTML = intro();
+  const sb2 = body.querySelector('#cr-start');
+  if (!sb2) return;
+  sb2.onclick = async () => {
+    sb2.disabled = true;
+    const { data: q, error } = await sb.rpc('quiz_start', { cid: c.id, iid: it.id });
+    if (error) { sb2.disabled = false; return body.insertAdjacentHTML('beforeend', `<p class="error">${esc(error.message)}</p>`); }
+    crQuizRun(body, q, async () => { const { data: v } = await sb.rpc('course_view', { cid: c.id }); if (v) { Object.assign(c, v); } });
+  };
+}
+function crResultHtml(r) {
+  if (!r) return '';
+  if (r.status === 'marking') return `<div class="cr-held"><strong>Submitted.</strong><span>Results usually within ${esc(r.results_in || 'a few days')}.</span></div>`;
+  return `<div class="cr-score"><b>${r.score} / ${r.max_score}</b><span class="cr-pill ${r.passed ? 'done' : 'late'}">${r.passed ? 'Passed' : 'Not passed'}</span><span class="muted">Pass mark ${r.pass_pct}%</span></div>
+    ${r.review ? `<div class="cr-review">${r.review.map((q, i) => {
+      const opts = (q.options || []), key = new Set((q.key || []).map(String)), ans = Array.isArray(q.answer) ? q.answer.map(String) : q.answer != null ? [String(q.answer)] : [];
+      return `<div class="cr-rq"><div class="cr-rq-h"><strong>${i + 1}. ${esc(q.text)}</strong><span class="muted small">${q.got ?? 0} / ${q.points}</span></div>
+        ${opts.length ? `<ul>${opts.map((o) => `<li class="${key.has(String(o.id)) ? 'right' : ans.includes(String(o.id)) ? 'wrong' : ''}">${esc(o.text)}${key.has(String(o.id)) ? ' ✓' : ''}${ans.includes(String(o.id)) ? ' <em>(your answer)</em>' : ''}</li>`).join('')}</ul>`
+          : `<p class="muted small">Your answer: ${esc(q.answer || '–')}${(q.accepted || []).length ? ` · Accepted: ${esc(q.accepted.join(', '))}` : ''}</p>`}</div>`;
+    }).join('')}</div>` : ''}`;
+}
+function crQuizRun(body, q, after) {
+  const answers = Object.assign({}, q.answers || {});
+  const qs = q.questions || [];
+  let saveT;
+  const save = () => { clearTimeout(saveT); saveT = setTimeout(() => sb.rpc('quiz_save', { attempt_id: q.attempt_id, answers }), 600); };
+  const ends = q.time_limit_min ? new Date(new Date(q.started_at).getTime() + q.time_limit_min * 60000) : null;
+  let n = 0;
+  body.innerHTML = `<form class="cr-quiz" id="cr-quiz">${ends ? '<p class="cr-timer" id="cr-timer"></p>' : ''}${qs.map((x) => {
+    if (x.type === 'section') return `<h3 class="cr-qsec">${esc(x.text)}</h3>`;
+    n += 1;
+    const name = 'q-' + x.id, a = answers[x.id];
+    let inp;
+    if (x.type === 'single' || x.type === 'truefalse') inp = (x.options || []).map((o) => `<label class="cr-opt"><input type="radio" name="${esc(name)}" value="${esc(o.id)}"${a === o.id ? ' checked' : ''}><span>${esc(o.text)}</span></label>`).join('');
+    else if (x.type === 'multi') inp = (x.options || []).map((o) => `<label class="cr-opt"><input type="checkbox" name="${esc(name)}" value="${esc(o.id)}"${Array.isArray(a) && a.includes(o.id) ? ' checked' : ''}><span>${esc(o.text)}</span></label>`).join('') + '<span class="muted small">Tick every right answer.</span>';
+    else if (x.type === 'short') inp = `<input class="cr-text" name="${esc(name)}" maxlength="300" value="${esc(a || '')}">`;
+    else inp = `<textarea class="cr-text" name="${esc(name)}" rows="5" maxlength="5000">${esc(a || '')}</textarea>`;
+    return `<fieldset class="cr-q" data-q="${esc(x.id)}" data-type="${esc(x.type)}"><legend><span class="cr-qn">${n}.</span> ${esc(x.text)} <span class="muted small">(${x.points} ${x.points === 1 ? 'point' : 'points'})</span></legend>${inp}</fieldset>`;
+  }).join('')}
+    <p class="error" id="cr-qerr" hidden></p>
+    <div class="cr-step-foot"><span class="muted small">Answers save as you go.</span><span class="sp"></span><button type="submit" class="refresh">Send answers</button></div></form>`;
+  const form = body.querySelector('#cr-quiz');
+  form.addEventListener('input', (e) => {
+    const fs = e.target.closest('[data-q]'); if (!fs) return;
+    const id = fs.dataset.q, ty = fs.dataset.type;
+    if (ty === 'multi') answers[id] = [...fs.querySelectorAll('input:checked')].map((x) => x.value);
+    else if (ty === 'single' || ty === 'truefalse') answers[id] = fs.querySelector('input:checked')?.value;
+    else answers[id] = e.target.value;
+    save();
+  });
+  let timer;
+  if (ends) {
+    const tick = () => { const s = Math.max(0, Math.round((ends - Date.now()) / 1000)); const t = body.querySelector('#cr-timer'); if (!t) return clearInterval(timer);
+      t.textContent = `Time left: ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; if (s === 0) { clearInterval(timer); form.requestSubmit(); } };
+    tick(); timer = setInterval(tick, 1000);
+  }
+  form.onsubmit = async (e) => {
+    e.preventDefault(); clearTimeout(saveT); clearInterval(timer);
+    const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+    const { data: r, error } = await sb.rpc('quiz_submit', { attempt_id: q.attempt_id, answers });
+    if (error) { btn.disabled = false; const p = form.querySelector('#cr-qerr'); p.textContent = error.message; p.hidden = false; return; }
+    body.innerHTML = crResultHtml(r);
+    after();
+  };
+}
+
+// ---------- practical evaluations ----------
+function crEvalResult(it, ev) {
+  return `<div class="cr-score"><span class="cr-pill ${ev.passed ? 'done' : 'due'}">${ev.passed ? 'Passed' : 'Not passed yet'}</span><span class="muted">Assessed by ${esc(cleanName(ev.assessor || ''))}${ev.submitted_at ? ' · ' + esc(crDate(ev.submitted_at)) : ''}</span></div>
+    <div class="cr-table-wrap"><table class="cr-table"><thead><tr><th>Competency</th><th>Level</th><th>Comment</th></tr></thead><tbody>
+    ${(it.competencies || []).map((k) => { const lv = +(ev.levels || {})[k.id]; return `<tr><td>${esc(k.text)}</td><td><span class="cr-lvl l${lv}">${esc(CR_LEVELS[lv - 1] || '–')}</span></td><td class="muted">${esc((ev.comments || {})[k.id] || '')}</td></tr>`; }).join('')}
+    </tbody></table></div>${(ev.comments || {})._overall ? `<p class="cr-overall">${esc(ev.comments._overall)}</p>` : ''}`;
+}
+async function crEvalForm(el, dept, c, it, who) {
+  const { data: ex } = await sb.rpc('course_eval_get', { cid: c.id, iid: it.id, who });
+  const { data: rows } = await sb.rpc('course_progress_report', { cid: c.id });
+  const person = (rows || []).find((r) => r.discord_id === who) || {};
+  const levels = Object.assign({}, ex && ex.status === 'draft' ? ex.levels : {}), comments = Object.assign({}, ex && ex.status === 'draft' ? ex.comments : {});
+  const done = ex && ex.status === 'submitted';
+  const need = it.pass_level || 3;
+  el.innerHTML = `<button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>${esc(c.title)}</button>
+    <section class="card cr-step"><div class="cr-eval-h"><h2 class="cr-step-h">${esc(it.title)}</h2><span class="cr-pill aud">${esc(cleanName(person.name || who))}${person.rank ? ' · ' + esc(person.rank) : ''}</span></div>
+    ${done ? crEvalResult(it, Object.assign({ assessor: ex.assessor_name }, ex)) : `
+    <div class="cr-table-wrap"><table class="cr-table cr-rubric"><thead><tr><th>Competency</th>${CR_LEVELS.map((l) => `<th>${l}</th>`).join('')}</tr></thead><tbody>
+      ${(it.competencies || []).map((k) => `<tr data-k="${esc(k.id)}"><td><strong>${esc(k.text)}</strong><textarea class="cr-cmt" rows="1" maxlength="500" placeholder="Comment (optional)">${esc(comments[k.id] || '')}</textarea></td>
+        ${CR_LEVELS.map((l, i) => `<td><button type="button" class="cr-lvl-btn l${i + 1}${+levels[k.id] === i + 1 ? ' on' : ''}" data-lv="${i + 1}" aria-pressed="${+levels[k.id] === i + 1}">${l}</button></td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    <label class="f"><span>Overall comment <em>(optional)</em></span><textarea id="cr-overall" rows="2" maxlength="1000">${esc(comments._overall || '')}</textarea></label>
+    <p class="error" id="cr-everr" hidden></p>
+    <div class="cr-step-foot"><span id="cr-evstate" class="cr-pill due"></span><span class="sp"></span><button type="button" class="ghost" id="cr-evsave">Save as draft</button><button type="button" class="refresh" id="cr-evsubmit">Submit report</button></div>`}
+    </section>`;
+  el.querySelector('#cr-back').onclick = () => crCourse(el, dept, c.id, '');
+  if (done) return;
+  const state = () => { const below = (it.competencies || []).filter((k) => !levels[k.id] || +levels[k.id] < need).length; el.querySelector('#cr-evstate').textContent = below ? `Not passed yet: ${below} below ${CR_LEVELS[need - 1]}` : 'Passes'; el.querySelector('#cr-evstate').className = 'cr-pill ' + (below ? 'due' : 'done'); };
+  state();
+  el.onclick = async (e) => {
+    const b = e.target.closest('[data-lv]');
+    if (b) { const k = b.closest('[data-k]').dataset.k; levels[k] = +b.dataset.lv; b.closest('tr').querySelectorAll('[data-lv]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); state(); return; }
+    const sv = e.target.closest('#cr-evsave, #cr-evsubmit');
+    if (!sv) return;
+    el.querySelectorAll('[data-k]').forEach((r) => { comments[r.dataset.k] = r.querySelector('.cr-cmt').value.trim(); });
+    comments._overall = el.querySelector('#cr-overall').value.trim();
+    sv.disabled = true;
+    const { error } = await sb.rpc('course_eval_save', { cid: c.id, iid: it.id, who, levels, comments, submit: sv.id === 'cr-evsubmit', observed_on: null });
+    sv.disabled = false;
+    const er = el.querySelector('#cr-everr');
+    if (error) { er.textContent = error.message; er.hidden = false; return; }
+    if (sv.id === 'cr-evsubmit') return crCourse(el, dept, c.id, '');
+    sv.textContent = 'Saved';
+  };
+}
+
+// ---------- marking queue (Assess courses) ----------
+async function crMarking(el, dept) {
+  crSetHash(crRoute(dept, 'marking'));
+  el.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
+  const { data, error } = await sb.rpc('course_marking', { dept });
+  if (error) { el.innerHTML = ''; return liveError(el, error); }
+  const list = data || [];
+  el.innerHTML = `<button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button>
+    ${list.length ? list.map((a) => `<section class="card cr-mark" data-a="${a.id}">
+      <div class="cr-eval-h"><h2 class="cr-step-h">${esc(a.quiz)} <span class="muted small">· ${esc(a.course)}</span></h2><span class="cr-pill aud">${esc(cleanName(a.name))}</span><span class="muted small">Sent ${esc(when(a.submitted_at))}</span></div>
+      ${(a.questions || []).filter((q) => q.type !== 'section').map((q, i) => {
+        const auto = a.marks && q.id in a.marks, ans = (a.answers || {})[q.id];
+        const shown = Array.isArray(ans) ? ans.map((id) => (q.options || []).find((o) => o.id === id)?.text || id).join(', ') : (q.options || []).find((o) => o.id === ans)?.text || ans;
+        return `<div class="cr-rq"><div class="cr-rq-h"><strong>${i + 1}. ${esc(q.text)}</strong><span class="muted small">${q.points ?? 1} pts</span></div>
+          <p class="cr-ans">${esc(shown || '–')}</p>
+          ${auto ? `<p class="muted small">Marked automatically: ${a.marks[q.id]} / ${q.points ?? 1}</p>` : `${q.model ? `<p class="muted small">Model answer: ${esc(q.model)}</p>` : ''}
+            <label class="cr-markin">Mark <input type="number" min="0" max="${q.points ?? 1}" step="0.5" data-mq="${esc(q.id)}" required> / ${q.points ?? 1}</label>`}</div>`;
+      }).join('')}
+      <p class="error" hidden></p>
+      <div class="cr-step-foot"><span class="sp"></span><button type="button" class="refresh" data-submit="${a.id}">Send marks</button></div></section>`).join('')
+    : '<div class="card ma-empty"><strong>Nothing to mark.</strong></div>'}`;
+  el.querySelector('#cr-back').onclick = () => crGrid(el, dept);
+  el.onclick = async (e) => {
+    const b = e.target.closest('[data-submit]'); if (!b) return;
+    const card = b.closest('[data-a]'), marks = {};
+    card.querySelectorAll('[data-mq]').forEach((i) => { if (i.value !== '') marks[i.dataset.mq] = +i.value; });
+    b.disabled = true;
+    const { error: er } = await sb.rpc('course_mark_attempt', { attempt_id: +b.dataset.submit, marks });
+    if (er) { b.disabled = false; const p = card.querySelector('.error'); p.textContent = er.message; p.hidden = false; return; }
+    card.innerHTML = '<p class="cr-markdone">Marked. They’ve been sent their result.</p>';
+  };
+}
+
+// ---------- builders: list ----------
+async function crManage(el, dept) {
+  crSetHash(crRoute(dept, 'manage'));
+  const { data, error } = await sb.rpc('course_admin_list', { dept });
+  if (error) { el.innerHTML = ''; return liveError(el, error); }
+  el.innerHTML = `<div class="cr-bar"><button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button><span class="sp"></span><button type="button" class="refresh" id="cr-new">New course</button></div>
+    <div class="card app-group">${(data || []).map((c) => `<div class="af-row"><div class="af-main"><div class="af-t">${esc(c.title)}</div><div class="af-s">${esc(c.kind || '')}${c.opens_at ? ' · opens ' + esc(crDate(c.opens_at)) : ''}</div></div>
+      <div class="af-pills"><span class="ap-flag ${c.status === 'published' ? 'open' : ''}">${c.status === 'published' ? 'Published' : 'Not published'}</span>${c.has_draft && c.status === 'published' ? '<span class="ap-flag draft">Unpublished changes</span>' : ''}</div>
+      <div class="af-pills"><button type="button" class="ghost small-btn" data-edit="${esc(c.id)}">Edit</button></div></div>`).join('') || '<p class="muted small">No courses yet.</p>'}</div>`;
+  el.querySelector('#cr-back').onclick = () => crGrid(el, dept);
+  el.onclick = async (e) => {
+    const ed = e.target.closest('[data-edit]'); if (ed) return crEditor(el, dept, ed.dataset.edit);
+    if (e.target.closest('#cr-new')) { const { data: id, error: er } = await sb.rpc('course_create', { dept, title: 'New course' }); if (!er) crEditor(el, dept, id); }
+  };
+}
+
+// ---------- builders: the course editor ----------
+// The whole course is one draft document, autosaved (and copied to this browser in case the tab closes);
+// Publish checks it in the database and makes it live.
+async function crEditor(el, dept, cid) {
+  crSetHash(crRoute(dept, 'edit/' + cid));
+  el.innerHTML = '<div class="card"><p class="muted small">Opening the course…</p></div>';
+  const [{ data: d, error }, ranks] = await Promise.all([sb.rpc('course_admin_get', { cid }), crLoadRanks(dept)]);
+  if (error || !d) { el.innerHTML = ''; return liveError(el, error || { message: 'This course no longer exists.' }); }
+  const lkey = 'cbh-coursedraft-' + cid;
+  let draft = JSON.parse(JSON.stringify(d.draft || d.content || {}));
+  let local = null; try { local = JSON.parse(localStorage.getItem(lkey) || 'null'); } catch { /* fine */ }
+  let dirty = false, saving = false, failed = false, savedAt = d.draft_saved_at, saveT;
+  if (local && local.at && (!d.draft_saved_at || new Date(local.at) > new Date(d.draft_saved_at))) { draft = local.draft; dirty = true; }
+  draft.modules = draft.modules || [];
+  let open = null;   // the step being edited: "m:i"
+  el.innerHTML = `
+    <div class="bd-top"><button type="button" class="back inline-back" id="ce-back"><span class="back-ico" aria-hidden="true"></span>Courses</button>
+      <span class="bd-saved" id="ce-saved" aria-live="polite"></span>
+      <span class="bd-acts"><button type="button" class="ghost" id="ce-discard">${d.status === 'published' ? 'Discard changes' : 'Delete draft'}</button><button type="button" class="refresh" id="ce-publish">Publish</button></span></div>
+    <p class="error" id="ce-err" hidden></p>
+    <div class="bd">
+      <div class="app-col">
+        <section class="card bd-title"><input id="ce-t" class="bd-t" maxlength="100" placeholder="Course name" aria-label="Course name">
+          <textarea id="ce-d" class="bd-d" rows="2" maxlength="1000" placeholder="What this course covers (optional)" aria-label="Description"></textarea></section>
+        <div id="ce-mods" class="ce-mods"></div>
+        <button type="button" class="ghost small-btn" id="ce-addmod">+ Module</button>
+      </div>
+      <div class="app-col">
+        <section class="card app-fs bd-side">
+          <h3 class="app-h">Who it’s for</h3>
+          <div class="app-roles" id="ce-aud">${ranks.map((r) => `<label class="app-role"><input type="checkbox" value="${esc(r.id)}"><span>${esc(r.rank_label || r.name)}</span></label>`).join('')}</div>
+          <span class="app-hint">None ticked = everyone in ${esc(dept)}.</span>
+          <label class="f"><span>Kind</span><input id="ce-kind" maxlength="40" list="ce-kinds"><datalist id="ce-kinds"><option value="General skills"><option value="Evaluation course"><option value="Induction"><option value="Promotion"></datalist></label>
+          <label class="f"><span>Opens <em>(optional)</em></span><input id="ce-open" type="date"></label>
+          <label class="f"><span>Due, days after it opens <em>(optional)</em></span><input id="ce-due" type="number" min="1" max="365"></label>
+          <label class="f"><span>Finish first <em>(optional)</em></span><select id="ce-pre"><option value="">Nothing</option>${(d.others || []).map((o) => `<option value="${esc(o.id)}">${esc(o.title)}</option>`).join('')}</select></label>
+          <div class="f"><span>Colour</span><div class="ce-sw" id="ce-sw">${CR_COLOURS.map((cl) => `<button type="button" class="ce-swb" data-col="${cl}" style="background:${cl}" aria-label="Colour ${cl}"></button>`).join('')}<input type="color" id="ce-colour" aria-label="Any colour"></div></div>
+          <p class="app-hint">To pass: every step done, every quiz passed and every evaluation at Standard or above.</p>
+        </section>
+        <div class="bd-danger"><button type="button" class="app-x" id="ce-archive">Remove this course</button></div>
+      </div>
+    </div>`;
+  const $e = (q) => el.querySelector(q);
+  function fillSide() {
+    $e('#ce-t').value = draft.title || ''; $e('#ce-d').value = draft.description || '';
+    $e('#ce-kind').value = draft.kind || ''; $e('#ce-open').value = draft.opens_at ? String(draft.opens_at).slice(0, 10) : '';
+    $e('#ce-due').value = draft.due_days || ''; $e('#ce-pre').value = draft.prereq || '';
+    $e('#ce-aud').querySelectorAll('input').forEach((x) => { x.checked = (draft.audience_ranks || []).includes(x.value); });
+    $e('#ce-colour').value = draft.color || '#2ED3C6';
+    $e('#ce-sw').querySelectorAll('[data-col]').forEach((b) => b.classList.toggle('on', (draft.color || '#2ED3C6').toLowerCase() === b.dataset.col.toLowerCase()));
+  }
+  function drawMods() {
+    $e('#ce-mods').innerHTML = draft.modules.map((m, mi) => `<section class="card ce-mod" data-m="${mi}">
+      <div class="ce-mod-h"><input class="ce-mt" maxlength="120" value="${esc(m.title)}" placeholder="Module title" aria-label="Module title">
+        <span class="bd-btns"><button type="button" data-mup="${mi}"${mi ? '' : ' disabled'} aria-label="Move module up">↑</button><button type="button" data-mrm="${mi}" aria-label="Remove module">×</button></span></div>
+      <div class="ce-items">${(m.items || []).map((it, ii) => `<div class="ce-item${open === mi + ':' + ii ? ' open' : ''}" data-i="${mi}:${ii}">
+        <button type="button" class="ce-item-h" data-toggle="${mi}:${ii}"><span class="cr-ico" aria-hidden="true">${esc(CR_ICON[it.kind])}</span><span class="ce-item-t">${esc(it.title || 'Untitled')}</span><span class="muted small">${esc(CR_KINDS[it.kind])}</span></button>
+        <span class="bd-btns"><button type="button" data-up="${mi}:${ii}"${ii ? '' : ' disabled'} aria-label="Move up">↑</button><button type="button" data-dn="${mi}:${ii}"${ii < m.items.length - 1 ? '' : ' disabled'} aria-label="Move down">↓</button><button type="button" data-rm="${mi}:${ii}" aria-label="Remove step">×</button></span>
+        ${open === mi + ':' + ii ? `<div class="ce-item-body">${crItemEditor(it)}</div>` : ''}
+      </div>`).join('') || '<p class="muted small">No steps yet.</p>'}</div>
+      <div class="addmenu">${Object.entries(CR_KINDS).map(([k, l]) => `<button type="button" class="ghost small-btn" data-add="${mi}:${k}">+ ${l}</button>`).join('')}</div>
+    </section>`).join('');
+  }
+  const status = (t, cls = '') => { const s = $e('#ce-saved'); if (s) { s.textContent = t; s.className = 'bd-saved ' + cls; } };
+  const showSaved = () => (failed ? status('Couldn’t save. Trying again…', 'bad') : dirty || saving ? status('Saving…') : status(savedAt ? `Draft saved · ${when(savedAt)}` : d.status === 'published' ? 'No changes since it was published' : 'Not published yet', savedAt ? 'ok' : ''));
+  function changed() {
+    dirty = true; failed = false;
+    try { localStorage.setItem(lkey, JSON.stringify({ at: new Date().toISOString(), draft })); } catch { /* fine */ }
+    showSaved(); clearTimeout(saveT); saveT = setTimeout(save, 800);
+  }
+  async function save() {
+    if (!dirty || saving) return;
+    saving = true; dirty = false;
+    const { data: t, error: er } = await sb.rpc('course_draft_save', { cid, draft });
+    saving = false;
+    if (er) { failed = true; dirty = true; showSaved(); clearTimeout(saveT); saveT = setTimeout(save, 4000); return; }
+    savedAt = t; if (!dirty) { try { localStorage.removeItem(lkey); } catch { /* fine */ } }
+    showSaved(); if (dirty) { clearTimeout(saveT); saveT = setTimeout(save, 800); }
+  }
+  const flush = async () => { clearTimeout(saveT); while (saving) await new Promise((r) => setTimeout(r, 100)); if (dirty) await save(); };
+  const itemAt = (key) => { const [mi, ii] = key.split(':').map(Number); return draft.modules[mi].items[ii]; };
+
+  el.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.id === 'ce-t') draft.title = t.value;
+    else if (t.id === 'ce-d') draft.description = t.value;
+    else if (t.id === 'ce-kind') draft.kind = t.value;
+    else if (t.id === 'ce-due') draft.due_days = t.value ? Math.max(1, Math.min(365, +t.value)) : null;
+    else if (t.id === 'ce-colour') { draft.color = t.value.toUpperCase(); fillSide(); }
+    else if (t.classList.contains('ce-mt')) draft.modules[+t.closest('[data-m]').dataset.m].title = t.value;
+    else if (t.dataset.f) { crItemInput(itemAt(t.closest('[data-i]').dataset.i), t); if (t.dataset.redraw) drawMods(); }
+    else return;
+    changed();
+  });
+  el.addEventListener('change', async (e) => {
+    const t = e.target;
+    if (t.closest('#ce-aud')) draft.audience_ranks = [...$e('#ce-aud').querySelectorAll('input:checked')].map((x) => x.value);
+    else if (t.id === 'ce-open') draft.opens_at = t.value ? new Date(t.value + 'T00:00:00').toISOString() : null;
+    else if (t.id === 'ce-pre') draft.prereq = t.value || null;
+    else if (t.type === 'file' && t.dataset.upload) {
+      const it = itemAt(t.closest('[data-i]').dataset.i), f = t.files[0]; if (!f) return;
+      const okType = ['application/pdf', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(f.type);
+      const note = t.closest('.ce-item-body').querySelector('.ce-upnote');
+      if (!okType) { note.textContent = 'Use a PDF, PowerPoint (.pptx) or image (PNG, JPG, WebP, GIF).'; return; }
+      if (f.size > 50 * 1024 * 1024) { note.textContent = 'That file is over 50 MB.'; return; }
+      const safe = f.name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+/, '').slice(-80) || 'file';
+      const path = `${crDept(dept).id}/${cid}/${Math.random().toString(36).slice(2, 8)}-${safe}`;
+      note.textContent = 'Uploading…';
+      const { error: er } = await sb.storage.from('course-files').upload(path, f, { contentType: f.type, upsert: false });
+      if (er) { note.textContent = 'Upload failed: ' + er.message; return; }
+      Object.assign(it, { path, mime: f.type, name: f.name }); if (!it.title) it.title = f.name.replace(/\.[^.]+$/, '');
+      drawMods();
+    } else if (t.dataset.f) { crItemInput(itemAt(t.closest('[data-i]').dataset.i), t); drawMods(); }
+    else return;
+    changed();
+  });
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.dataset.addopt) { e.preventDefault(); e.target.closest('.ce-item-body').querySelector('[data-optadd]')?.click(); }
+  });
+  el.onclick = async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    const ds = t.dataset;
+    if (t.id === 'ce-back') { await flush(); return crGrid(el, dept); }
+    if (ds.col) { draft.color = ds.col; fillSide(); return changed(); }
+    if (t.id === 'ce-addmod') { draft.modules.push({ id: crUid('m'), title: `Module ${draft.modules.length + 1}`, items: [] }); drawMods(); return changed(); }
+    if (ds.mup) { const i = +ds.mup; [draft.modules[i - 1], draft.modules[i]] = [draft.modules[i], draft.modules[i - 1]]; drawMods(); return changed(); }
+    if (ds.mrm) { if (draft.modules[+ds.mrm].items.length && !t.classList.contains('confirm')) { t.classList.add('confirm'); t.textContent = '?'; t.title = 'Tap again to remove the module and its steps'; return; } draft.modules.splice(+ds.mrm, 1); drawMods(); return changed(); }
+    if (ds.add) { const [mi, k] = ds.add.split(':'); const it = crNewItem(k); draft.modules[+mi].items.push(it); open = `${mi}:${draft.modules[+mi].items.length - 1}`; drawMods(); return changed(); }
+    if (ds.toggle) { open = open === ds.toggle ? null : ds.toggle; return drawMods(); }
+    if (ds.up || ds.dn) { const [mi, ii] = (ds.up || ds.dn).split(':').map(Number), to = ii + (ds.up ? -1 : 1), arr = draft.modules[mi].items; [arr[ii], arr[to]] = [arr[to], arr[ii]]; open = null; drawMods(); return changed(); }
+    if (ds.rm) { const [mi, ii] = ds.rm.split(':').map(Number); draft.modules[mi].items.splice(ii, 1); open = null; drawMods(); return changed(); }
+    const key = t.closest('[data-i]')?.dataset.i;
+    if (key && crItemClick(itemAt(key), ds)) { drawMods(); return changed(); }
+    if (t.id === 'ce-publish') {
+      const er = $e('#ce-err'); er.hidden = true; t.disabled = true; await flush();
+      const { error: pe } = await sb.rpc('course_publish', { cid }); t.disabled = false;
+      if (pe) { er.textContent = pe.message; er.hidden = false; return; }
+      try { localStorage.removeItem(lkey); } catch { /* fine */ }
+      return crCourse(el, dept, cid, '');
+    }
+    if (t.id === 'ce-discard') { t.outerHTML = '<span class="bd-confirm">Sure? <button type="button" class="ghost small-btn danger-text" id="ce-discard-yes">Yes</button><button type="button" class="ghost small-btn" id="ce-discard-no">Keep</button></span>'; return; }
+    if (t.id === 'ce-discard-no') return crEditor(el, dept, cid);
+    if (t.id === 'ce-discard-yes') { clearTimeout(saveT); dirty = false; try { localStorage.removeItem(lkey); } catch { /* fine */ } await sb.rpc('course_discard', { cid }); return d.status === 'published' ? crEditor(el, dept, cid) : crGrid(el, dept); }
+    if (t.id === 'ce-archive') { t.outerHTML = '<span class="bd-confirm">Remove the course and its files? <button type="button" class="ghost small-btn danger-text" id="ce-arch-yes">Remove</button><button type="button" class="ghost small-btn" id="ce-arch-no">Keep</button></span>'; return; }
+    if (t.id === 'ce-arch-no') return crEditor(el, dept, cid);
+    if (t.id === 'ce-arch-yes') {
+      const folder = `${crDept(dept).id}/${cid}`;
+      const { data: files } = await sb.storage.from('course-files').list(folder, { limit: 1000 });
+      if (files && files.length) await sb.storage.from('course-files').remove(files.map((f) => `${folder}/${f.name}`));
+      const { error: ae } = await sb.rpc('course_archive', { cid });
+      if (ae) { const er = $e('#ce-err'); er.textContent = ae.message; er.hidden = false; return; }
+      return crGrid(el, dept);
+    }
+  };
+  fillSide(); drawMods(); showSaved();
+  if (dirty) { status('Recovered unsaved changes from this browser. Saving…'); save(); }
+}
+
+function crNewItem(kind) {
+  const it = { id: crUid('s'), kind, title: '' };
+  if (kind === 'lesson') it.body = '';
+  if (['slides', 'link', 'video'].includes(kind)) it.url = '';
+  if (kind === 'quiz') Object.assign(it, { exam: false, pass_pct: 80, tries: 3, wait_hours: 0, reveal: 'after', results_in: '3 days', questions: [crNewQ('single')] });
+  if (kind === 'eval') Object.assign(it, { pass_level: 3, competencies: [{ id: crUid('k'), text: '' }] });
+  return it;
+}
+function crNewQ(type) {
+  const q = { id: crUid('q'), type, text: '', points: 1 };
+  if (type === 'single' || type === 'multi') { q.options = [{ id: crUid('o'), text: '' }, { id: crUid('o'), text: '' }]; q.key = []; }
+  if (type === 'truefalse') { q.options = [{ id: 'true', text: 'True' }, { id: 'false', text: 'False' }]; q.key = ['true']; }
+  if (type === 'short') q.accepted = [];
+  if (type === 'long') q.model = '';
+  return q;
+}
+const CR_QTYPES = [['single', 'One answer'], ['multi', 'Several answers'], ['truefalse', 'True or false'], ['short', 'Short answer'], ['long', 'Written answer (marked by a person)']];
+
+// The editor for one step (data-f fields are read by crItemInput).
+function crItemEditor(it) {
+  const f = (name, label, val, extra = '') => `<label class="f"><span>${label}</span><input data-f="${name}" value="${esc(val ?? '')}" ${extra}></label>`;
+  let x = f('title', 'Title', it.title, 'maxlength="160"');
+  if (it.kind === 'lesson') x += `<label class="f"><span>Lesson <em>(# heading, - list, **bold**, [link](https://…), ![picture](https://…))</em></span><textarea data-f="body" rows="10" maxlength="60000">${esc(it.body || '')}</textarea></label>`;
+  if (it.kind === 'slides') x += f('url', 'Google Slides link', it.url, 'placeholder="https://docs.google.com/presentation/d/…" inputmode="url"') + '<p class="app-hint">The deck must be shared as “Anyone with the link can view”. For a private deck, export it to PDF and add it as a File instead.</p>';
+  if (it.kind === 'video') x += f('url', 'YouTube link', it.url, 'placeholder="https://www.youtube.com/watch?v=…" inputmode="url"');
+  if (it.kind === 'link') x += f('url', 'Link', it.url, 'placeholder="https://…" inputmode="url"') + '<p class="app-hint">Google Docs links show inside the site when shared “Anyone with the link”. Members press I’ve finished.</p>';
+  if (it.kind === 'file') x += `<div class="f"><span>File <em>(PDF, PowerPoint .pptx or image, up to 50 MB)</em></span><input type="file" data-upload="1" accept=".pdf,.pptx,image/png,image/jpeg,image/webp,image/gif"><span class="app-hint ce-upnote">${it.path ? 'Uploaded: ' + esc(it.name || it.path.split('/').pop()) : 'PDFs show slide by slide and count when they reach the last page. PowerPoints download (export to PDF to show them in the site).'}</span></div>`;
+  if (it.kind === 'eval') {
+    x += `<label class="f"><span>Pass level</span><select data-f="pass_level">${CR_LEVELS.map((l, i) => `<option value="${i + 1}"${(it.pass_level || 3) === i + 1 ? ' selected' : ''}>${l} or above</option>`).join('')}</select></label>
+      <div class="f"><span>Competencies</span>${(it.competencies || []).map((k, i) => `<div class="ce-row"><input data-f="comp" data-k="${i}" value="${esc(k.text)}" maxlength="200" placeholder="e.g. Records evidence"><button type="button" class="app-x" data-comprm="${i}">Remove</button></div>`).join('')}
+      <button type="button" class="ghost small-btn" data-compadd="1">+ Competency</button></div>`;
+  }
+  if (it.kind === 'quiz') {
+    x += `<div class="ce-qset">
+      <label class="app-switch"><input type="checkbox" data-f="exam"${it.exam ? ' checked' : ''}> Formal exam</label>
+      <label class="f"><span>Pass mark %</span><input type="number" min="0" max="100" data-f="pass_pct" value="${it.pass_pct ?? 80}"></label>
+      <label class="f"><span>Tries</span><input type="number" min="1" max="20" data-f="tries" value="${it.tries ?? 3}"></label>
+      <label class="f"><span>Wait between tries (hours)</span><input type="number" min="0" max="720" data-f="wait_hours" value="${it.wait_hours ?? 0}"></label>
+      <label class="f"><span>Time limit (minutes, optional)</span><input type="number" min="1" max="600" data-f="time_limit_min" value="${it.time_limit_min ?? ''}"></label>
+      <label class="f"><span>Show answers</span><select data-f="reveal"><option value="now"${it.reveal === 'now' ? ' selected' : ''}>Straight after (auto-marked)</option><option value="after"${(it.reveal || 'after') === 'after' ? ' selected' : ''}>Once marked</option><option value="never"${it.reveal === 'never' ? ' selected' : ''}>Never</option></select></label>
+      <label class="f"><span>“Results usually within”</span><input data-f="results_in" maxlength="40" value="${esc(it.results_in || '3 days')}"></label></div>
+      <p class="app-hint">If any answer needs a person to mark it, the whole result is held until it’s marked. Marking happens under Courses › Marking.</p>
+      <div class="ce-qs">${(it.questions || []).map((q, qi) => crQEditor(q, qi)).join('')}</div>
+      <div class="addmenu">${CR_QTYPES.map(([t, l]) => `<button type="button" class="ghost small-btn" data-qadd="${t}">+ ${l}</button>`).join('')}<button type="button" class="ghost small-btn" data-qadd="section">+ Section</button></div>`;
+  }
+  return x;
+}
+function crQEditor(q, qi) {
+  if (q.type === 'section') return `<div class="ce-q sec" data-q="${qi}"><input data-f="qtext" value="${esc(q.text)}" placeholder="Section title" maxlength="200"><span class="bd-btns"><button type="button" data-qup="${qi}"${qi ? '' : ' disabled'}>↑</button><button type="button" data-qrm="${qi}">×</button></span></div>`;
+  const opts = q.options || [];
+  return `<div class="ce-q" data-q="${qi}">
+    <div class="ce-q-h"><span class="ce-qt">${esc((CR_QTYPES.find(([t]) => t === q.type) || [])[1] || q.type)}</span><label class="ce-pts">Points <input type="number" min="0" max="100" step="0.5" data-f="qpoints" value="${q.points ?? 1}"></label>
+      <span class="bd-btns"><button type="button" data-qup="${qi}"${qi ? '' : ' disabled'} aria-label="Move up">↑</button><button type="button" data-qrm="${qi}" aria-label="Remove question">×</button></span></div>
+    <textarea data-f="qtext" rows="2" maxlength="2000" placeholder="Question">${esc(q.text)}</textarea>
+    ${['single', 'multi', 'truefalse'].includes(q.type) ? `<div class="ce-opts">${opts.map((o, oi) => `<div class="ce-opt"><button type="button" class="ce-right${(q.key || []).includes(o.id) ? ' on' : ''}" data-right="${oi}" data-qi="${qi}" aria-pressed="${(q.key || []).includes(o.id)}" title="Right answer">✓</button>
+        ${q.type === 'truefalse' ? `<span>${esc(o.text)}</span>` : `<input data-f="opt" data-o="${oi}" value="${esc(o.text)}" maxlength="500" placeholder="Choice ${oi + 1}"><button type="button" class="app-x" data-optrm="${oi}" data-qi="${qi}">Remove</button>`}</div>`).join('')}
+      ${q.type === 'truefalse' ? '' : `<button type="button" class="ghost small-btn" data-optadd="1" data-qi="${qi}">+ Choice</button>`}<span class="app-hint">Tick the right answer${q.type === 'multi' ? 's' : ''} (the answer key).</span></div>` : ''}
+    ${q.type === 'short' ? `<label class="f"><span>Accepted answers <em>(comma separated; leave empty for a person to mark)</em></span><input data-f="accepted" value="${esc((q.accepted || []).join(', '))}" maxlength="500"></label>` : ''}
+    ${q.type === 'long' ? `<label class="f"><span>Model answer for markers <em>(optional, never shown to candidates)</em></span><textarea data-f="model" rows="2" maxlength="2000">${esc(q.model || '')}</textarea></label>` : ''}
+  </div>`;
+}
+function crItemInput(it, t) {
+  const f = t.dataset.f, qi = t.closest('[data-q]') ? +t.closest('[data-q]').dataset.q : null, q = qi != null ? it.questions[qi] : null;
+  const num = (v) => (v === '' ? null : +v);
+  switch (f) {
+    case 'title': case 'body': case 'url': case 'results_in': case 'reveal': it[f] = t.value; break;
+    case 'exam': it.exam = t.checked; break;
+    case 'pass_pct': case 'tries': case 'wait_hours': case 'time_limit_min': it[f] = num(t.value); break;
+    case 'pass_level': it.pass_level = +t.value; break;
+    case 'comp': it.competencies[+t.dataset.k].text = t.value; break;
+    case 'qtext': q.text = t.value; break;
+    case 'qpoints': q.points = num(t.value) ?? 1; break;
+    case 'opt': q.options[+t.dataset.o].text = t.value; break;
+    case 'accepted': q.accepted = t.value.split(',').map((s) => s.trim()).filter(Boolean); break;
+    case 'model': q.model = t.value; break;
+    default: break;
+  }
+}
+// Buttons inside a step's editor; true = something changed.
+function crItemClick(it, ds) {
+  if (ds.compadd) { it.competencies.push({ id: crUid('k'), text: '' }); return true; }
+  if (ds.comprm) { it.competencies.splice(+ds.comprm, 1); return true; }
+  if (ds.qadd) { it.questions.push(ds.qadd === 'section' ? { id: crUid('q'), type: 'section', text: '' } : crNewQ(ds.qadd)); return true; }
+  if (ds.qup) { const i = +ds.qup; [it.questions[i - 1], it.questions[i]] = [it.questions[i], it.questions[i - 1]]; return true; }
+  if (ds.qrm) { it.questions.splice(+ds.qrm, 1); return true; }
+  if (ds.right || ds.optadd || ds.optrm) {
+    const q = it.questions[+ds.qi];
+    if (!q) return false;
+    if (ds.optadd) { q.options.push({ id: crUid('o'), text: '' }); return true; }
+    if (ds.optrm) { const o = q.options.splice(+ds.optrm, 1)[0]; q.key = (q.key || []).filter((k) => k !== o.id); return true; }
+    const o = q.options[+ds.right];
+    if (q.type === 'multi') q.key = (q.key || []).includes(o.id) ? q.key.filter((k) => k !== o.id) : [...(q.key || []), o.id];
+    else q.key = [o.id];
+    return true;
+  }
+  return false;
+}
+
+// ---------- My courses (sidebar "My stuff") ----------
+// One department: its Courses tab. Several: #courses lists my courses from each of them.
+const crMyDepts = () => DEPARTMENTS.filter((d) => crMember(d.name));
+function crMyCoursesHref() {
+  const ds = crMyDepts();
+  return ds.length === 1 ? `#directors/${ds[0].id}/courses` : ds.length > 1 ? '#courses' : null;
+}
+PAGES.push({ id: 'courses', aud: 'everyone', title: 'My courses', icon: 'graduation-cap', layout: 'mycourses' });
+LIVE.mycourses = async (body) => {
+  const ds = crMyDepts();
+  if (ds.length === 1) { location.replace(`#directors/${ds[0].id}/courses`); return; }
+  body.innerHTML = '<div class="card"><p class="muted small">Loading your courses…</p></div>';
+  const lists = await Promise.all(ds.map(async (d) => { await crLoadRanks(d.name); return { d, list: ((await sb.rpc('course_list', { dept: d.name })).data || []).filter((c) => c.mine) }; }));
+  const any = lists.some((x) => x.list.length);
+  body.innerHTML = any ? lists.filter((x) => x.list.length).map(({ d, list }) => `<section class="cr-sec"><h2 class="ma-day">${esc(d.name)}</h2><div class="cr-grid">${list.map((c) => {
+      const pct = c.counts && c.counts.total ? Math.round((c.counts.done / c.counts.total) * 100) : 0;
+      return `<a class="cr-block${c.lock ? ' locked' : ''}" href="#directors/${d.id}/courses/${esc(c.id)}" style="--c:${esc(c.color || '#2ED3C6')};--dept:${d.color}">
+        <span class="cr-top"><span class="cr-kind">${esc(c.kind || 'Course')}</span></span>
+        <span class="cr-body"><span class="cr-pills">${crAudience(c, d.name)}${c.complete ? '<span class="cr-pill done">Completed</span>' : c.lock === 'date' ? `<span class="cr-pill soon">Opens ${esc(crDate(c.opens_at))}</span>` : c.lock === 'prereq' ? `<span class="cr-pill soon">Finish ${esc(c.prereq || 'another course')} first</span>` : '<span class="cr-pill open">Open</span>'}</span>
+          <strong class="cr-title">${esc(c.title)}</strong>${c.lock ? '' : `<span class="cr-progress"><i style="width:${pct}%"></i></span>`}
+          <span class="cr-foot"><span>${c.counts?.done || 0} of ${c.counts?.total || 0} steps</span><span>${c.lock ? 'Locked' : 'Open ›'}</span></span></span></a>`;
+    }).join('')}</div></section>`).join('')
+    : '<div class="card ma-empty"><strong>You have no courses yet.</strong><span>Your department will add them here.</span></div>';
+};
