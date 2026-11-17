@@ -562,3 +562,19 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
   .hub-dir .tile:not(.wide) { aspect-ratio: 1 / 1; grid-column: auto; }
   .hub-dir .tile:not(.wide) .tile-title { font-size: 16px; }
 }
+
+/* Mod actions (0.11.0): member picker with suggestions, Roblox username check. */
+.picker { position: relative; }
+.sugg { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; display: grid; max-height: 320px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(11, 30, 74, .16); padding: 4px; }
+.sg { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: var(--text);
+  padding: 7px 9px; border: 0; border-radius: 8px; background: none; cursor: pointer; }
+.sg:hover, .sg.on { background: var(--raised); }
+.sg .avatar, .picked .avatar { width: 30px; height: 30px; flex: none; }
+.pk-main { flex: 1; min-width: 0; display: grid; font-weight: 400; }
+.pk-main strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-empty { padding: 8px 10px; margin: 0; }
+.picked { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 9px; border: 1px solid var(--teal); border-radius: 10px; background: var(--teal-wash); }
+.field-note { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.field-note.ok { color: var(--teal-ink); font-weight: 600; }
+.field-note.bad { color: #8a1c1c; }

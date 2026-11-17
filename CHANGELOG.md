@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.11.0 (2026-11-17)
+
+**Added:** **Mod actions** (was Mod reports, in the Admin hub) now **carries out** what you choose in Discord, the same way the slash commands do.
+- **New action** → pick **Discord** or **In game (Maple Hospital)**.
+- **Discord:** Warn, Timeout (10 minutes to 1 week), Remove timeout, Kick, Ban or Unban. Start typing in **Who** and people appear by nickname, username or Discord ID. Pick one with a click or the arrow keys and Enter. Banned people show a **Banned** tag so you can unban them. The button says exactly what will happen (e.g. **Ban Maia Acey**), and kicks and bans ask you to confirm. CareBeyond Helper DMs the person, carries out the action and posts it to #server-logs. The list shows **Pending**, then **Done** or **Failed** with the reason, without reloading.
+- **In game:** Warn, Kick, Ban or Note, saved as a record. You must enter their **full Roblox username**. It's checked with Roblox as you type ("Found: … @name"), and the exact username from Roblox is what's saved.
+
+**Changed:** "Mod reports" is renamed **Mod actions**, and "New report" is now **New action**.
+Bot (by Bravo): carries out actions from the website with the same rules as the slash commands (not on yourself, bots, the owner, or anyone with the same or a higher role), and catches up after time offline. **Needs the bot updated on Wispbyte.**
+Database change: yes, migration 0012 and a new Roblox username check (by Bravo).
+
 ## 0.10.3 (2026-11-17)
 
 **Fixed:** department pages in the **Directors hub** no longer need reloading after you change someone's year or rank, add someone or remove someone. While a change is **Pending**, the page checks every few seconds. Once CareBeyond Helper has made the change, the page shows **Done** (or **Failed** with the reason) and the member's new year or rank, usually within about 10 seconds.

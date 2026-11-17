@@ -388,7 +388,7 @@ const PAGES = [
   ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
     { id: 'sessions',     title: 'Sessions',     icon: 'calendar', layout: 'sessions' },
-    { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'cases' },
+    { id: 'cases',        title: 'Mod actions',  icon: 'law',     layout: 'cases' },
     { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'logs' },
     { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'tickets' },
     { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'review', aud: 'reviewer' },
@@ -510,7 +510,7 @@ const COMMAND_GROUPS = [
   { aud: 'everyone', title: 'Everyone', cmds: [
     ['/login', 'code', 'Log in to this website with the code from "Log in with a code".'],
   ] },
-  { aud: 'admin', title: 'Admins · moderation', note: 'Each is saved as a case (see Mod reports), posted to #server-logs, and the member gets a DM where possible. You can\u2019t act on someone with the same or a higher role.', cmds: [
+  { aud: 'admin', title: 'Admins · moderation', note: 'Each is saved as a case (see Mod actions), posted to #server-logs, and the member gets a DM where possible. You can\u2019t act on someone with the same or a higher role.', cmds: [
     ['/warn', 'member reason', 'Warn a member.'],
     ['/timeout', 'member length reason', 'Time out for 10 minutes, 1 hour, 6 hours, 1 day, 3 days or 1 week.'],
     ['/untimeout', 'member [reason]', 'Remove a timeout.'],
@@ -618,93 +618,216 @@ function liveError(body, err) {
   body.insertAdjacentHTML('beforeend', `<p class="error">Couldn't load this: ${esc(err.message || err)}</p>`);
 }
 
-// ----- Mod reports (#admin/cases) -----
-const CASE_ACTIONS = [
-  { id: 'warn', label: 'Warn' }, { id: 'timeout', label: 'Timeout' }, { id: 'kick', label: 'Kick' },
-  { id: 'ban', label: 'Ban' }, { id: 'unban', label: 'Unban' }, { id: 'note', label: 'Note' },
+// ----- Mod actions (#admin/cases) -----
+// Discord: pick a member (by ID, nickname or username); CareBeyond Helper carries the action out (DM, then the action,
+// then #server-logs) and marks it Done or Failed. In game: a record only, against a real, full Roblox username.
+// Back end (Bravo, migration 0012): mod_member_search, mod_cases.status/error, the roblox-user Edge Function.
+const DISCORD_ACTIONS = [
+  { id: 'warn', label: 'Warn' }, { id: 'timeout', label: 'Timeout' }, { id: 'untimeout', label: 'Remove timeout' },
+  { id: 'kick', label: 'Kick' }, { id: 'ban', label: 'Ban' }, { id: 'unban', label: 'Unban' },
 ];
+const TIMEOUT_LENGTHS = [[10, '10 minutes'], [60, '1 hour'], [360, '6 hours'], [1440, '1 day'], [4320, '3 days'], [10080, '1 week']];
+const GAME_ACTIONS = [{ id: 'warn', label: 'Warn' }, { id: 'kick', label: 'Kick' }, { id: 'ban', label: 'Ban' }, { id: 'note', label: 'Note' }];
+const CASE_FILTERS = [{ id: 'all', label: 'All' }, { id: 'warn', label: 'Warn' }, { id: 'timeout', label: 'Timeout' }, { id: 'kick', label: 'Kick' },
+  { id: 'ban', label: 'Ban' }, { id: 'unban', label: 'Unban' }, { id: 'note', label: 'Note' }];
 const ACTION_LABEL = { warn: 'Warn', timeout: 'Timeout', untimeout: 'Timeout removed', kick: 'Kick', ban: 'Ban', unban: 'Unban', note: 'Note' };
-const SOURCE_LABEL = { discord: 'Discord', website: 'Website', in_game: 'In game' };
+const ACTION_VERB = { warn: 'Warn', timeout: 'Time out', untimeout: 'Remove timeout for', kick: 'Kick', ban: 'Ban', unban: 'Unban' };
+const SOURCE_LABEL = { discord: 'Discord', website: 'Discord (website)', in_game: 'In game' };
+const CASE_STATUS = { pending: ['sub-pending', 'Pending'], failed: ['sub-denied', 'Failed'] };
+let caseWatch = null;
 
 async function renderCases(body) {
-  let filter = 'all';
+  let filter = 'all', where = 'discord', action = 'warn', target = null, roblox = null;
   body.innerHTML = `
     <div class="toolbar">
-      <button class="refresh" id="case-new">New report</button>
-      <div class="chips" id="case-filter">${[{ id: 'all', label: 'All' }, ...CASE_ACTIONS].map((a) =>
+      <button class="refresh" id="case-new">New action</button>
+      <div class="chips" id="case-filter">${CASE_FILTERS.map((a) =>
         `<button class="chip${a.id === 'all' ? ' on' : ''}" data-f="${a.id}">${a.label}</button>`).join('')}</div>
     </div>
-    <form class="card case-form" id="case-form" hidden>
-      <div class="seg" id="case-action">${CASE_ACTIONS.map((a, i) =>
-        `<button type="button" class="seg-btn${i === 0 ? ' on' : ''}" data-a="${a.id}">${a.label}</button>`).join('')}</div>
-      <div class="f-row">
-        <label class="f"><span>Who</span><input id="case-target" required maxlength="100" placeholder="Their Discord or Roblox name"></label>
-        <label class="f"><span>Discord ID <em>(optional)</em></span><input id="case-target-id" inputmode="numeric" pattern="[0-9]{15,22}" placeholder="e.g. 1142255844453523527"></label>
-      </div>
-      <div class="f-row">
-        <label class="f" id="case-dur-wrap" hidden><span>Length (minutes)</span><input id="case-dur" type="number" min="1" max="40320" placeholder="60"></label>
-        <label class="f"><span>Where</span><select id="case-source"><option value="in_game">In game (Maple Hospital)</option><option value="website">Discord / other</option></select></label>
-      </div>
+    <form class="card case-form" id="case-form" hidden autocomplete="off">
+      <div class="f"><span>Where</span><div class="seg" id="case-where">
+        <button type="button" class="seg-btn on" data-w="discord">Discord</button>
+        <button type="button" class="seg-btn" data-w="in_game">In game (Maple Hospital)</button></div></div>
+      <div class="f"><span>Action</span><div class="seg" id="case-action"></div></div>
+      <div class="f picker" id="case-who-discord"><span>Who</span>
+        <div id="case-picked" class="picked" hidden></div>
+        <input id="case-q" placeholder="Name, username or Discord ID" aria-autocomplete="list" aria-controls="case-sugg">
+        <div class="sugg" id="case-sugg" role="listbox" hidden></div></div>
+      <label class="f" id="case-who-game" hidden><span>Full Roblox username</span>
+        <input id="case-roblox" maxlength="20" placeholder="e.g. Builderman" spellcheck="false" autocapitalize="off">
+        <span class="field-note" id="case-roblox-note" hidden></span></label>
+      <label class="f" id="case-tlen-wrap" hidden><span>Length</span><select id="case-tlen">${TIMEOUT_LENGTHS.map(([m, l]) => `<option value="${m}"${m === 60 ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f" id="case-dur-wrap" hidden><span>Length (minutes, optional)</span><input id="case-dur" type="number" min="1" max="525600" placeholder="e.g. 1440"></label>
       <label class="f"><span>Reason</span><textarea id="case-reason" required maxlength="1000" rows="3"></textarea></label>
       <p class="error" id="case-error" hidden></p>
-      <div class="f-actions"><button type="button" class="linkish" id="case-cancel">Cancel</button><button class="refresh" type="submit">Save report</button></div>
+      <div class="f-actions"><button type="button" class="linkish" id="case-cancel">Cancel</button><button class="refresh" type="submit" id="case-go">Warn</button></div>
     </form>
     <div class="card" id="case-list"><p class="muted small">Loading…</p></div>`;
 
-  const form = body.querySelector('#case-form');
-  let action = 'warn';
-  const showDur = () => { body.querySelector('#case-dur-wrap').hidden = !['timeout', 'ban'].includes(action); };
-  body.querySelector('#case-new').onclick = () => { form.hidden = !form.hidden; if (!form.hidden) body.querySelector('#case-target').focus(); };
-  body.querySelector('#case-cancel').onclick = () => { form.hidden = true; };
-  body.querySelector('#case-action').onclick = (e) => {
-    const b = e.target.closest('.seg-btn'); if (!b) return;
-    action = b.dataset.a;
-    body.querySelectorAll('#case-action .seg-btn').forEach((x) => x.classList.toggle('on', x === b));
-    showDur();
+  const $b = (s) => body.querySelector(s);
+  const form = $b('#case-form'), q = $b('#case-q'), sugg = $b('#case-sugg'), picked = $b('#case-picked');
+  const err = (msg) => { const e = $b('#case-error'); e.textContent = msg || ''; e.hidden = !msg; };
+
+  // What the form shows depends on Where and the action.
+  const sync = () => {
+    const list = where === 'discord' ? DISCORD_ACTIONS : GAME_ACTIONS;
+    if (!list.some((a) => a.id === action)) action = 'warn';
+    $b('#case-action').innerHTML = list.map((a) => `<button type="button" class="seg-btn${a.id === action ? ' on' : ''}" data-a="${a.id}">${a.label}</button>`).join('');
+    $b('#case-who-discord').hidden = where !== 'discord';
+    $b('#case-who-game').hidden = where !== 'in_game';
+    $b('#case-tlen-wrap').hidden = !(where === 'discord' && action === 'timeout');
+    $b('#case-dur-wrap').hidden = !(where === 'in_game' && action === 'ban');
+    const who = where === 'discord' ? (target && cleanName(target.display_name)) : (roblox && roblox.name);
+    const bare = { warn: 'Warn', timeout: 'Time out', untimeout: 'Remove timeout', kick: 'Kick', ban: 'Ban', unban: 'Unban' };
+    $b('#case-go').textContent = where === 'in_game' ? 'Save' : (who ? `${ACTION_VERB[action]} ${who}` : bare[action]);
   };
+  $b('#case-where').onclick = (e) => {
+    const b = e.target.closest('.seg-btn'); if (!b) return;
+    where = b.dataset.w;
+    body.querySelectorAll('#case-where .seg-btn').forEach((x) => x.classList.toggle('on', x === b));
+    err(''); sync();
+  };
+  $b('#case-action').onclick = (e) => {
+    const b = e.target.closest('.seg-btn'); if (!b) return;
+    action = b.dataset.a; sync();
+  };
+  $b('#case-new').onclick = () => { form.hidden = !form.hidden; if (!form.hidden) (where === 'discord' ? q : $b('#case-roblox')).focus(); };
+  $b('#case-cancel').onclick = () => { form.hidden = true; };
+
+  // Discord member picker: suggestions as you type (ID, nickname or username); banned people show for Unban.
+  let timer = null, results = [], active = -1;
+  const showPicked = () => {
+    picked.hidden = !target; q.hidden = !!target;
+    if (target) picked.innerHTML = `<img class="avatar" src="${esc(sized(target.avatar_url || '', 64))}" alt="" onerror="this.style.visibility='hidden'">
+      <span class="pk-main"><strong>${esc(cleanName(target.display_name || target.username || target.discord_id))}</strong>
+      <span class="muted small-meta">${target.username ? '@' + esc(target.username) + ' · ' : ''}${esc(target.discord_id)}${target.banned ? ' · banned' : ''}</span></span>
+      <button type="button" class="linkish" id="case-change">Change</button>`;
+    if (target) picked.querySelector('#case-change').onclick = () => { target = null; showPicked(); sync(); q.value = ''; q.focus(); };
+    sync();
+  };
+  const pick = (m) => { target = m; sugg.hidden = true; err(''); showPicked(); };
+  const drawSugg = () => {
+    sugg.hidden = !results.length && !q.value.trim();
+    const id = q.value.trim();
+    const rawId = /^\d{15,22}$/.test(id) && !results.some((m) => m.discord_id === id);
+    sugg.innerHTML = results.map((m, i) => `<button type="button" role="option" class="sg${i === active ? ' on' : ''}" data-i="${i}">
+        <img class="avatar" src="${esc(sized(m.avatar_url || '', 64))}" alt="" onerror="this.style.visibility='hidden'">
+        <span class="pk-main"><strong>${esc(cleanName(m.display_name || m.username || m.discord_id))}</strong>
+        <span class="muted small-meta">${m.username ? '@' + esc(m.username) + ' · ' : ''}${esc(m.discord_id)}</span></span>
+        ${m.banned ? '<span class="st sub-denied">Banned</span>' : ''}</button>`).join('')
+      + (rawId ? `<button type="button" class="sg" data-raw="${esc(id)}"><span class="pk-main"><strong>Use ID ${esc(id)}</strong><span class="muted small-meta">Someone not in the server</span></span></button>` : '')
+      + (!results.length && !rawId && id.length >= 2 ? '<p class="muted small sg-empty">Nobody found. Try their username or Discord ID.</p>' : '');
+    sugg.hidden = !sugg.innerHTML.trim();
+  };
+  q.oninput = () => {
+    clearTimeout(timer);
+    const term = q.value.trim();
+    if (term.length < 2) { results = []; active = -1; sugg.hidden = true; return; }
+    timer = setTimeout(async () => {
+      const { data, error } = await sb.rpc('mod_member_search', { q: term });
+      if (q.value.trim() !== term) return;
+      if (error) { results = []; sugg.hidden = false; sugg.innerHTML = `<p class="error sg-empty">${esc(error.message)}</p>`; return; }
+      results = data || []; active = results.length ? 0 : -1; drawSugg();
+    }, 200);
+  };
+  q.onkeydown = (e) => {
+    if (sugg.hidden || !results.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); active = (active + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length; drawSugg(); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(results[active]); }
+    else if (e.key === 'Escape') sugg.hidden = true;
+  };
+  sugg.onclick = (e) => {
+    const b = e.target.closest('.sg'); if (!b) return;
+    pick(b.dataset.raw ? { discord_id: b.dataset.raw, display_name: 'ID ' + b.dataset.raw } : results[+b.dataset.i]);
+  };
+  document.addEventListener('click', (e) => { if (body.isConnected && !e.target.closest('#case-who-discord')) sugg.hidden = true; });
+
+  // In game: the username must be a real Roblox account; we save its exact spelling.
+  const rIn = $b('#case-roblox'), rNote = $b('#case-roblox-note');
+  let rTimer = null;
+  const note = (cls, text) => { rNote.className = 'field-note ' + cls; rNote.textContent = text; rNote.hidden = !text; };
+  rIn.oninput = () => {
+    clearTimeout(rTimer); roblox = null; sync();
+    const name = rIn.value.trim();
+    if (!name) return note('', '');
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) return note('bad', 'Roblox usernames are 3–20 letters, numbers or _ (no spaces). Use the username, not the display name.');
+    note('', 'Checking…');
+    rTimer = setTimeout(async () => {
+      const { data, error } = await sb.functions.invoke('roblox-user', { body: { username: name } });
+      if (rIn.value.trim() !== name) return;
+      if (error || !data || !data.name) {
+        // Non-2xx answers come back as error.context (a Response) carrying { error: "plain words" }.
+        let msg = "Couldn't check Roblox right now. Try again in a moment.";
+        try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch { /* keep the general message */ }
+        if (rIn.value.trim() === name) note('bad', msg);
+        return;
+      }
+      roblox = data;
+      note('ok', `Found: ${data.displayName && data.displayName !== data.name ? data.displayName + ' ' : ''}@${data.name}`);
+      sync();
+    }, 450);
+  };
+
   body.querySelector('#case-filter').onclick = (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
     filter = b.dataset.f;
     body.querySelectorAll('#case-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
     load();
   };
+
   form.onsubmit = async (e) => {
     e.preventDefault();
-    const err = body.querySelector('#case-error');
-    err.hidden = true;
-    const dur = parseInt(body.querySelector('#case-dur').value, 10);
-    const row = {
-      action,
-      target_name: body.querySelector('#case-target').value.trim(),
-      target_discord_id: body.querySelector('#case-target-id').value.trim() || null,
-      reason: body.querySelector('#case-reason').value.trim(),
-      duration_minutes: ['timeout', 'ban'].includes(action) && dur > 0 ? dur : null,
-      source: body.querySelector('#case-source').value,
-      moderator_discord_id: myDiscordId,
-      moderator_name: $('name').textContent,
-    };
-    const { error } = await sb.from('mod_cases').insert(row);
-    if (error) { err.textContent = "Couldn't save the report: " + error.message; err.hidden = false; return; }
-    form.reset(); form.hidden = true; load();
+    err('');
+    const reason = $b('#case-reason').value.trim();
+    const dur = parseInt($b('#case-dur').value, 10);
+    let row;
+    if (where === 'discord') {
+      if (!target) return err('Pick who this is for.');
+      const who = cleanName(target.display_name);
+      if (['kick', 'ban'].includes(action) && !confirm(`${ACTION_LABEL[action]} ${who}? CareBeyond Helper will do this in Discord now.`)) return;
+      row = { action, target_name: target.display_name || target.username || target.discord_id, target_discord_id: target.discord_id,
+        reason, duration_minutes: action === 'timeout' ? +$b('#case-tlen').value : null, source: 'website', status: 'pending' };
+    } else {
+      if (!roblox) return err(rIn.value.trim() ? 'Check the Roblox username: it has to be a real account.' : 'Enter their full Roblox username.');
+      row = { action, target_name: roblox.name, target_roblox_id: roblox.id ? String(roblox.id) : null,
+        reason, duration_minutes: action === 'ban' && dur > 0 ? dur : null, source: 'in_game', status: 'done' };
+    }
+    Object.assign(row, { moderator_discord_id: myDiscordId, moderator_name: $('name').textContent });
+    const { error } = await sb.from('mod_cases').insert(row).select().single();
+    if (error) return err("Couldn't save it: " + error.message);
+    form.reset(); target = null; roblox = null; note('', ''); showPicked(); form.hidden = true; load();
   };
 
   async function load() {
-    const list = body.querySelector('#case-list');
-    let q = sb.from('mod_cases').select('*').order('created_at', { ascending: false }).limit(100);
-    if (filter !== 'all') q = q.eq('action', filter);
-    const { data, error } = await q;
+    const list = $b('#case-list');
+    let qy = sb.from('mod_cases').select('*').order('created_at', { ascending: false }).limit(100);
+    if (filter === 'timeout') qy = qy.in('action', ['timeout', 'untimeout']);
+    else if (filter !== 'all') qy = qy.eq('action', filter);
+    const { data, error } = await qy;
     if (error) { list.innerHTML = ''; return liveError(list, error); }
-    if (!data.length) { list.innerHTML = `<p class="muted small">${filter === 'all' ? 'No reports yet.' : 'None of these yet.'}</p>`; return; }
-    list.innerHTML = data.map((c) => `
-      <div class="row-item case">
+    if (!data.length) { list.innerHTML = `<p class="muted small">${filter === 'all' ? 'No actions yet.' : 'None of these yet.'}</p>`; return; }
+    list.innerHTML = data.map((c) => {
+      const st = CASE_STATUS[c.status];
+      return `<div class="row-item case">
         <span class="act act-${esc(c.action)}">${esc(ACTION_LABEL[c.action] || c.action)}</span>
         <div class="case-main">
           <div><strong>${esc(c.target_name || c.target_discord_id || 'Unknown')}</strong>${c.duration_minutes ? ` <span class="muted">· ${c.duration_minutes} min</span>` : ''}</div>
           <div class="case-reason">${esc(c.reason)}</div>
-          <div class="muted small-meta">by ${esc(c.moderator_name || 'unknown')} · ${esc(SOURCE_LABEL[c.source] || c.source)} · ${when(c.created_at)}</div>
+          <div class="muted small-meta">by ${esc(c.moderator_name || 'unknown')} · ${esc(SOURCE_LABEL[c.source] || c.source)} · ${when(c.created_at)}${c.status === 'failed' && c.error ? ' · ' + esc(c.error) : ''}</div>
         </div>
-      </div>`).join('');
+        ${st ? `<span class="st ${st[0]}">${st[1]}</span>` : ''}
+      </div>`;
+    }).join('');
+    // While anything is Pending, check again every 3 s until the bot has carried it out.
+    clearInterval(caseWatch);
+    if (data.some((c) => c.status === 'pending')) {
+      caseWatch = setInterval(() => {
+        if (!body.isConnected || location.hash !== '#admin/cases') return clearInterval(caseWatch);
+        clearInterval(caseWatch); load();
+      }, 3000);
+    }
   }
+  sync();
   load();
 }
 
