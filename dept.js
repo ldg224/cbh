@@ -688,7 +688,7 @@ async function renderDept(body, tool) {
     const held = {};
     (permQ.data || []).forEach((x) => { if (rankById[x.role_id]) held[x.role_id + '|' + x.perm] = x; });
     const low = rows.slice().sort((a, b) => a.rank_order - b.rank_order);
-    const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
+    const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.filter((x) => x.rank_order < r.rank_order).map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
     pane.innerHTML = `<div class="card dp-perms-card">
       <div class="dp-head"><h2>Who can do what</h2><span class="muted small-meta">The Director and executives can always do everything.</span></div>
       <p class="error" id="dp-perm-err" hidden></p>
@@ -699,7 +699,7 @@ async function renderDept(body, tool) {
           ${PERMS.map(([k, l]) => { const on = !!held[r.id + '|' + k]; const w = held[r.id + '|members.edit'];
             return `<span role="cell" class="dp-pcell" data-label="${esc(l)}">
               <label class="dp-tick"><input type="checkbox" data-role="${esc(r.id)}" data-perm="${k}"${on ? ' checked' : ''} aria-label="${esc(r.rank_label)}: ${esc(l)}"><span aria-hidden="true"></span></label>
-              ${k === 'members.edit' && on && w ? `<span class="dp-win">${winSel(r, 'lo', w.window_lo)}<em>to</em>${winSel(r, 'hi', w.window_hi)}</span>` : ''}</span>`; }).join('')}
+              ${k === 'members.edit' && on && w ? `<span class="dp-win" title="Up to the rank below ${esc(r.rank_label)}">${winSel(r, 'lo', w.window_lo)}<em>to</em>${winSel(r, 'hi', w.window_hi)}</span>` : ''}</span>`; }).join('')}
         </div>`).join('')}
       </div></div>`;
     const err = pane.querySelector('#dp-perm-err');
