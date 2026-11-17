@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.22.1 (2026-11-18)
+
+**Fixed:**
+- **Hospital tools** only lists what you can open (no more **Applications** link sending reviewers back to Home or duplicating the department link).
+- The sidebar scrolls above the session card, with a soft edge when there's more below.
+- **Commands** no longer scrolls sideways on phones.
+- A department's **Overview** now lists applications to review and meetings needing attendance, so it matches the sidebar badge.
+
+Bot: no change. Database change: no.
+
 ## 0.22.0 (2026-11-18)
 
 **Added:**
