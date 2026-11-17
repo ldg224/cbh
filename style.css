@@ -513,14 +513,9 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 /* Sessions page */
 .sess-now { display: flex; align-items: center; gap: 16px; }
 .sess-now.is-live { border-color: rgba(22, 179, 100, .45); }
-/* Department pages */
-.dept-bar { justify-content: flex-end; }
-.dept-row { align-items: center; }
-.dept-row .avatar { width: 36px; height: 36px; flex: none; }
-.dept-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+/* Department pages (add-member picker; the rest is in dept.css) */
 .dp-rank { font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text); padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
 .dp-rank:focus { outline: 2px solid rgba(58, 130, 208, .35); border-color: var(--blue); }
-.dot-inline { display: inline-block; margin: 0 0 1px 4px; vertical-align: middle; }
 .dp-add { display: grid; gap: 14px; }
 .dp-results { display: flex; flex-wrap: wrap; gap: 8px; }
 .dp-results:empty { display: none; }
@@ -529,11 +524,6 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .dp-pick .avatar { width: 26px; height: 26px; border-width: 1px; }
 .dp-pick:hover { border-color: var(--blue); }
 .dp-pick.on { background: var(--teal-wash); border-color: var(--teal); }
-@media (max-width: 560px) {
-  .dept-row { flex-wrap: wrap; }
-  .dept-ctl { width: 100%; justify-content: flex-start; padding-left: 50px; }
-  .dept-bar .refresh { flex: 1; }
-}
 
 /* Directors hub layout (0.10.1): Sessions pinned full width on top, then the four departments in one row,
    each running from Directors violet into its department colour. */

@@ -874,10 +874,8 @@ async function renderTeamTickets(body) {
 LIVE.contact = renderContact;
 LIVE.tickets = renderTeamTickets;
 
-// ----- Apply (#apply) and Applications review (#admin/applications, #review) — back end: Bravo, migration 0006 -----
-// Questions come from the forms table (placeholders until the owner sends the real ones), never hard-coded here.
-const SUB_STATUS = { pending: 'Waiting', accepted: 'Accepted', denied: 'Not accepted', reviewed: 'Reviewed' };
-const formAllowed = (f) => f.open && (f.audience === 'member' || (f.audience === 'team' && access.staff) || (f.audience === 'admin' && access.admin));
+// ----- Apply (#apply) and Applications (#admin/applications, #review): applications.js (0028). -----
+// Questions come from the forms table, edited by executives on the Applications page.
 
 function questionField(q) {
   const id = `q-${esc(q.id)}`, req = q.required ? 'required' : '';
@@ -891,133 +889,7 @@ function questionField(q) {
   }
 }
 
-async function renderApply(body) {
-  body.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
-  const [{ data: forms, error }, { data: mine }] = await Promise.all([
-    sb.from('forms').select('*').order('sort'),
-    sb.from('form_submissions').select('id, form_key, status, review_note, created_at').eq('submitter_discord_id', myDiscordId).order('created_at', { ascending: false }),
-  ]);
-  if (error) { body.innerHTML = ''; return liveError(body, error); }
-  const list = forms.filter(formAllowed);
-  const title = (k) => (forms.find((f) => f.key === k) || {}).title || k;
-  body.innerHTML = `
-    <div class="form-list">${list.map((f) => `
-      <button class="card form-card" data-k="${esc(f.key)}">
-        <span class="t-ico" style="--c:${f.kind === 'report' ? '#5c72ff' : '#3a82d0'};--icon:${iconUrl(f.kind === 'report' ? 'law' : 'resume')}" aria-hidden="true"></span>
-        <span class="case-main"><strong>${esc(f.title)}</strong>${f.description ? `<span class="muted small-meta">${esc(f.description)}</span>` : ''}</span>
-        <span class="go" aria-hidden="true">›</span>
-      </button>`).join('') || '<div class="card"><p class="muted small">Nothing open right now.</p></div>'}</div>
-    ${mine && mine.length ? `<h2 class="menu-label aud-everyone"><span class="aud-dot"></span>Your submissions</h2>
-      <div class="card">${mine.map((s) => `
-        <div class="row-item"><div class="case-main"><strong>${esc(title(s.form_key))}</strong>
-          <span class="muted small-meta">${when(s.created_at)}${s.review_note ? ` · “${esc(s.review_note)}”` : ''}</span></div>
-          <span class="st sub-${esc(s.status)}">${esc(SUB_STATUS[s.status] || s.status)}</span></div>`).join('')}</div>` : ''}`;
-  body.querySelector('.form-list').onclick = (e) => {
-    const b = e.target.closest('.form-card'); if (!b) return;
-    renderForm(body, list.find((f) => f.key === b.dataset.k));
-  };
-}
-
-function renderForm(body, form) {
-  body.innerHTML = `
-    <button class="back inline-back" type="button"><span class="back-ico" aria-hidden="true"></span>All forms</button>
-    <form class="card case-form" id="ap-form">
-      <div><h2 class="form-title">${esc(form.title)}</h2>${form.description ? `<p class="muted">${esc(form.description)}</p>` : ''}</div>
-      ${(form.questions || []).map(questionField).join('')}
-      <p class="error" id="ap-err" hidden></p>
-      <div class="f-actions"><button class="refresh" type="submit">${form.kind === 'report' ? 'Send report' : 'Send application'}</button></div>
-    </form>`;
-  body.querySelector('.inline-back').onclick = () => renderApply(body);
-  const yesno = {};
-  body.querySelectorAll('[data-yesno]').forEach((g) => g.addEventListener('click', (e) => {
-    const b = e.target.closest('.seg-btn'); if (!b) return;
-    yesno[g.dataset.yesno] = b.dataset.v;
-    g.querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('on', x === b));
-  }));
-  body.querySelector('#ap-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const err = body.querySelector('#ap-err'); err.hidden = true;
-    const answers = {};
-    for (const q of form.questions || []) {
-      const id = `q-${q.id}`;
-      const v = q.type === 'yesno' ? yesno[id] : body.querySelector('#' + CSS.escape(id))?.value.trim();
-      if (q.required && !v) { err.textContent = `Please answer “${q.label}”.`; err.hidden = false; return; }
-      if (v) answers[q.id] = q.type === 'number' ? Number(v) : v;
-    }
-    const { error } = await sb.from('form_submissions').insert({ form_key: form.key, submitter_discord_id: myDiscordId, submitter_name: $('name').textContent, answers });
-    if (error) { err.textContent = "Couldn't send: " + error.message; err.hidden = false; return; }
-    body.innerHTML = `<div class="card center sent"><span class="t-ico big" style="--c:#2ed3c6;--icon:${iconUrl('verified')}" aria-hidden="true"></span>
-      <h2 class="form-title">Sent</h2><p class="muted">${form.kind === 'report' ? 'The admin team has your report.' : 'You’ll get a DM from CareBeyond Helper when it’s been reviewed.'}</p>
-      <button class="ghost" id="ap-done">Done</button></div>`;
-    body.querySelector('#ap-done').onclick = () => renderApply(body);
-  };
-}
-
-async function renderReview(body) {
-  let filter = 'pending';
-  body.innerHTML = `
-    <div class="toolbar"><div class="chips" id="rv-filter"><button class="chip on" data-f="pending">Waiting</button><button class="chip" data-f="done">Done</button></div></div>
-    <div class="card" id="rv-list"><p class="muted small">Loading…</p></div>`;
-  const { data: forms } = await sb.from('forms').select('key, title, kind, questions');
-  const fmap = Object.fromEntries((forms || []).map((f) => [f.key, f]));
-  body.querySelector('#rv-filter').onclick = (e) => {
-    const b = e.target.closest('.chip'); if (!b) return;
-    filter = b.dataset.f;
-    body.querySelectorAll('#rv-filter .chip').forEach((x) => x.classList.toggle('on', x === b));
-    load();
-  };
-  const list = body.querySelector('#rv-list');
-  async function load() {
-    let q = sb.from('form_submissions').select('*').order('created_at', { ascending: false }).limit(100);
-    q = filter === 'pending' ? q.eq('status', 'pending') : q.neq('status', 'pending');
-    const { data, error } = await q;
-    if (error) { list.innerHTML = ''; return liveError(list, error); }
-    list.innerHTML = data.length ? data.map((s) => `
-      <button class="row-item ticket" data-id="${s.id}">
-        <span class="t-ico" style="--c:${fmap[s.form_key]?.kind === 'report' ? '#5c72ff' : '#3a82d0'};--icon:${iconUrl(fmap[s.form_key]?.kind === 'report' ? 'law' : 'resume')}" aria-hidden="true"></span>
-        <span class="case-main"><strong>${esc(s.submitter_name || 'Unknown')}</strong>
-          <span class="muted small-meta">${esc(fmap[s.form_key]?.title || s.form_key)} · ${when(s.created_at)}${s.reviewer_name ? ` · ${esc(s.reviewer_name)}` : ''}</span></span>
-        <span class="st sub-${esc(s.status)}">${esc(SUB_STATUS[s.status] || s.status)}</span>
-      </button>`).join('') : `<p class="muted small">${filter === 'pending' ? 'Nothing waiting.' : 'Nothing reviewed yet.'}</p>`;
-    list.onclick = (e) => {
-      const b = e.target.closest('.ticket'); if (!b) return;
-      const s = data.find((x) => String(x.id) === b.dataset.id);
-      renderSubmission(body, s, fmap[s.form_key] || { title: s.form_key, kind: 'application', questions: [] });
-    };
-  }
-  load();
-}
-
-function renderSubmission(body, s, form) {
-  const qs = form.questions || [];
-  const label = (id) => (qs.find((q) => q.id === id) || {}).label || id;
-  const isReport = form.kind === 'report';
-  body.innerHTML = `
-    <button class="back inline-back" type="button"><span class="back-ico" aria-hidden="true"></span>All submissions</button>
-    <div class="card thread-head"><div class="case-main"><strong class="thread-subject">${esc(s.submitter_name || 'Unknown')}</strong>
-      <span class="muted small-meta">${esc(form.title)} · ${when(s.created_at)}</span></div>
-      <span class="st sub-${esc(s.status)}">${esc(SUB_STATUS[s.status] || s.status)}</span></div>
-    <div class="card answers">${Object.entries(s.answers || {}).map(([k, v]) => `
-      <div class="answer"><div class="answer-q">${esc(label(k))}</div><div class="answer-a">${esc(v)}</div></div>`).join('') || '<p class="muted small">No answers.</p>'}</div>
-    ${s.status === 'pending' ? `<form class="card case-form" id="rv-form">
-      <label class="f"><span>Note to ${isReport ? 'the file' : 'the applicant'} <em>(optional)</em></span><textarea id="rv-note" rows="2" maxlength="1000"></textarea></label>
-      <p class="error" id="rv-err" hidden></p>
-      <div class="f-actions">${isReport ? '<button type="button" class="refresh" data-s="reviewed">Mark reviewed</button>'
-        : '<button type="button" class="ghost deny" data-s="denied">Deny</button><button type="button" class="refresh" data-s="accepted">Accept</button>'}</div>
-    </form>` : (s.review_note ? `<div class="card"><div class="answer-q">Note</div><div class="answer-a">${esc(s.review_note)}</div></div>` : '')}`;
-  body.querySelector('.inline-back').onclick = () => renderReview(body);
-  body.querySelector('#rv-form')?.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-s]'); if (!b) return;
-    const { data, error } = await sb.from('form_submissions').update({
-      status: b.dataset.s, reviewer_discord_id: myDiscordId, reviewer_name: $('name').textContent,
-      review_note: body.querySelector('#rv-note').value.trim() || null, reviewed_at: new Date().toISOString(),
-    }).eq('id', s.id).eq('status', 'pending').select();
-    const err = body.querySelector('#rv-err');
-    if (error) { err.textContent = "Couldn't save: " + error.message; err.hidden = false; return; }
-    if (!data || !data.length) { err.textContent = 'Someone else has already reviewed this.'; err.hidden = false; return; }
-    renderReview(body);
-  });
-}
+// The Apply and Applications pages live in applications.js since the 0.19.x redesign (questionField stays here).
 
 // ----- Shifts (#shifts) -----
 const shiftSecs = (s, now = Date.now()) => Math.max(0, ((s.ended_at ? new Date(s.ended_at) : now) - new Date(s.started_at)) / 1000
@@ -1383,7 +1255,7 @@ async function renderRoster(body) {
 
 // ----- Department pages (#directors/<dept>): dept.js / dept.css (0.17.x redesign, Bravo) -----
 
-Object.assign(LIVE, { apply: renderApply, review: renderReview, shifts: renderShifts, people: renderRoster, settings: renderSettings, sessions: renderSessions });
+Object.assign(LIVE, { shifts: renderShifts, people: renderRoster, settings: renderSettings, sessions: renderSessions });
 
 // ---------- running sessions (admins) ----------
 // Sessions are run from the website only (the /session commands were removed). The website writes the sessions
