@@ -245,6 +245,10 @@ function draw(data) {
   setPhoto(me.avatar_url);
   // Who they are is shown only by badges (never as a sentence like "CareBeyond staff").
   drawBadges(buildBadges(roles, departments));
+  setAccess(me, roles);
+  buildMenu();
+  buildSessionBanner();
+  route();
   // No "how this page works" text: the note only appears for loading and errors.
   note('');
 }
@@ -303,6 +307,9 @@ function onSession(session) {
   $('signed-in').hidden = !user;
   $('who').hidden = !user;
   $('changed').hidden = true;
+  $('menu').hidden = true;
+  $('page').hidden = true;
+  $('session').hidden = true;
   stopCodeLogin();
   showLoginView('main');
   if (!user) return;
@@ -325,6 +332,199 @@ $('login').addEventListener('click', async () => {
     $('login-error').textContent = "Couldn't start Discord login: " + error.message;
     $('login-error').hidden = false;
   }
+});
+
+// ---------- home menu, hubs and pages ----------
+// The owner's rules (Plans/CareBeyond/RESEARCH.md §6): as few pages as possible, tools grouped into HUBS, each
+// person sees only what they can use, ordered Executive > Admin > Staff > Everyone, and each audience has its own
+// colour. Pages are TEMPLATES for now (layout + placeholder blocks) until the back end for each lands.
+const AUDIENCES = [
+  { id: 'exec',     label: 'Executive' },
+  { id: 'admin',    label: 'Admin' },
+  { id: 'staff',    label: 'Staff' },
+  { id: 'everyone', label: 'Everyone' },
+];
+// id = route (#id); hubs hold tools (#hub/tool). `photo`: a Roblox screenshot in assets/photos/ (tinted by CSS).
+const PAGES = [
+  { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
+    { id: 'reports',  title: 'Reports',       icon: 'bar-chart', layout: 'stats' },
+    { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list' },
+    { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form' },
+    { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
+  ] },
+  { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
+    { id: 'cases',        title: 'Mod reports',  icon: 'law',     layout: 'list' },
+    { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'log' },
+    { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'list' },
+    { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'list', aud: 'exec' },
+  ] },
+  { id: 'shifts',   aud: 'staff',    title: 'Shifts',         icon: 'clock',   layout: 'shifts' },
+  { id: 'roster',   aud: 'staff',    title: 'Staff & roster', icon: 'people',  layout: 'people' },
+  { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'doc' },
+  { id: 'contact',  aud: 'everyone', title: 'Contact a team', icon: 'chat',    layout: 'contact' },
+  { id: 'apply',    aud: 'everyone', title: 'Apply',          icon: 'resume',  layout: 'form' },
+  { id: 'commands', aud: 'everyone', title: 'Commands',       icon: 'console', layout: 'commands' },
+];
+// Who can see what. Derived from role kinds (cbh/roles.py): exec = leadership or Executive; admin = the
+// Administration department, or exec; staff = the bot's is_staff flag.
+let access = { exec: false, admin: false, staff: false, everyone: true };
+function setAccess(me, roles) {
+  const exec = roles.some((r) => r.kind === 'leadership' || r.kind === 'executive');
+  const admin = exec || roles.some((r) => r.department === 'Administration');
+  access = { exec, admin, staff: !!me.is_staff || admin, everyone: true };
+}
+const canSee = (aud) => !!access[aud];
+const iconUrl = (name) => `url('assets/icons/${name}.png')`;   // single quotes: also used inside style="..."
+
+function tileEl(href, p, aud, extra = '') {
+  const a = document.createElement('a');
+  a.className = `tile aud-${aud}${p.wide ? ' wide' : ''}${p.photo ? ' has-photo' : ''} ${extra}`;
+  a.href = href;
+  a.style.setProperty('--icon', iconUrl(p.icon));
+  if (p.photo) {
+    const img = document.createElement('img');
+    img.className = 'tile-photo';
+    img.src = p.photo;
+    img.alt = '';
+    img.loading = 'lazy';
+    a.append(img);
+  }
+  a.insertAdjacentHTML('beforeend',
+    '<span class="tile-mark" aria-hidden="true"></span><span class="tile-badge" aria-hidden="true"><span></span></span>');
+  const t = document.createElement('span');
+  t.className = 'tile-title';
+  t.textContent = p.title;
+  a.append(t);
+  return a;
+}
+
+function buildMenu() {
+  const nav = $('menu');
+  nav.replaceChildren();
+  for (const aud of AUDIENCES) {
+    const pages = PAGES.filter((p) => p.aud === aud.id);
+    if (!canSee(aud.id) || !pages.length) continue;
+    const group = document.createElement('section');
+    group.className = `menu-group aud-${aud.id}`;
+    group.innerHTML = `<h2 class="menu-label"><span class="aud-dot"></span>${aud.label}</h2>`;
+    const grid = document.createElement('div');
+    grid.className = 'menu-grid' + (pages.filter((p) => !p.wide).length === 2 ? ' n2' : '');
+    for (const p of pages) grid.append(tileEl('#' + p.id, p, aud.id));
+    group.append(grid);
+    nav.append(group);
+  }
+}
+
+// Placeholder building blocks for the templates.
+const sk = (w, h, extra = '') => `<span class="sk ${extra}" style="width:${w};height:${h}px"></span>`;
+const lines = (...ws) => ws.map((w) => sk(w, 12)).join('<span style="display:block;height:9px"></span>');
+const rows = (n, right) => `<div class="card">${Array.from({ length: n }, () =>
+  `<div class="row-item">${sk('34px', 34, 'round')}<div style="flex:1">${lines('42%', '24%')}</div>${right}</div>`).join('')}</div>`;
+const stat3 = () => `<div class="grid-3">${[0, 1, 2].map(() =>
+  `<div class="card tight">${sk('45%', 11)}<div style="height:12px"></div>${sk('58%', 30)}</div>`).join('')}</div>`;
+const LAYOUTS = {
+  stats: () => stat3() + `<div class="card">${sk('30%', 14)}<div style="height:18px"></div>${sk('100%', 180)}</div>` + rows(4, sk('64px', 22, 'pill')),
+  list: () => `<div class="toolbar">${sk('220px', 38, 'pill')}${sk('120px', 38, 'pill')}</div>` + rows(6, sk('72px', 22, 'pill')),
+  log: () => `<div class="toolbar">${['70px', '90px', '80px', '110px'].map((w) => sk(w, 30, 'pill')).join('')}</div>` +
+    `<div class="card">${Array.from({ length: 8 }, () => `<div class="row-item">${sk('52px', 12)}<div style="flex:1">${lines('65%')}</div>${sk('40px', 12)}</div>`).join('')}</div>`,
+  form: () => `<div class="card form-sk">${sk('30%', 12)}${sk('100%', 42)}${sk('30%', 12)}${sk('100%', 120)}<div style="display:flex;justify-content:flex-end">${sk('140px', 42, 'pill')}</div></div>`,
+  settings: () => `<div class="card">${Array.from({ length: 5 }, () => `<div class="row-item"><div style="flex:1">${lines('35%', '55%')}</div>${sk('46px', 26, 'pill')}</div>`).join('')}</div>`,
+  shifts: () => `<div class="card" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">${sk('64px', 64, 'round')}<div style="flex:1;min-width:160px">${lines('35%', '55%')}</div>${sk('150px', 44, 'pill')}</div>` + stat3() + rows(4, sk('70px', 14)),
+  people: () => `<div class="toolbar">${['90px', '120px', '110px', '130px'].map((w) => sk(w, 30, 'pill')).join('')}</div>` +
+    `<div class="grid-people">${Array.from({ length: 8 }, () => `<div class="card person">${sk('64px', 64, 'round')}${sk('70%', 13)}${sk('55%', 22, 'pill')}</div>`).join('')}</div>`,
+  doc: () => Array.from({ length: 4 }, () => `<div class="card">${sk('38%', 16)}<div style="height:14px"></div>${lines('100%', '94%', '70%')}</div>`).join(''),
+  contact: () => `<div class="team-pick">${Array.from({ length: 4 }, () => `<div class="card tight team-sk">${sk('40px', 40, 'round')}${sk('70%', 13)}</div>`).join('')}</div>` +
+    `<div class="card form-sk">${sk('25%', 12)}${sk('100%', 120)}<div style="display:flex;justify-content:flex-end">${sk('140px', 42, 'pill')}</div></div>`,
+  commands: () => commandsPage(),
+};
+
+// Bot commands: a static list for now (Bravo keeps us told about changes; later the bot may sync it to Supabase).
+const COMMANDS = [
+  { name: '/login', args: 'code', what: 'Log in to this website with the code from "Log in with a code".', who: 'Everyone' },
+];
+function commandsPage() {
+  const el = document.createElement('div');
+  el.className = 'card';
+  for (const c of COMMANDS) {
+    const row = document.createElement('div');
+    row.className = 'row-item cmd-row';
+    row.innerHTML = '<code class="cmd"></code><div class="cmd-what"></div><span class="cmd-who"></span>';
+    row.querySelector('.cmd').textContent = c.args ? `${c.name} ${c.args}` : c.name;
+    row.querySelector('.cmd-what').textContent = c.what;
+    row.querySelector('.cmd-who').textContent = c.who;
+    el.append(row);
+  }
+  return el.outerHTML;
+}
+
+// #exec, #admin/logs, #shifts… Anything else = home. Only while logged in, and only pages this person may see.
+function findRoute() {
+  const [a, b] = location.hash.slice(1).split('/');
+  const page = PAGES.find((p) => p.id === a && canSee(p.aud));
+  if (!page) return null;
+  if (!b) return { page };
+  const tool = (page.tools || []).find((t) => t.id === b && canSee(t.aud || page.aud));
+  return tool ? { page, tool } : { page };
+}
+
+function setPageTitle(icon, text, aud) {
+  const h = $('page-title');
+  h.className = `page-title aud-${aud}`;
+  h.innerHTML = `<span class="pt-ico" style="--icon:${iconUrl(icon)}" aria-hidden="true"></span>`;
+  h.append(document.createTextNode(text));
+}
+
+function route() {
+  if (!currentUserId) return;
+  closePop();
+  const r = findRoute();
+  $('signed-in').hidden = !!r;
+  $('session').hidden = !!r;
+  $('menu').hidden = !!r;
+  $('page').hidden = !r;
+  if (!r) { document.title = 'CareBeyond Dashboard'; fitBadges(); return; }
+  const { page, tool } = r;
+  const back = $('page').querySelector('.back');
+  back.href = tool ? '#' + page.id : '#';
+  back.lastChild.textContent = tool ? page.title : 'Menu';
+  const body = $('page-body');
+  if (tool) {
+    setPageTitle(tool.icon, tool.title, tool.aud || page.aud);
+    body.innerHTML = LAYOUTS[tool.layout]();
+  } else if (page.tools) {
+    setPageTitle(page.icon, page.title, page.aud);
+    const grid = document.createElement('div');
+    grid.className = 'hub-grid';
+    for (const t of page.tools.filter((x) => canSee(x.aud || page.aud))) {
+      const a = tileEl(`#${page.id}/${t.id}`, t, t.aud || page.aud, 'tool');
+      if (t.aud && t.aud !== page.aud) {
+        a.insertAdjacentHTML('beforeend', `<span class="tile-flag">${AUDIENCES.find((x) => x.id === t.aud).label} only</span>`);
+      }
+      grid.append(a);
+    }
+    body.replaceChildren(grid);
+  } else {
+    setPageTitle(page.icon, page.title, page.aud);
+    body.innerHTML = LAYOUTS[page.layout]();
+  }
+  document.title = (tool ? tool.title : page.title) + ' · CareBeyond';
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+
+// ---------- session banner ----------
+// Under the Welcome card: the Maple Hospital custom server and its join code (pinned; the owner will say if it
+// changes). Live / next-session status comes once the sessions back end is ready.
+const JOIN_CODE = '4920-4087';
+function buildSessionBanner() {
+  $('join-code').textContent = JOIN_CODE;
+}
+$('copy-join').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(JOIN_CODE);
+    $('copy-join').textContent = 'Copied';
+    setTimeout(() => { $('copy-join').textContent = 'Copy'; }, 1500);
+  } catch { /* the code is on screen */ }
 });
 
 // ---------- log in with a code ----------

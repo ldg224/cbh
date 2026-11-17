@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.5.0 (2026-11-17)
+
+**Added:**
+- A home menu under the Welcome card, grouped by who it's for, most important first: **Executive**, **Admin**, **Staff**, **Everyone**. Each group has its own colour, and you only see what you can use.
+- **Executive hub** (Reports, Strikes, Announcements, Bot settings) and **Admin hub** (Mod reports, Discord logs, Tickets, plus Applications for executives).
+- Staff: **Shifts** and **Staff & roster**. Everyone: **Rules & info**, **Contact a team**, **Apply** and **Commands**.
+- A **Maple Hospital server** banner with the join code and a Copy button.
+
+Most pages are layouts for now and fill in as each feature is built. Commands already lists `/login`.
+Database change: none.
+
 ## 0.4.1 (2026-11-17)
 
 **Fixed:** adding the dashboard to an iPhone home screen now shows the CareBeyond icon on the brand blue, named "CareBeyond", instead of a blank grey "C". Android's "Add to Home screen" gets the same icon. If you added it before, remove it from your home screen and add it again to get the new icon.

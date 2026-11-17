@@ -80,6 +80,28 @@
     </section>
     <div id="more-pop" class="pop" role="dialog" aria-label="More badges" tabindex="-1" hidden></div>
 
+    <!-- Session banner: the Maple Hospital custom server and its join code (live/next session once the back end lands). -->
+    <section id="session" class="session" hidden>
+      <span class="session-ico" aria-hidden="true"></span>
+      <div class="session-text">
+        <span class="session-label">Maple Hospital server</span>
+        <span class="session-code">Join code <strong id="join-code"></strong></span>
+      </div>
+      <button id="copy-join" class="ghost">Copy</button>
+    </section>
+
+    <!-- Home menu: tiles grouped by audience (Executive > Admin > Staff > Everyone), built by app.js from PAGES. -->
+    <nav id="menu" class="menu" aria-label="Sections" hidden></nav>
+
+    <!-- A section page. TEMPLATES only for now: each section's layout with placeholder blocks, no data yet. -->
+    <section id="page" class="page" hidden>
+      <div class="page-head">
+        <a class="back" href="#"><span class="back-ico" aria-hidden="true"></span>Menu</a>
+        <h1 id="page-title" class="page-title"></h1>
+      </div>
+      <div id="page-body" class="page-body"></div>
+    </section>
+
     <p id="loading" class="muted center">Loading…</p>
   </main>
 
