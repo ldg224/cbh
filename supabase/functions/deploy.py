@@ -15,7 +15,7 @@ REF = 'ycrwcwfknqikezynzgyv'
 TOKEN = (Path.home() / '.supabase' / 'token.txt').read_text().strip()
 # These are called by people who aren't logged in yet and check their own secret, so Supabase must not
 # require a signed-in caller. Every other function does.
-OPEN = {'login-code', 'roblox-user'}
+OPEN = {'login-code', 'roblox-user', 'roblox-headshots'}
 
 
 def deploy(slug):
