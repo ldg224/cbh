@@ -1,7 +1,7 @@
 // Session history (Alpha, for Bravo's Sessions page, 0.16.0). Bravo's renderSessions mounts it on
 // <div id="sess-history"> at the bottom of #directors/sessions and #admin/sessions:
 //   window.renderSessionHistory(el)
-// Draws past sessions grouped by week: when, type tag, host, length, how many staff were on shift (up to 5 photos)
+// Draws past sessions grouped by week: when, type tag, location, every host (lead first), length, how many staff were on shift (up to 5 photos)
 // and the note. Data: sb.rpc('session_history', { max_rows }) (migration 0020, Bravo), session runners only.
 // No timers: like every page, it never redraws by itself.
 (function () {
@@ -42,6 +42,18 @@
     + (p.avatar_url ? `<img class="face-img" src="${esc(sized(p.avatar_url, 64))}" alt="" loading="lazy" onerror="this.parentNode.classList.remove('has-img');this.remove()">` : '')
     + `<span class="face-i">${esc((cleanName(p.name || '?')[0] || '?').toUpperCase())}</span></span>`;
 
+  // Where it ran (migration 0022): "Discord only", or the in-game place.
+  const loc = (s) => (s.location_kind === 'in_game' ? (s.location_text ? `In game · ${s.location_text}` : 'In game') : s.location_kind === 'discord' ? 'Discord only' : '');
+  // Every host, lead first: a small stack of faces, then the names ("Hosted by Skyler Collins and Raven").
+  function hostsHtml(s) {
+    const hosts = (Array.isArray(s.hosts) && s.hosts.length ? s.hosts : s.host_name ? [{ name: s.host_name, is_lead: true }] : [])
+      .slice().sort((a, b) => (b.is_lead ? 1 : 0) - (a.is_lead ? 1 : 0));
+    if (!hosts.length) return '<div class="sh-hhosts"><span class="sh-hhost muted">Host not recorded</span></div>';
+    const names = hosts.map((h) => cleanName(h.name || '?'));
+    const text = names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    return `<div class="sh-hhosts"><span class="sh-hfaces">${hosts.slice(0, 4).map(faceOf).join('')}</span>
+      <span class="sh-hhost">Hosted by ${esc(text)}${hosts.length > 1 ? ` <span class="sh-hlead">(${esc(names[0])} leading)</span>` : ''}</span></div>`;
+  }
   function row(s) {
     const t = tag(s);
     const start = new Date(s.started_at), end = s.ended_at ? new Date(s.ended_at) : null;
@@ -52,7 +64,8 @@
     return `<article class="sh-hrow">
       <div class="sh-hwhen"><strong>${esc(day)}</strong><span>${esc(time)}</span></div>
       <div class="sh-hmain">
-        <div class="sh-hline"><span class="sh-htag" style="--c:${esc(t.color)}">${esc(t.label)}</span><span class="sh-hhost">${s.host_name ? 'Hosted by ' + esc(cleanName(s.host_name)) : 'Host not recorded'}</span></div>
+        <div class="sh-hline"><span class="sh-htag" style="--c:${esc(t.color)}">${esc(t.label)}</span><span class="sh-hloc">${esc(loc(s))}</span></div>
+        ${hostsHtml(s)}
         ${s.note ? `<p class="sh-hnote">${esc(s.note)}</p>` : ''}
       </div>
       <div class="sh-hstats">

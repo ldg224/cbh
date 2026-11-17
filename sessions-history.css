@@ -35,3 +35,8 @@
   .sh-hmain { grid-column: 1 / -1; grid-row: 2; }
   .sh-hstats { grid-row: 1; grid-column: 2; }
 }
+/* 0022: location and every host */
+.sh-hloc { font-size: 12.5px; font-weight: 600; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+.sh-hloc:empty { display: none; }
+.sh-hhosts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sh-hlead { font-weight: 500; color: var(--muted); }
