@@ -1561,6 +1561,35 @@ function personBadges(badges) {
 // Staff & roster (0.15.x redesign, Bravo; owner chose "compact rows"). Hospital-wide for staff (docs/ACCESS.md):
 // everyone in a department as one row each, in department sections, with search, department filter and on-shift dots
 // (on_shift_now(), migration 0018). Never shows Records data; admins can open a person's record from their row.
+// Roster labels (owner: "which role belongs to this section?"). In a department section the person's rank THERE is
+// the main label; their other departments are secondary. Two designs while the owner chooses (ROSTER_LABELS).
+const ROSTER_LABELS = new URLSearchParams(location.search).get('ro') || 'a';
+function rosterLabels(p, here, deptColour) {
+  const lead = p.roles.filter((r) => r.kind === 'leadership').sort((a, b) => b.position - a.position);
+  const ranks = p.roles.filter((r) => r.kind === 'rank').sort((a, b) => b.rank_order - a.rank_order);
+  const best = (d) => ranks.find((r) => r.department === d);
+  const depts = [...new Set(p.roles.filter((r) => r.department && (r.kind === 'rank' || r.kind === 'department')).map((r) => r.department))];
+  const mainRank = here !== 'Leadership' && here !== 'Other' ? best(here) : null;
+  const others = depts.filter((d) => d !== here).map((d) => ({ d, rank: best(d) }));
+  const exec = p.roles.some((r) => r.kind === 'executive');
+  const col = (d) => deptColour(d) || '#3a82d0';
+  if (ROSTER_LABELS === 'b') {
+    // Option B: the section rank as a column on the right; everything else as one quiet line under the name.
+    const main = mainRank ? mainRank.rank_label : (here === 'Leadership' && lead[0] ? lead[0].name : (here !== 'Other' && depts.includes(here) ? 'Member' : ''));
+    const also = [...(here === 'Leadership' ? lead.slice(1) : lead).map((r) => r.name),
+      ...others.map((o) => o.rank ? `${o.d} ${o.rank.rank_label}` : o.d), ...(exec ? ['Executive'] : [])];
+    return { side: main ? `<span class="ro-rankcol" style="--dept:${col(here)}">${esc(main)}</span>` : '',
+      under: also.length ? `<span class="ro-also">${esc(also.join(' · '))}</span>` : '' };
+  }
+  // Option A: leadership + the section rank as solid chips; other departments as small muted chips with a colour dot.
+  const chips = [
+    ...lead.map((r) => `<span class="ro-chip solid" style="--bg:${readableColour(hex(r.badge_color || 3834576))}">${esc(r.name)}</span>`),
+    ...(mainRank ? [`<span class="ro-chip solid" style="--bg:${readableColour(col(here))}">${esc(mainRank.rank_label)}</span>`] : []),
+    ...others.map((o) => `<span class="ro-chip muted" style="--dept:${col(o.d)}"><span class="ro-cdot"></span>${esc(o.d)}${o.rank ? ' · ' + esc(o.rank.rank_label) : ''}</span>`),
+    ...(exec ? ['<span class="ro-chip muted ex">Executive</span>'] : []),
+  ];
+  return { side: `<span class="ro-chips2">${chips.join('')}</span>`, under: '' };
+}
 // A role colour darkened toward navy only as far as needed to reach 4.5:1 contrast on white (WCAG AA for text).
 function readableColour(hexStr) {
   const n = parseInt(hexStr.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255], navy = [11, 30, 74];
@@ -1618,6 +1647,7 @@ async function renderRoster(body) {
     const s = onNow[p.discord_id];
     const me = p.discord_id === myDiscordId;
     const tag = access.admin ? 'button' : 'div';
+    const lab = rosterLabels(p, d, colour);
     return `<${tag} class="ro-row${me ? ' me' : ''}"${access.admin ? ` type="button" data-rec="${esc(p.discord_id)}" title="Open record"` : ''}>
       <span class="ro-face" style="--dept:${colour(p.main) || '#3a82d0'}">
         <span class="ro-init" aria-hidden="true">${esc(initials(p.display_name))}</span>
@@ -1625,8 +1655,8 @@ async function renderRoster(body) {
         ${s ? `<span class="ro-dot ${s.status === 'break' ? 'brk' : 'on'}" title="${s.status === 'break' ? 'On a break' : 'On shift'}"></span>` : ''}
       </span>
       <span class="ro-name"><span class="ro-line"><strong${p.nameColour ? ` style="color:${readableColour(p.nameColour)}"` : ''}>${esc(p.name)}</strong>${me ? '<span class="ro-you">You</span>' : ''}</span>
-        ${s ? `<span class="ro-status ${s.status === 'break' ? 'brk' : 'on'}">${s.status === 'break' ? 'On a break' : 'On shift'}${s.department !== d ? ' · ' + esc(s.department) : ''}</span>` : ''}</span>
-      <span class="ro-badges">${personBadges(rosterBadges(p.roles, depts, d))}</span>
+        ${lab.under}${s ? `<span class="ro-status ${s.status === 'break' ? 'brk' : 'on'}">${s.status === 'break' ? 'On a break' : 'On shift'}${s.department !== d ? ' · ' + esc(s.department) : ''}</span>` : ''}</span>
+      <span class="ro-badges">${lab.side}</span>
     </${tag}>`;
   };
 
