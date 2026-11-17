@@ -880,7 +880,7 @@ async function loadFailNotices() {
   }));
 }
 
-// ----- Records (#admin/records): search anyone; profile, stats, roles, warnings, incidents, messages (90 days) -----
+// ----- Records (#admin/records): search anyone; profile, stats, roles, warnings, actions, messages (90 days) -----
 // Back end (Bravo, migration 0013): mod_member_search (with warnings), member_record, discord_messages.
 async function renderRecords(body) {
   body.innerHTML = `
@@ -928,11 +928,11 @@ async function renderRecords(body) {
 const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 async function showRecord(box, id) {
   box.innerHTML = '<div class="card"><p class="muted small">Loading…</p></div>';
-  const [rec, roleQ, casesQ, logsQ] = await Promise.all([
+  const [rec, roleQ, casesQ] = await Promise.all([
     sb.rpc('member_record', { discord_id: id }),
     sb.from('roles').select(ROLE_FIELDS),
-    sb.from('mod_cases').select('*').eq('target_discord_id', id).neq('status', 'failed').is('revoked_at', null).order('created_at', { ascending: false }).limit(200),
-    sb.from('discord_logs').select('*').eq('user_discord_id', id).order('at', { ascending: false }).limit(200),
+    // Only actions taken on their Discord account: never in-game records, role changes or joins (owner, 0.13.2).
+    sb.from('mod_cases').select('*').eq('target_discord_id', id).neq('source', 'in_game').neq('status', 'failed').is('revoked_at', null).order('created_at', { ascending: false }).limit(200),
   ]);
   if (rec.error) { box.innerHTML = ''; return liveError(box, rec.error); }
   const r = rec.data || {};
@@ -944,10 +944,8 @@ async function showRecord(box, id) {
   const warns = cases.filter((c) => c.action === 'warn');
   const activeWarns = warns.filter((c) => !c.revoked_at);
   const exec = access.exec;   // executives get a settings button: Remove warning, Unban
-  // Incidents: every other case (timeouts, kicks, bans, notes) plus what the Discord logs saw happen to them.
-  const incidents = [...cases.filter((c) => c.action !== 'warn').map((c) => ({ kind: 'case', at: c.created_at, c })),
-    ...(logsQ.data || []).filter((l) => !['message_delete', 'message_edit'].includes(l.type)).map((l) => ({ kind: 'log', at: l.at, l }))]
-    .sort((a, b) => new Date(b.at) - new Date(a.at));
+  // Actions: every other mod action on them (timeouts, kicks, bans, unbans). Nothing automatic is listed here.
+  const actions = cases.filter((c) => c.action !== 'warn');
   const name = cleanName(r.display_name || r.username || id);
 
   box.innerHTML = `
@@ -968,13 +966,13 @@ async function showRecord(box, id) {
     </form>` : ''}
     <div class="grid-4">
       <div class="card tight stat${r.warnings ? ' stat-warn' : ''}"><span class="muted small-meta">Warnings</span><strong>${Number(r.warnings ?? activeWarns.length)}</strong></div>
-      <div class="card tight stat"><span class="muted small-meta">Incidents</span><strong>${incidents.length}</strong></div>
+      <div class="card tight stat"><span class="muted small-meta">Actions</span><strong>${actions.length}</strong></div>
       <div class="card tight stat"><span class="muted small-meta">Messages (90 days)</span><strong>${Number(r.messages_90d || 0)}</strong></div>
       <div class="card tight stat"><span class="muted small-meta">Shift hours (30 days)</span><strong>${Number(r.shift_hours_30d || 0).toFixed(1)}</strong></div>
     </div>
     <div class="toolbar"><div class="chips" id="rec-tabs">
       <button class="chip on" data-t="warnings">Warnings <span class="count">${activeWarns.length}</span></button>
-      <button class="chip" data-t="incidents">Incidents <span class="count">${incidents.length}</span></button>
+      <button class="chip" data-t="actions">Actions <span class="count">${actions.length}</span></button>
       <button class="chip" data-t="messages">Messages</button>
       <button class="chip" data-t="details">Details</button></div></div>
     <div id="rec-tab"></div>`;
@@ -999,10 +997,7 @@ async function showRecord(box, id) {
       ${exec && !c.revoked_at && c.status === 'done' ? `<button class="gear small" data-gear="${c.id}" aria-label="Remove this warning" title="Remove this warning"></button>` : ''}</div>`;
   const tabs = {
     warnings: () => `<div class="card">${warns.length ? warns.map(warnRow).join('') : `<p class="muted small">${esc(name)} has no warnings.</p>`}</div>`,
-    incidents: () => `<div class="card">${incidents.length ? incidents.map((x) => x.kind === 'case' ? caseRow(x.c) : `
-      <div class="row-item log"><span class="log-type t-${esc(x.l.type)}">${esc(LOG_LABEL[x.l.type] || x.l.type)}</span>
-        <div class="case-main">${logDetail(x.l) || `<span class="muted">${x.l.channel_name ? 'in #' + esc(x.l.channel_name) : ''}</span>`}</div>
-        <span class="muted small-meta when">${when(x.l.at)}</span></div>`).join('') : '<p class="muted small">No incidents.</p>'}</div>`,
+    actions: () => `<div class="card">${actions.length ? actions.map(caseRow).join('') : `<p class="muted small">No actions taken on ${esc(name)}.</p>`}</div>`,
     details: () => `<div class="card"><dl class="rec-dl">
       <dt>Discord ID</dt><dd>${esc(id)}</dd>
       ${r.username ? `<dt>Username</dt><dd>@${esc(r.username)}</dd>` : ''}
@@ -1050,7 +1045,7 @@ async function showRecord(box, id) {
         reason: ub.querySelector('input').value.trim(), source: 'website', status: 'pending',
         moderator_discord_id: myDiscordId, moderator_name: $('name').textContent }).select().single();
       if (error) { er.textContent = "Couldn't unban: " + error.message; er.hidden = false; return; }
-      ub.innerHTML = `<p class="small"><span class="st sub-pending">Pending</span> CareBeyond Helper is unbanning ${esc(name)}. It shows under Incidents once it's done.</p>`;
+      ub.innerHTML = `<p class="small"><span class="st sub-pending">Pending</span> CareBeyond Helper is unbanning ${esc(name)}. It shows under Actions once it's done.</p>`;
     };
   }
   box.querySelector('#rec-tabs').onclick = (e) => { const b = e.target.closest('.chip'); if (b) show(b.dataset.t); };

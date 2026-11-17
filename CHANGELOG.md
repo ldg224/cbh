@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.13.2 (2026-11-17)
+
+**Changed:** in **Records**, **Incidents** is now **Actions**: only mod actions taken on that person's Discord account (timeouts, kicks, bans, unbans). Role changes, joins and leaves no longer appear there, and in-game records don't show on anyone's record. Incidents are meant for explicit write-ups only.
+
+Bot: no change.
+Database change: none.
+
 ## 0.13.1 (2026-11-17)
 
 **Fixed:** a removed warning now disappears completely. It no longer shows (crossed out) in **Records** or in the **Mod actions** list, and it doesn't count towards anyone's warnings.
