@@ -12,7 +12,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 const ALLOWED_ORIGINS = ["https://ldg224.github.io", "http://127.0.0.1:8765", "http://localhost:8765"];
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I/L
 const CODE_LEN = 6;
-const STARTS_PER_MINUTE = 40; // across everyone; stops someone flooding the table
+const STARTS_PER_MINUTE = 300;      // across everyone; a backstop against flooding the table
+const STARTS_PER_IP_MINUTE = 5;     // per address (hashed), so one person can't block code logins for everyone
+const COLLECT_WITHIN_MS = 10 * 60_000; // a claimed code's session can only be collected for 10 minutes
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -64,8 +66,28 @@ function describeBrowser(ua: string) {
   return os ? `${browser} on ${os}` : browser;
 }
 
+// The caller's address, keyed and hashed (never stored as-is). cf-connecting-ip is set by Cloudflare in front of
+// Supabase and a request that tries to send its own is refused there (checked 18 Nov 2026); sb-forwarded-for (first
+// entry, Supabase's own) carries the same address. x-forwarded-for's first entry can be sent by the caller, so it
+// isn't used. The key is the function's existing service-role secret, so no salt lives in the code.
+async function ipHash(req: Request) {
+  const ip = (req.headers.get("cf-connecting-ip") ?? "").trim()
+    || (req.headers.get("sb-forwarded-for") ?? "").split(",")[0].trim();
+  if (!ip) return null;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("cbh-login:" + ip));
+  return Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function start(req: Request) {
   const since = new Date(Date.now() - 60_000).toISOString();
+  const ip_hash = await ipHash(req);
+  if (ip_hash) {
+    const { count: mine } = await admin.from("login_codes").select("code", { count: "exact", head: true })
+      .eq("ip_hash", ip_hash).gte("created_at", since);
+    if ((mine ?? 0) >= STARTS_PER_IP_MINUTE) return reply(req, { error: "Too many codes from here. Wait a minute and try again." }, 429);
+  }
   const { count } = await admin.from("login_codes").select("code", { count: "exact", head: true }).gte("created_at", since);
   if ((count ?? 0) >= STARTS_PER_MINUTE) return reply(req, { error: "Too many people are logging in right now. Try again in a minute." }, 429);
 
@@ -77,7 +99,7 @@ async function start(req: Request) {
   const client_info = describeBrowser(req.headers.get("user-agent") ?? "");
   for (let i = 0; i < 5; i++) {
     const code = randomCode();
-    const { error } = await admin.from("login_codes").insert({ code, secret_hash, client_info });
+    const { error } = await admin.from("login_codes").insert({ code, secret_hash, client_info, ip_hash });
     if (!error) return reply(req, { code: `${code.slice(0, 3)}-${code.slice(3)}`, secret, expires_in: 300 });
     if (error.code !== "23505") throw error; // anything but a clash with an existing code
   }
@@ -95,6 +117,9 @@ async function poll(req: Request, body: Record<string, unknown>) {
   if (!row.discord_id) {
     return reply(req, { status: new Date(row.expires_at) < new Date() ? "expired" : "waiting" });
   }
+
+  // Claimed, but too long ago to collect now (a code can't be claimed after 5 minutes; collection stops at 10).
+  if (Date.now() - new Date(row.created_at).getTime() > COLLECT_WITHIN_MS) return reply(req, { status: "expired" });
 
   // Claimed: hand the session over exactly once.
   const { data: used } = await admin.from("login_codes").update({ used_at: new Date().toISOString() })
