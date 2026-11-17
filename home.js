@@ -264,6 +264,7 @@ function drawPins(tools) {
     const i = liveInfo(t);
     const f = FOLDERS.find((x) => x.id === t.folder);
     const a = tileEl(t.href, t.def, 'everyone', 'h-pin-tile');
+    a.classList.remove('wide');   // every pin is the same size (Sessions is a wide banner elsewhere)
     if (t.def.color) a.style.setProperty('--dept', t.def.color);
     else { a.style.setProperty('--g1', f.g[0]); a.style.setProperty('--g2', f.g[1]); a.style.setProperty('--g3', f.g[1]); }
     a.querySelector('.tile-flag')?.remove();   // "Being built" is never pinned-worthy noise; live flags below instead

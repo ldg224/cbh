@@ -857,3 +857,10 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .h-pins .tile-title { font-size: 17px; }
 .h-pins .tile-mark { width: auto; height: 120%; right: -6%; bottom: -24%; }
 @media (max-width: 560px) { .h-pins .tile { height: 100px; } .h-pins .tile-title { font-size: 15px; } }
+/* Pins (0.14.5): tiles never get narrower than a long word needs; extra pins wrap to a second row instead of
+   squeezing, and titles may take two lines. Never clipped, never "…". */
+.h-pins { grid-template-columns: repeat(auto-fit, minmax(min(172px, 100%), 1fr)); }
+.h-pins .tile-title { font-size: 16px; line-height: 1.15; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; right: 14px; }
+.h-pins .tile { height: 124px; }
+@media (max-width: 760px) { .h-pins { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); } }
+@media (max-width: 560px) { .h-pins { grid-template-columns: repeat(2, minmax(0, 1fr)); } .h-pins .tile { height: 108px; } .h-pins .tile-title { font-size: 15px; } }
