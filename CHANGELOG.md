@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.19.1 (2026-11-18)
+
+**Changed:**
+- **Rank permissions** for a department can now only be read by executives, that department's Director and its own members (before, any signed-in member could see every department's).
+
+**Bot:**
+- **Privileged role watch:** when someone is given a Director, Leader, leadership, office or Executive role in Discord instead of through the website, the bot posts a red alert in **#server-logs** (who, which role and who gave it) and keeps a record that only executives can see. It also checks after every restart for roles given while it was offline. Nothing is blocked or undone.
+
+Database change: yes, migration 0031 (rank permissions read limited to the department; the privileged role record).
+
 ## 0.19.0 (2026-11-18)
 
 **Added:**
