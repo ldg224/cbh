@@ -3,6 +3,25 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.29.1 (2026-11-18)
+
+**Fixed:**
+- Department pages with many tabs now have arrow buttons to scroll the tab row, and the mouse wheel scrolls it too. The tab you're on is centred when the page opens.
+
+Database change: no.
+
+## 0.29.0 (2026-11-18)
+
+**Changed:**
+- Hospital tools now live in Administration: Mod actions, Records, Discord logs, Tickets and the Staff directory are tabs on the Administration page, shown to whoever has permission for each. The Hospital Director and COO also see Activity, Bot settings and Roles there.
+- Old links still work.
+- The Staff directory is still in My stuff for all staff.
+
+**Fixed:**
+- Administration Team Members can now handle Administration tickets.
+
+Database change: yes, migration 0065 (Administration tickets); already applied.
+
 ## 0.28.0 (2026-11-18)
 
 **Added:**

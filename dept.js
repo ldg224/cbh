@@ -167,10 +167,13 @@ async function renderDept(body, tool) {
         <div class="dp-stat"><b>${nextMeet ? (nextMeet.status === 'live' ? 'Now' : esc(dpDayShort(nextMeet.scheduled_for))) : 'None'}</b><span>${nextMeet && nextMeet.status === 'live' ? 'Meeting on' : 'Next meeting'}</span></div>
       </div>` : ''}
     </section>
+    <div class="dp-tabwrap"><button type="button" class="dp-tabarrow l" data-tabscroll="-1" aria-label="Scroll the tabs left" hidden><span aria-hidden="true"></span></button>
     <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `${t.first && TABS.some((x) => !(x.ext && x.ext.tool)) ? '<span class="dp-tsep" aria-hidden="true"></span>' : ''}<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}"${t.ext && t.ext.tool ? ' class="dp-tooltab"' : ''}>${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
+    <button type="button" class="dp-tabarrow r" data-tabscroll="1" aria-label="Scroll the tabs right" hidden><span aria-hidden="true"></span></button></div>
     <p class="error" id="dp-err" hidden></p>
     <div id="dp-pane" role="tabpanel"></div>`;
   const pane = body.querySelector('#dp-pane'), tabsEl = body.querySelector('.dp-tabs');
+  dpTabScroll(body.querySelector('.dp-tabwrap'));
   // Extra tabs' optional badge counts (e.g. applications waiting), filled in when they arrive.
   TABS.filter((t) => t.ext && typeof t.ext.count === 'function').forEach((t) => {
     Promise.resolve().then(() => t.ext.count(dept)).then((n) => {
@@ -827,3 +830,36 @@ async function renderDept(body, tool) {
 }
 
 LIVE.dept = renderDept;
+
+// Department tab row (0.29.1; owner: "cannot scroll, add arrow buttons"): arrows at the ends appear only when the row
+// overflows and hide at each end; a click scrolls about one row-width; the mouse wheel scrolls it sideways; touch
+// swipe still works; the chosen tab is brought into view when the page opens.
+function dpTabScroll(wrap) {
+  if (!wrap) return;
+  const row = wrap.querySelector('.dp-tabs'), left = wrap.querySelector('.dp-tabarrow.l'), right = wrap.querySelector('.dp-tabarrow.r');
+  const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const update = () => {
+    const max = row.scrollWidth - row.clientWidth;
+    wrap.classList.toggle('over', max > 2);
+    left.hidden = !(max > 2 && row.scrollLeft > 2);
+    right.hidden = !(max > 2 && row.scrollLeft < max - 2);
+  };
+  wrap.querySelectorAll('[data-tabscroll]').forEach((b) => {
+    b.onclick = () => row.scrollBy({ left: Number(b.dataset.tabscroll) * Math.max(120, row.clientWidth * 0.8), behavior: smooth ? 'smooth' : 'auto' });
+  });
+  row.addEventListener('scroll', update, { passive: true });
+  row.addEventListener('wheel', (e) => {
+    const max = row.scrollWidth - row.clientWidth;
+    if (max <= 2 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // sideways wheels and trackpads already work
+    const next = Math.min(max, Math.max(0, row.scrollLeft + e.deltaY));
+    if (next === row.scrollLeft) return;   // at an end: let the page scroll
+    e.preventDefault();
+    row.scrollLeft = next;
+  }, { passive: false });
+  if (window.ResizeObserver) new ResizeObserver(update).observe(row);
+  // Bring the chosen tab into view now, and again once the web font has loaded (tab widths change with it).
+  const centre = () => { const cur = row.querySelector('[aria-selected="true"]'); if (cur) row.scrollTo({ left: Math.max(0, cur.offsetLeft - (row.clientWidth - cur.offsetWidth) / 2), behavior: 'instant' }); update(); };
+  centre();
+  requestAnimationFrame(centre);
+  if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { if (row.isConnected) centre(); });
+}
