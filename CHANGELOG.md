@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.29.1 (2026-11-18)
+
+**Fixed:**
+- Department pages with many tabs now have arrow buttons to scroll the tab row, and the mouse wheel scrolls it too. The tab you're on is centred when the page opens.
+
+Database change: no.
+
 ## 0.29.0 (2026-11-18)
 
 **Changed:**
