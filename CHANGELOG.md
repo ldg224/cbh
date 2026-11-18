@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.32.4 (2026-11-19)
+
+**Changed:**
+- Departments open without the "Loading…" flash: the banner shows straight away, and the tabs and Overview show quiet outlines until their data arrives. The Overview now loads at the same time as the department, so the wait is about half as long.
+
+Database change: no.
+
 ## 0.32.3 (2026-11-18)
 
 **Changed:**
