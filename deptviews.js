@@ -126,7 +126,7 @@ function dvWirePosts(sec, dept, posts, canPost, redraw) {
   sec.querySelectorAll('[data-pdel]').forEach((b) => b.onclick = async () => {
     if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Tap again to delete'; setTimeout(() => { if (b.isConnected) { b.dataset.armed = ''; b.textContent = 'Delete'; } }, 4000); return; }
     b.disabled = true;
-    const { error } = await sb.rpc('dept_post_delete', { id: Number(b.dataset.pdel) });
+    const { error } = await sb.rpc('dept_post_delete', { p_id: Number(b.dataset.pdel) });
     if (error) { b.disabled = false; dvToast(b.closest('.dv-post'), error.message); return; }
     redraw();
   });
