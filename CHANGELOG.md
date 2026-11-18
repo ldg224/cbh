@@ -3,6 +3,29 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.32.0 (2026-11-18)
+
+**Changed:**
+- **A new, calmer layout:** a simple top bar (with Start / End shift and your avatar menu) and a plain left menu. On phones it's a slide-out menu.
+- **Each department opens in its own window** with its own menu: Overview, Roster, Events and saved views, plus a Leaders section for leaders.
+- Removed the old folder sidebar, the session and shift cards, the phone bottom tabs, Home's duplicate shift controls, and the department banner stats and hours chart.
+
+**Added:**
+- **Department Overview for everyone in the department:**
+  - What's on (sessions, meetings, trainings and events, with Going buttons)
+  - From the Director
+  - My progress
+  - My week against the weekly target
+  - On now
+- **Events:**
+  - Leaders can create trainings, drills, socials, ceremonies and other events.
+  - The bot posts them with Going / Maybe / Can't buttons and reminds the people who are going.
+  - Hospital-wide events post in #event-news and ping only Events Ping.
+- **"From the Director" posts**, copied to the department's announcements channel. Directors can give other ranks the new "Post updates" permission.
+- **Roster views** (Most minutes, Top performing, each Year) for leaders, and a weekly minutes target per department.
+
+Database change: yes, migrations 0075 to 0080 (events, department posts, targets, overview and roster views); already applied.
+
 ## 0.31.0 (2026-11-18)
 
 **Added:**
