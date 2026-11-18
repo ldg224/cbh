@@ -3,6 +3,20 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.27.0 (2026-11-18)
+
+**Changed:**
+- **Full access** (every department, Hospital tools, the Roles page) is now only for the **Hospital Director** and the **Chief Operations Officer**. Department Directors see and run their own department; any extra hospital tool can be switched on for them on the Roles page.
+- The **Executive** role is being replaced by **Board of Directors**, which CareBeyond Helper gives to every department Director automatically (and takes away if they stop being a Director). It opens the leaders' channels in Discord and gives nothing extra on the website.
+
+**Fixed:**
+- The department banner's numbers no longer push the page sideways on phones.
+
+**Bot:**
+- Treats only the Hospital Director and COO as full access, and keeps Board of Directors in step with the Director ranks.
+
+Database change: yes, migration 0059 (owners-only full access).
+
 ## 0.26.0 (2026-11-18)
 
 **Added:**
