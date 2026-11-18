@@ -445,6 +445,7 @@ async function renderDept(body, tool) {
       <div id="dp-results" class="dp-results" role="listbox" aria-label="Server members"></div>
       <div class="f"><span>Starting ${word}</span><div class="dp-seg" role="radiogroup" aria-label="Starting ${word}">${canGive.slice().reverse().map((r, i) => `<button type="button" role="radio" data-r="${esc(r.id)}" aria-checked="${i === 0}" style="--c:${r.badge_color ? hex(r.badge_color) : '#9aa9c4'}">${esc(r.rank_label)}</button>`).join('')}</div></div>
       ${reasonField('e.g. Passed their interview')}
+      <p class="xfer-warn" id="dp-xfer" role="alert" hidden></p>
       <p class="error" hidden></p>
       <div class="f-actions"><button type="button" class="linkish" data-x>Cancel</button><button class="refresh" type="submit" disabled>Add to ${esc(dept)}</button></div></form>`;
     const f = box.querySelector('form'), q = f.querySelector('#dp-aq'), res = f.querySelector('#dp-results'), go = f.querySelector('[type=submit]');
@@ -469,6 +470,15 @@ async function renderDept(body, tool) {
       const b = e.target.closest('.dp-pick'); if (!b) return;
       res.querySelectorAll('.dp-pick').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
       picked = b.dataset.id; go.disabled = !rank;
+      // One department per person (0073): adding someone from another department is a transfer. Say so before they confirm.
+      const warn = f.querySelector('#dp-xfer'), who = picked;
+      warn.hidden = true; go.textContent = `Add to ${dept}`;
+      sb.rpc('dept_transfer_preview', { target: who, department: dept }).then(({ data }) => {
+        if (picked !== who || !data?.transfer) return;
+        const from = data.from.map((x) => x.department + (x.rank_label ? ` (${x.rank_label})` : '')).join(', ');
+        warn.innerHTML = `<b>This is a transfer.</b> ${esc(cleanName(b.textContent.trim()))} is in ${esc(from)}. Adding them to ${esc(dept)} removes their ${esc(data.from.map((x) => x.department).join(' and '))} roles: one department per person.`;
+        warn.hidden = false; go.textContent = `Transfer to ${dept}`;
+      }, () => {});
     };
     f.querySelector('.dp-seg').onclick = (e) => {
       const b = e.target.closest('[data-r]'); if (!b) return;

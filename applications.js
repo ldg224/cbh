@@ -331,10 +331,19 @@ async function appDetail(el, dept, id) {
             <div class="app-roles">${extras.map((r) => `<label class="app-role"><input type="checkbox" value="${esc(r.id)}"${(f.accept_role_ids || []).includes(r.id) ? ' checked' : ''}><span>${esc(cleanName(r.name))}</span></label>`).join('')}</div>`
             : `<div class="app-roles ro">${[f.accept_rank_role_id, ...(f.accept_role_ids || [])].filter(Boolean).map((rid) => `<span class="app-role-ro">${esc(cleanName(roleName(rid)))}</span>`).join('') || '<span class="muted">No roles</span>'}</div>`}
           <span class="app-hint">Plus the ${esc(dept)} role. The bot gives them within a minute.</span></div>` : ''}
+        <p class="xfer-warn" id="app-xfer" role="alert" hidden></p>
         <p class="error" id="app-dec-err" hidden></p>
         <div class="f-actions"><button type="button" class="ghost" id="app-dec-cancel">Cancel</button>
-          <button type="submit" class="refresh${accept ? '' : ' danger-fill'}">${accept ? 'Accept' : 'Not accept'}</button></div>
+          <button type="submit" class="refresh${accept ? '' : ' danger-fill'}" id="app-dec-go">${accept ? 'Accept' : 'Not accept'}</button></div>
       </form>`;
+    if (accept) {   // one department per person (0073): accepting someone from another department is a transfer
+      sb.rpc('app_transfer_preview', { sub_id: id }).then(({ data }) => {
+        const w = $e('#app-xfer'); if (!w || !data?.transfer) return;
+        const from = data.from.map((x) => x.department + (x.rank_label ? ` (${x.rank_label})` : '')).join(', ');
+        w.innerHTML = `<b>This is a transfer.</b> ${esc(name)} is in ${esc(from)}. Accepting moves them to ${esc(dept)} and removes their ${esc(data.from.map((x) => x.department).join(' and '))} roles: one department per person.`;
+        w.hidden = false; $e('#app-dec-go').textContent = 'Accept and transfer';
+      }, () => {});
+    }
     $e('#app-dec-cancel').onclick = () => { box.innerHTML = decideHtml(); };
     $e('#app-dec-form').onsubmit = async (ev) => {
       ev.preventDefault();
