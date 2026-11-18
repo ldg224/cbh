@@ -13,9 +13,10 @@
 .dp-name { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; }
 .dp-pill { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
   background: rgba(255, 255, 255, .2); border: 1px solid rgba(255, 255, 255, .38); white-space: nowrap; }
-.dp-stats { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+/* Wraps by its own width (4 across, 2 across on phones or narrow panes), never wider than the banner. */
+.dp-stats { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr)); gap: 10px; margin-top: 18px; min-width: 0; }
 .dp-stat { background: rgba(255, 255, 255, .15); border: 1px solid rgba(255, 255, 255, .28); border-radius: 11px; padding: 9px 13px; min-width: 0; }
-.dp-stat b { display: block; font-size: 22px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.dp-stat b { display: block; font-size: 22px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dp-stat span { font-size: 12px; opacity: .92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .dp-loading .dp-name { opacity: .9; }
 
@@ -124,7 +125,7 @@
   .dp-sq { width: 42px; height: 42px; }
   .dp-sq::after { inset: 9px; }
   .dp-big { width: 120px; height: 120px; }
-  .dp-stats { grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .dp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
   .dp-stat b { font-size: 19px; }
   .dp-card { padding: 16px; }
   .dp-members { padding: 4px 14px; }
