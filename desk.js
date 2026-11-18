@@ -38,12 +38,18 @@
     return [
       canSee('staff') && myDepartments.length && { href: '#shifts', label: 'My shift', icon: 'clock' },
       sessionsHref() && { href: sessionsHref(), label: 'Sessions', icon: 'calendar' },
-      typeof crMyCoursesHref === 'function' && crMyCoursesHref() && { href: crMyCoursesHref(), label: 'My courses', icon: 'graduation-cap' },   // courses.js
+      typeof crMyCoursesHref === 'function' && crMyCoursesHref() && { href: crMyCoursesHref(), label: 'My courses', icon: 'graduation-cap', ...myCourseCount() },   // courses.js
       { href: '#contact', label: 'Contact a team', icon: 'chat' },
       canSee('leads') && { href: '#tickets', label: 'Team tickets', icon: 'inbox' },
       { href: '#apply', label: 'Apply', icon: 'resume' },
       canSee('staff') && { href: '#roster', label: 'Staff directory', icon: 'people' },
     ].filter(Boolean);
+  }
+  // Assigned courses I haven't finished, across departments (my_todo + course_my_todo, 0057): red if any is overdue.
+  function myCourseCount() {
+    let red = 0, orange = 0;
+    for (const t of Object.values(window.deskTodo || {})) { red += Number(t.courses || 0); orange += Number(t.courses_note || 0); }
+    return red ? { n: red + orange, sev: 'red' } : orange ? { n: orange, sev: 'orange' } : {};
   }
   // What each department page has waiting (my_todo, migration 0046): red = needs action now (applications,
   // attendance, failed rank changes, inactivity of 60+ days); orange = a note (inactivity of 14-59 days).
@@ -54,6 +60,8 @@
       meetings: n(t.attendance) ? { n: n(t.attendance), sev: 'red' } : null,
       applications: n(t.apps) ? { n: n(t.apps), sev: 'red' } : null,
       history: n(t.failed) ? { n: n(t.failed), sev: 'red' } : null,
+      // assigned courses (0057): red when one is overdue, else an orange note
+      courses: n(t.courses) ? { n: n(t.courses) + n(t.courses_note), sev: 'red' } : n(t.courses_note) ? { n: n(t.courses_note), sev: 'orange' } : null,
     };
   }
   // A collapsed folder's badge: its red count, or an orange count if there are only notes.
