@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.32.1 (2026-11-18)
+
+**Fixed:**
+- Pages outside a department (My shift, Sessions, Courses and others) now fill the space instead of sitting in the middle with a gap on the left.
+- Opening a department slides its menu in from the left; leaving slides it out. It switches instantly if you've turned on reduced motion.
+
+Database change: no.
+
 ## 0.32.0 (2026-11-18)
 
 **Changed:**
