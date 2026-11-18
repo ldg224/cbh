@@ -97,7 +97,8 @@ async function renderDept(body, tool) {
     // Cleared To do items (0049): quiet members dealt with / snoozed / on leave, and dismissed failed rank changes.
     sb.from('todo_dismissals').select('kind, target, until, last_active, reason, dismissed_by_name, created_at').eq('department', dept),
     // What's waiting on me here, the same my_todo() as the sidebar badge and Home (Desk sweep D6, 0.21.5).
-    window.deskTodo && window.deskTodo[dept] ? Promise.resolve({ data: window.deskTodo }) : sb.rpc('my_todo').then((r) => r, () => ({ data: null })),
+    window.deskTodo && window.deskTodo[dept] ? Promise.resolve({ data: window.deskTodo })
+      : sb.rpc('my_todo').then((r) => (window.execViewOff?.() && window.deskAsSelf ? { data: window.deskAsSelf(r.data) } : r), () => ({ data: null })),
   ]);
   if (!body.isConnected || !here()) return;
   if (roster.error) { body.innerHTML = ''; return liveError(body, roster.error); }

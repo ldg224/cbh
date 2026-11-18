@@ -262,6 +262,7 @@
     window.deskTodo = window.execViewOff?.() ? asSelfTodo(t || {}) : (t || {});
   }
   // my_todo() answers as an owner; with the exec view off, keep only what the person's own ranks would get there.
+  window.deskAsSelf = (t) => asSelfTodo(t || {});   // dept.js and home.js call my_todo() themselves too
   function asSelfTodo(t) {
     const out = {}, n = (v) => Number(v || 0);
     for (const [dept, x0] of Object.entries(t)) {

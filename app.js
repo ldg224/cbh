@@ -68,7 +68,8 @@ async function asSelf(roles, acc) {
   const teams = [...new Set(roles.filter((r) => (r.kind === 'department' || r.kind === 'rank') && r.department).map((r) => r.department))];
   return {
     acc: { ...acc, exec: false, admin: hperms.some((h) => ['hosp.mod', 'hosp.records', 'hosp.logs', 'hosp.incidents'].includes(h)),
-      team: teams.length > 0, teams, shift_teams: teams, directs, run_sessions: hperms.includes('hosp.sessions') || directs.length > 0 },
+      team: teams.length > 0, teams, shift_teams: teams, directs, run_sessions: hperms.includes('hosp.sessions') || directs.length > 0,
+      leads: [...new Set(ranks.filter((r) => ['Director', 'Leader', 'Year 5', 'Year 4'].includes(r.rank_label)).map((r) => r.department))] },
     perms, hperms,
   };
 }

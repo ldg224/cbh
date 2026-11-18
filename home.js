@@ -112,6 +112,15 @@ async function loadHomeData() {
     sb.rpc('get_my_prefs').then((r) => (r.error ? null : r.data), () => null),
   ]);
   HC = c || {};
+  // Exec view off (0.35.0, app.js): home_counts() answers as an owner, so drop the owner-only figure and count only the
+  // applications the person's own ranks may review (my_todo, filtered the same way as the menu).
+  if (window.execViewOff?.()) {
+    HC.hospital_hours_week = null;
+    const t = window.deskAsSelf ? window.deskAsSelf(await sb.rpc('my_todo').then((r) => r.data, () => null)) : {};
+    const apps = Object.values(t).filter((x) => Number(x.apps) > 0);
+    HC.apps_waiting = apps.reduce((a, x) => a + Number(x.apps), 0);
+    HC.apps_oldest_at = apps.map((x) => x.apps_oldest).filter(Boolean).sort()[0] || null;
+  }
   let pins = p && p.pins;
   if (!pins) { try { pins = JSON.parse(localStorage.getItem('cbh-pins') || 'null'); } catch { pins = null; } }
   PREFS = Object.assign({ enabled: true, count: 4, items: [] }, pins || {});
