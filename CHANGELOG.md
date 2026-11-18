@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.24.1 (2026-11-18)
+
+**Changed:**
+- **Course viewer:** a solid control bar under every PDF slide: big ◀ ▶ buttons, **Page 3 of 12** with a box to jump to a page, zoom and **Full screen**. Arrow keys, Page Up/Down, Home and End work on a computer; on phones the controls are big and swiping still turns pages.
+- Slides stand out on a light grey surround, Google Slides lessons get **Full screen** and **Open in Google Slides**, and pictures can be zoomed and shown full screen.
+
+Bot: no change. Database change: no.
+
 ## 0.24.0 (2026-11-18)
 
 **Added:**
