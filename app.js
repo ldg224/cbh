@@ -418,6 +418,8 @@ const AUDIENCES = [
   { id: 'everyone', label: 'Everyone' },
 ];
 // id = route (#id); hubs hold tools (#hub/tool). `photo`: a Roblox screenshot in assets/photos/ (tinted by CSS).
+// Hospital Director and Chief Operations Officer: the only roles with full access (0059).
+const OWNER_ROLES = ['1464007138882883725', '1472796994316534005'];
 const DEPARTMENTS = [
   { id: 'administration', name: 'Administration', icon: 'clipboard', color: '#5c72ff' },
   { id: 'nursing', name: 'Nursing', icon: 'nurse', color: '#ff3d7e' },
@@ -469,7 +471,8 @@ function setAccess(me, roles, acc) {
     setDirectorAccess(acc.directs, roles, !!acc.exec, acc.run_sessions);
     return;
   }
-  const exec = roles.some((r) => r.kind === 'leadership' || r.kind === 'executive');
+  // Full access = Hospital Director and COO only (owner, 18 Nov 2026; is_exec() in 0059). Only used if my_access fails.
+  const exec = roles.some((r) => OWNER_ROLES.includes(r.id));
   const admin = exec || roles.some((r) => r.department === 'Administration');
   access = { exec, admin, staff: !!me.is_staff || admin, everyone: true };
   setDirectorAccess(null, roles, exec);
