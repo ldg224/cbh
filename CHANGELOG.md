@@ -3,6 +3,20 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.30.0 (2026-11-18)
+
+**Added:**
+- **CBH Chart v1:** a quick patient log for clinical staff (Nursing, Paramedicine, Medical and Surgical).
+  - One shared Case per patient visit that every department adds to.
+  - Log a patient in about 30 seconds: patient, complaint, how they arrived, ESI triage, vitals on a keypad, treatments and medicines matched to Maple Hospital, an optional SBAR handover, and the outcome.
+  - Anything above your rank is saved as "needs cosign", and seniors cosign it from a queue.
+  - Mistakes are marked "entered in error", never deleted.
+- "CBH Chart" in the sidebar for clinical staff, Administration (read-only, for quality checks) and owners.
+- "+ Log a patient" on the Home shift bar and the sidebar shift card, and a + tab on phones, while you're on shift.
+- Cases are linked to your shift and session automatically.
+
+Database change: yes, migrations 0062 to 0064 (CBH Chart); already applied.
+
 ## 0.29.1 (2026-11-18)
 
 **Fixed:**
