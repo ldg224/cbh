@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.32.3 (2026-11-18)
+
+**Changed:**
+- Pages use the whole width of the window and stay centred, so Home and other pages no longer hug the left on big screens.
+
+Database change: no.
+
 ## 0.32.2 (2026-11-18)
 
 **Changed:**
