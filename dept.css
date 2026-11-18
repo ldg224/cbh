@@ -21,7 +21,20 @@
 .dp-loading .dp-name { opacity: .9; }
 
 /* Tabs */
-.dp-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 18px 0 16px; overflow-x: auto; position: relative; scrollbar-width: none; }
+.dp-tabwrap { position: relative; margin: 18px 0 16px; min-width: 0; }
+.dp-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0; overflow-x: auto; position: relative; scrollbar-width: none; scroll-behavior: smooth; overscroll-behavior-x: contain; }
+/* Arrows (0.29.1): only while the row overflows, hidden at each end; a fade so a cut-off tab reads as "more" */
+.dp-tabarrow { position: absolute; top: 0; bottom: 1px; z-index: 2; width: 44px; border: 0; padding: 0; cursor: pointer; display: grid; align-items: center; color: var(--text); }
+.dp-tabarrow.l { left: 0; justify-items: start; background: linear-gradient(90deg, var(--bg, #f3f7fc) 55%, transparent); }
+.dp-tabarrow.r { right: 0; justify-items: end; background: linear-gradient(270deg, var(--bg, #f3f7fc) 55%, transparent); }
+.dp-tabarrow[hidden] { display: none; }
+.dp-tabarrow span { width: 30px; height: 30px; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 2px 6px rgba(11, 30, 74, .12); display: grid; place-items: center; }
+.dp-tabarrow span::before { content: ""; width: 8px; height: 8px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(135deg); margin-left: 3px; }
+.dp-tabarrow.r span::before { transform: rotate(-45deg); margin: 0 3px 0 0; }
+.dp-tabarrow:hover span { border-color: var(--blue); }
+.dp-tabarrow:focus-visible { outline: none; }
+.dp-tabarrow:focus-visible span { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .dp-tabs { scroll-behavior: auto; } }
 .dp-tabs::-webkit-scrollbar { display: none; }
 .dp-tabs button { font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent;
   padding: 10px 13px 9px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
