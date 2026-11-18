@@ -54,12 +54,17 @@ const roBit = (perms, bit) => ((BigInt(perms || '0') >> BigInt(bit)) & 1n) === 1
 
 async function renderRoles(body) {
   body.innerHTML = '<div class="card"><p class="muted small">Loading roles…</p></div>';
-  const [ov, hp, rp, cp] = await Promise.all([
+  const [ov, hp, rp, cp, okq, stq] = await Promise.all([
     sb.rpc('role_overview'),
     sb.from('role_permissions').select('role_id, perm'),
     sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi'),
     sb.from('role_cmd_perms').select('role_id, command'),
+    sb.from('office_keys').select('department, role_id, active'),   // R2 (0058): bot-managed office keys
+    sb.from('status_roles').select('role_id'),                      // R2 (0058): bot-managed On Shift / On Break
   ]);
+  // Roles CareBeyond Helper hands out by itself: giving or taking them here would just be undone.
+  const autoKey = Object.fromEntries((okq.data || []).filter((k) => k.active).map((k) => [k.role_id, k.department]));
+  const autoStatus = new Set((stq.data || []).map((x) => x.role_id));
   if (ov.error) { body.innerHTML = ''; return liveError(body, ov.error); }
   const roles = (ov.data || []).filter((r) => r.name !== '@everyone');
   const byId = Object.fromEntries(roles.map((r) => [r.id, r]));
@@ -281,8 +286,11 @@ async function renderRoles(body) {
 
   // ---------- Members ----------
   async function drawMembers(r, pane) {
-    const ed = editable(r);
-    pane.innerHTML = `${lockNote(r)}${ed ? `<div class="card ro-sec ro-add"><label class="f"><span>Give this role to someone</span>
+    const keyDept = autoKey[r.id], dep = keyDept && DEPARTMENTS.find((d) => d.name === keyDept);
+    const auto = keyDept ? `CareBeyond Helper gives this key to the ranks and people chosen under Office access on the <a href="#directors/${dep ? dep.id : ''}/ranks">${esc(keyDept)} Ranks &amp; permissions</a> page. Change who has it there.`
+      : autoStatus.has(r.id) ? 'CareBeyond Helper gives and takes this role automatically when people start, pause and end shifts on the website.' : '';
+    const ed = editable(r) && !auto;
+    pane.innerHTML = `${auto ? `<p class="ro-note">${auto}</p>` : lockNote(r)}${ed ? `<div class="card ro-sec ro-add"><label class="f"><span>Give this role to someone</span>
         <input type="search" id="ro-find" placeholder="Search by name" autocomplete="off"></label><div id="ro-found" class="ro-found"></div></div>` : ''}
       <div class="card ro-mem" id="ro-mlist"><p class="muted small">Loading…</p></div>
       ${r.kind === 'rank' ? `<p class="muted small ro-foot">Promotions with a reason are best done on the <a href="#directors/${DEPARTMENTS.find((d) => d.name === r.department)?.id || ''}/members">${esc(r.department)} Members page</a>, which keeps the department’s history.</p>` : ''}`;
