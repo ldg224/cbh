@@ -93,6 +93,8 @@ const DEPARTMENT_ICON = {
   'Community Engagement': 'handshake',
   'Nursing': 'nurse',
   'Paramedicine': 'ambulance',
+  'Medical': 'stethoscope',
+  'Surgical': 'scalpel',
 };
 
 function buildBadges(roles, departments) {
@@ -424,10 +426,12 @@ const OWNER_ROLES = ['1464007138882883725', '1472796994316534005'];
 // The departments: loaded from public.departments (0060) at login by loadDepartments(); this list is the fallback if the
 // table can't be read. A new department is a row in that table (plus its ranks in the bot's roles.py).
 const DEPARTMENTS = [
-  { id: 'administration', name: 'Administration', icon: 'clipboard', color: '#5c72ff' },
+  { id: 'administration', name: 'Administration', icon: 'clipboard', color: '#7b61ff' },
   { id: 'nursing', name: 'Nursing', icon: 'nurse', color: '#ff3d7e' },
   { id: 'paramedicine', name: 'Paramedicine', icon: 'ambulance', color: '#ff5533' },
   { id: 'community', name: 'Community Engagement', icon: 'handshake', color: '#ffaa00' },
+  { id: 'medical', name: 'Medical', icon: 'stethoscope', color: '#2f7af2' },
+  { id: 'surgical', name: 'Surgical', icon: 'scalpel', color: '#229147' },
 ];
 function deptTools() {
   return DEPARTMENTS.map((d) => ({ id: d.id, title: d.name, icon: d.icon, layout: 'dept', dept: d.name, aud: 'dir:' + d.name, color: d.color }));
@@ -815,7 +819,7 @@ const LIVE = {};   // logs, cases and records: added by logs.js, cases.js and re
 // both ways (Discord thread / DMs <-> website).
 const TEAM_SUBS = { Administration: 'Support', 'Community Engagement': 'Partnerships' };   // optional subtitles on Contact a team
 const TEAMS = [
-  { id: 'Administration', label: 'Administration', sub: 'Support', icon: 'clipboard', color: 0x5C72FF },
+  { id: 'Administration', label: 'Administration', sub: 'Support', icon: 'clipboard', color: 0x7B61FF },
   { id: 'Nursing', label: 'Nursing', sub: '', icon: 'nurse', color: 0xFF3D7E },
   { id: 'Paramedicine', label: 'Paramedicine', sub: '', icon: 'ambulance', color: 0xFF5533 },
   { id: 'Community Engagement', label: 'Community Engagement', sub: 'Partnerships', icon: 'handshake', color: 0xFFAA00 },
