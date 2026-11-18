@@ -1165,7 +1165,8 @@ async function renderSettings(body) {
 // own section the department is implied, so its rank reads just "Year 5"; other departments say "Community
 // Engagement Leader". Leadership titles first, then each department (most senior first), then Executive.
 function rosterBadges(roles, depts, here) {
-  const deptColour = Object.fromEntries(depts.map((d) => [d.department, d.badge_color]));
+  // Department colours from DEPARTMENTS (R2: the hidden division roles are going; `depts` is kept for old callers).
+  const deptColour = Object.fromEntries(DEPARTMENTS.map((d) => [d.name, parseInt(d.color.slice(1), 16)]));
   const out = roles.filter((r) => r.kind === 'leadership').sort((a, b) => b.position - a.position)
     .map((r) => ({ label: r.name, color: r.badge_color, icon: LEADERSHIP_ICON[r.id] || 'star' }));
   const ranks = roles.filter((r) => r.kind === 'rank').sort((a, b) => (b.department === here) - (a.department === here) || b.rank_order - a.rank_order);
@@ -1229,7 +1230,6 @@ async function renderRoster(body) {
   ]);
   if (error) { body.innerHTML = ''; return liveError(body, error); }
   const byId = Object.fromEntries((allRoles || []).map((r) => [r.id, r]));
-  const depts = (allRoles || []).filter((r) => r.kind === 'department');
   const onNow = Object.fromEntries((onq.data || []).map((s) => [s.discord_id, s]));
   const colour = (name) => (DEPARTMENTS.find((d) => d.name === name) || {}).color;
   const SECTIONS = ['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'];

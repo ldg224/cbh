@@ -791,6 +791,7 @@ async function renderDept(body, tool) {
       if (error) { err.textContent = error.message; err.hidden = false; return; }
       await reload();
     });
+    window.deptOfficeCard?.(pane, dept, ranks);   // Office access (offices.js, R2)
   }
 
   // ---------- History ----------
