@@ -239,7 +239,7 @@ function drawDeptCards() {
   const mine = DEPARTMENTS.filter((d) => canSee('dir:' + d.name));
   const sec = $('h-dept-sec');
   if (!mine.length) {
-    sec.innerHTML = myDepartments.length ? '' : `<div class="hd-apply"><b>Join a department</b><span>Apply to Nursing, Paramedicine, Administration or Community Engagement.</span><a class="refresh" href="#apply">Apply</a></div>`;
+    sec.innerHTML = myDepartments.length ? '' : `<div class="hd-apply"><b>Join a department</b><span>Apply to ${esc(DEPARTMENTS.map((d) => d.name).join(', ').replace(/, ([^,]*)$/, ' or $1'))}.</span><a class="refresh" href="#apply">Apply</a></div>`;
     return;
   }
   // Owner (18 Nov 2026): "Departments", one row each with a big arrow that opens the full department page.

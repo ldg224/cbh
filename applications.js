@@ -4,7 +4,8 @@
 // Permissions (0027): applications.review = the queue; applications.settings = the builder. Who reviews a form, how
 // many approvals it needs and whether an exec gives the final Accept: execs and the department's Director only.
 // Loaded after app.js (questionField, DEPARTMENTS, iconUrl, hasPerm, myDirects), faces.js and cases.js.
-const APP_DEPTS = ['Administration', 'Nursing', 'Paramedicine', 'Community Engagement'];
+// Every department (app.js DEPARTMENTS, from the departments table, 0060). A getter, so it follows the table once loaded.
+const APP_DEPTS = { filter: (f) => DEPARTMENTS.map((d) => d.name).filter(f), find: (f) => DEPARTMENTS.map((d) => d.name).find(f) };
 const appDept = (name) => DEPARTMENTS.find((d) => d.name === name) || { name, id: '', color: '#3a82d0', icon: 'resume' };
 const appDate = (iso) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 const appAgo = (iso) => { const d = Math.floor((Date.now() - new Date(iso)) / 864e5); return d < 1 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`; };

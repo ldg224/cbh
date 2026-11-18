@@ -44,6 +44,7 @@ async function fetchMine() {
   const mine = new Set(me.role_ids);
   const roles = rows.filter((r) => mine.has(r.id)).sort((a, b) => b.position - a.position);
   const departments = rows.filter((r) => r.kind === 'department');
+  await loadDepartments();
   const [acc, sess, perms] = await Promise.all([
     sb.rpc('my_access').then((r) => r.data || null, () => null),
     fetchSession(),
@@ -420,12 +421,31 @@ const AUDIENCES = [
 // id = route (#id); hubs hold tools (#hub/tool). `photo`: a Roblox screenshot in assets/photos/ (tinted by CSS).
 // Hospital Director and Chief Operations Officer: the only roles with full access (0059).
 const OWNER_ROLES = ['1464007138882883725', '1472796994316534005'];
+// The departments: loaded from public.departments (0060) at login by loadDepartments(); this list is the fallback if the
+// table can't be read. A new department is a row in that table (plus its ranks in the bot's roles.py).
 const DEPARTMENTS = [
   { id: 'administration', name: 'Administration', icon: 'clipboard', color: '#5c72ff' },
   { id: 'nursing', name: 'Nursing', icon: 'nurse', color: '#ff3d7e' },
   { id: 'paramedicine', name: 'Paramedicine', icon: 'ambulance', color: '#ff5533' },
   { id: 'community', name: 'Community Engagement', icon: 'handshake', color: '#ffaa00' },
 ];
+function deptTools() {
+  return DEPARTMENTS.map((d) => ({ id: d.id, title: d.name, icon: d.icon, layout: 'dept', dept: d.name, aud: 'dir:' + d.name, color: d.color }));
+}
+// Fill DEPARTMENTS (in place, so every reader sees it) from the table, then refresh what was built from it.
+async function loadDepartments() {
+  try {
+    const { data, error } = await sb.from('departments').select('name, id, color, icon, sort, active, tickets').eq('active', true).order('sort');
+    if (error || !data || !data.length) return;
+    DEPARTMENTS.splice(0, DEPARTMENTS.length, ...data.map((d) => ({ id: d.id, name: d.name, icon: d.icon,
+      color: '#' + Number(d.color).toString(16).padStart(6, '0'), tickets: d.tickets !== false })));
+    for (const d of DEPARTMENTS) DEPARTMENT_ICON[d.name] = d.icon;
+    TEAMS.splice(0, TEAMS.length, ...DEPARTMENTS.filter((d) => d.tickets).map((d) => ({ id: d.name, label: d.name, sub: TEAM_SUBS[d.name] || '',
+      icon: d.icon, color: parseInt(d.color.slice(1), 16) })));
+    const hub = PAGES.find((p) => p.id === 'directors');
+    if (hub) hub.tools.splice(0, hub.tools.length, ...hub.tools.filter((t) => t.layout !== 'dept'), ...deptTools());
+  } catch { /* keep the built-in list */ }
+}
 const PAGES = [
   { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
     { id: 'reports',  title: 'Activity',      icon: 'bar-chart', layout: 'reports' },
@@ -437,7 +457,7 @@ const PAGES = [
   // Directors hub: sessions, plus one page per department for its Director (execs see all four).
   { id: 'directors', aud: 'director', title: 'Directors hub', icon: 'org-chart', wide: true, tools: [
     { id: 'sessions', title: 'Sessions', icon: 'calendar', layout: 'sessions', wide: true },   // pinned on top
-    ...DEPARTMENTS.map((d) => ({ id: d.id, title: d.name, icon: d.icon, layout: 'dept', dept: d.name, aud: 'dir:' + d.name, color: d.color })),
+    ...deptTools(),
   ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
     { id: 'sessions',     title: 'Sessions',     icon: 'calendar', layout: 'sessions' },
@@ -793,6 +813,7 @@ const LIVE = {};   // logs, cases and records: added by logs.js, cases.js and re
 // ----- Contact a team (#contact) and team tickets (#admin/tickets, #tickets) -----
 // Back end by Bravo (migration 0005): a ticket opens a private thread in the team's Discord channel; replies flow
 // both ways (Discord thread / DMs <-> website).
+const TEAM_SUBS = { Administration: 'Support', 'Community Engagement': 'Partnerships' };   // optional subtitles on Contact a team
 const TEAMS = [
   { id: 'Administration', label: 'Administration', sub: 'Support', icon: 'clipboard', color: 0x5C72FF },
   { id: 'Nursing', label: 'Nursing', sub: '', icon: 'nurse', color: 0xFF3D7E },
@@ -1235,7 +1256,7 @@ async function renderRoster(body) {
   const byId = Object.fromEntries((allRoles || []).map((r) => [r.id, r]));
   const onNow = Object.fromEntries((onq.data || []).map((s) => [s.discord_id, s]));
   const colour = (name) => (DEPARTMENTS.find((d) => d.name === name) || {}).color;
-  const SECTIONS = ['Leadership', 'Administration', 'Nursing', 'Paramedicine', 'Community Engagement', 'Other'];
+  const SECTIONS = ['Leadership', ...DEPARTMENTS.map((d) => d.name), 'Other'];
   const everyone = (people || []).map((p) => {
     const roles = (p.role_ids || []).map((id) => byId[id]).filter(Boolean);
     const lead = roles.filter((r) => r.kind === 'leadership');
