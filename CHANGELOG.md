@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.25.0 (2026-11-18)
+
+**Added:**
+- **Exam lock** for quizzes and exams: **Start exam** goes full screen. Leaving once shows a big warning with a 30-second countdown; leaving again, or staying away for 30 seconds or more, ends the exam ("Your exam has ended"). Reloading the page counts as leaving. An ended exam uses a try, can't be submitted, and its answers are kept unmarked (Not passed). The server decides, so editing the page can't get round it.
+- Each exam chooses **Allow phones** (stay on this page; the default for formal exams) or **Computer only** (full screen required). A website can't truly lock a device: this detects leaving and enforces the rules.
+- Assessors see an **exit log** on every attempt, and Progress shows ended attempts.
+- **My courses** is now its own page listing every course you're enrolled in, across all your departments.
+
+Bot: no change.
+Database change: yes, migration 0055 (exam lock; already applied).
+
 ## 0.24.1 (2026-11-18)
 
 **Changed:**
