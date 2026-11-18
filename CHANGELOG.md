@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.36.1 (2026-11-19)
+
+**Fixed:**
+- In the application builder, moving a stage up could blank its name and lose its buttons. Stages saved without a name now show as boxes to fill in, and empty stages are never saved.
+
+Database change: no.
+
 ## 0.36.0 (2026-11-19)
 
 **Changed:**
