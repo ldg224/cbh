@@ -1,5 +1,6 @@
 // Department pages (#directors/<dept>), redesigned 0.17.x (Bravo; owner's choices in chat, 18 Nov 2026).
-// Layout A (tabs): a department banner (Directors violet into the department colour, with its numbers), then tabs
+// 0.33.0 (owner): Overview, Roster, Shifts, Events, Courses; Leaders: Applications, Sessions, Tickets, Manage. Members lives
+// on Roster, Meetings on Events, History + Ranks & Permissions on Manage (toggles at the top). Was (0.17.x) tabs
 // Overview, Members, Courses, Meetings, History. Courses comes in a later stage and shows as "being built" for
 // now. Meetings (stage 2, migration 0025) are scheduled here and posted by CareBeyond Helper (meetings cog). Every change (year/rank, add, remove) takes an optional reason, shown in History.
 // Back end: dept_roster, dept_weekly_hours, member_search, dept_set_rank / dept_add / dept_remove (reason
@@ -59,7 +60,7 @@ async function renderDept(body, tool) {
   const dep = DEPARTMENTS.find((d) => d.name === dept) || { name: dept, color: '#3a82d0', icon: 'clock' };
   const route = `#directors/${tool.id}`;
   const here = () => location.hash.split('/').slice(0, 2).join('/') === route;   // a tab may follow: #directors/<id>/<tab>
-  const linked = location.hash.split('/')[2];
+  let linked = location.hash.split('/')[2];
   let linkedSub = location.hash.split('/').slice(3).join('/');   // e.g. one application: #directors/<dept>/applications/<id>
   $('page-title').hidden = true;
   body.style.setProperty('--dept-tab', dep.color);
@@ -80,7 +81,7 @@ async function renderDept(body, tool) {
   const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ, disQ, todoQ] = await Promise.all([
     lead ? sb.rpc('dept_roster', { department: dept }) : none,
     sb.from('roles').select('id, name, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept).order('rank_order', { ascending: false }),
-    seeHist || seeDept ? sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100) : none,
+    seeHist || seeDept || editM ? sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100) : none,
     seeAct ? sb.rpc('dept_weekly_hours', { department: dept }) : none,
     lead ? sb.from('meetings').select('*').eq('department', dept).order('scheduled_for', { ascending: false }).limit(60) : none,
     lead ? sb.rpc('dept_last_meeting', { department: dept }) : none,
@@ -155,26 +156,59 @@ async function renderDept(body, tool) {
 
   // ---------- banner + tabs ----------
   const ext = (id) => window.DEPT_TABS.filter((x) => !x.tool && x.id === id && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x }));
-  const TABS = [
-    ...(seeDept || member ? [{ id: 'overview', label: 'Overview' }] : []),
-    ...ext('roster'), ...ext('events'),
-    ...(seeDept ? [{ id: 'members', label: 'Members', n: people.length }] : []),
-    // Courses: a placeholder until a page registers DEPT_TABS id 'courses' (Alpha's courses.js), which then replaces it.
-    ...((seeDept || can('courses.manage') || can('courses.assess')) && !window.DEPT_TABS.some((x) => x.id === 'courses') ? [{ id: 'courses', label: 'Courses', soon: true }] : []),
-    ...(seeDept || manageMt || attMt ? [{ id: 'meetings', label: 'Meetings', n: upcoming.length || null }] : []),
-    ...(seeHist ? [{ id: 'history', label: 'History', n: hist.length || null }] : []),
-    ...window.DEPT_TABS.filter((x) => !x.tool && !['roster', 'events'].includes(x.id) && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x })),
-    ...(director ? [{ id: 'ranks', label: 'Ranks & Permissions' }] : []),
-    // Hospital tools (Administration only, by permission; admin-tools.js), after a divider.
-    ...window.DEPT_TABS.filter((x) => x.tool && dpShows(x, dept)).map((x, i) => ({ id: x.id, label: x.label, ext: x, first: i === 0 })),
+  // 0.33.0 (owner): one inner menu, the same on phones (these tabs) and computers (desk.js deptPages).
+  //   Main: Overview, Roster, Shifts, Events, Courses. Leaders: Applications, Sessions, Tickets, Manage. Then the
+  //   Administration Hospital Tools. Members folded into Roster (leaders get its edit controls there), Meetings into
+  //   Events, History + Ranks & Permissions into Manage: each folded page is a toggle at the top, never its own page.
+  const memberList = seeDept || editM || seeAct;   // leaders get the full member list (and its edit controls) on Roster
+  const rosterExt = window.DEPT_TABS.find((x) => !x.tool && x.id === 'roster' && dpShows(x, dept));
+  const eventsExt = window.DEPT_TABS.find((x) => !x.tool && x.id === 'events' && dpShows(x, dept));
+  const SECS = {
+    events: [...(eventsExt ? [['upcoming', 'Upcoming']] : []), ...(seeDept || manageMt || attMt ? [['meetings', 'Meetings']] : [])],
+    // History for history.view, and for members.edit (they clear failed changes there); the rest for the Director.
+    manage: [...(seeHist || editM ? [['history', 'History']] : []), ...(director ? [['ranks', 'Ranks & Permissions']] : [])],
+  };
+  const KNOWN = ['roster', 'shifts', 'events', 'courses', 'applications', 'sessions', 'tickets'];
+  // Nobody gets a department they're not in (owner, 0.33.0); executives see every department. Someone outside it who
+  // holds a permission there keeps the department, but only the pages that permission opens (no Overview, Roster or
+  // Shifts): Hospital Tools for hosp.*, Courses for courses.assess, and so on (Charlie, 19 Nov 2026).
+  const outsider = !exec && !inMyDept(dept);
+  const leadTabs = [
+    ...ext('applications'), ...ext('sessions'), ...ext('tickets'),
+    ...window.DEPT_TABS.filter((x) => !x.tool && !KNOWN.includes(x.id) && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x })),
+    ...(SECS.manage.length ? [{ id: 'manage', label: 'Manage' }] : []),
   ];
-  if (!TABS.length) { body.innerHTML = `<div class="card"><p class="muted small">You don’t have anything to see in ${esc(dept)} yet.</p></div>`; return; }
-  let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || dpTab[dept] || TABS[0].id;
+  const tools = window.DEPT_TABS.filter((x) => x.tool && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x }));
+  const mainTabs = [
+    ...(outsider ? [] : [
+      ...(seeDept || member ? [{ id: 'overview', label: 'Overview' }] : []),
+      ...(memberList || rosterExt ? [{ id: 'roster', label: 'Roster' }] : []),
+      ...ext('shifts'),
+    ]),
+    ...(SECS.events.length ? [{ id: 'events', label: 'Events' }] : []),
+    // Courses: a placeholder until a page registers DEPT_TABS id 'courses' (courses.js), which then replaces it.
+    ...ext('courses'),
+    ...((seeDept || can('courses.manage') || can('courses.assess')) && !window.DEPT_TABS.some((x) => x.id === 'courses') ? [{ id: 'courses', label: 'Courses', soon: true }] : []),
+  ];
+  const TABS = [
+    ...mainTabs,
+    ...leadTabs.map((t, i) => (i === 0 && mainTabs.length ? { ...t, sep: true } : t)),
+    ...tools.map((t, i) => (i === 0 && (mainTabs.length || leadTabs.length) ? { ...t, sep: true } : t)),
+  ];
+  // Old links and remembered tabs land on the page that took them over (0.33.0).
+  const ALIAS = { members: ['roster', ''], meetings: ['events', 'meetings'], history: ['manage', 'history'], ranks: ['manage', 'ranks'] };
+  const resolve = (id, sub) => (ALIAS[id] ? [ALIAS[id][0], sub || ALIAS[id][1]]
+    : id === 'roster' && /^(most_minutes|top)$/.test(sub || '') && TABS.some((t) => t.id === 'shifts') ? ['shifts', 'leaderboard'] : [id, sub]);
+  const secOf = {};   // the open toggle on Events and Manage
+  if (linked) [linked, linkedSub] = resolve(linked, linkedSub);
+  if (!TABS.length) { body.innerHTML = `${bannerHtml}<div class="card"><p class="muted small">${outsider ? `You’re not in ${esc(dept)}.` : `You don’t have anything to see in ${esc(dept)} yet.`}</p></div>`; return; }
+  if (!linked && ALIAS[dpTab[dept]]) secOf[ALIAS[dpTab[dept]][0]] = ALIAS[dpTab[dept]][1];   // e.g. back to Meetings after saving one
+  let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || (dpTab[dept] && resolve(dpTab[dept])[0]) || TABS[0].id;
   if (!TABS.some((t) => t.id === tab)) tab = TABS[0].id;
   body.innerHTML = `
     ${bannerHtml}
     <div class="dp-tabwrap"><button type="button" class="dp-tabarrow l" data-tabscroll="-1" aria-label="Scroll the tabs left" hidden><span aria-hidden="true"></span></button>
-    <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `${t.first && TABS.some((x) => !(x.ext && x.ext.tool)) ? '<span class="dp-tsep" aria-hidden="true"></span>' : ''}<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}"${t.ext && t.ext.tool ? ' class="dp-tooltab"' : ''}>${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
+    <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `${t.sep ? '<span class="dp-tsep" aria-hidden="true"></span>' : ''}<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}"${t.ext && t.ext.tool ? ' class="dp-tooltab"' : ''}>${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
     <button type="button" class="dp-tabarrow r" data-tabscroll="1" aria-label="Scroll the tabs right" hidden><span aria-hidden="true"></span></button></div>
     <p class="error" id="dp-err" hidden></p>
     <div id="dp-pane" role="tabpanel"></div>`;
@@ -189,22 +223,47 @@ async function renderDept(body, tool) {
   });
   const fail = (msg) => { const e = body.querySelector('#dp-err'); e.textContent = msg; e.hidden = !msg; };
 
-  function show(id, focus) {
-    tab = dpTab[dept] = id;
+  function show(id0, focus, sub0) {
     // The deep-linked tab keeps its sub-path (and hands it to an extra tab's render) on its first show only.
-    const sub = id === linked ? linkedSub : '';
-    if (id === linked) linkedSub = '';
-    try { history.replaceState(null, '', `${route}${id === 'overview' ? '' : '/' + id}${sub ? '/' + sub : ''}`); } catch { /* fine without it */ }
+    let [id, sub] = resolve(id0, sub0 ?? (id0 === linked ? linkedSub : ''));
+    if (id0 === linked) linkedSub = '';
+    if (!TABS.some((t) => t.id === id)) id = TABS[0].id;
+    tab = dpTab[dept] = id;
+    if (SECS[id]) {
+      const has = (k) => SECS[id].some(([x]) => x === k);
+      sub = has(sub) ? sub : has(secOf[id]) ? secOf[id] : SECS[id][0][0];
+      secOf[id] = sub;
+    }
+    const tail = sub && !(SECS[id] && sub === SECS[id][0][0]) ? '/' + sub : '';
+    try { history.replaceState(null, '', `${route}${id === 'overview' ? '' : '/' + id}${tail}`); } catch { /* fine without it */ }
     tabsEl.querySelectorAll('[role=tab]').forEach((b) => { const on = b.dataset.tab === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
     const cur = tabsEl.querySelector('[aria-selected="true"]');   // keep the chosen tab in view on narrow screens
     if (cur && (cur.offsetLeft < tabsEl.scrollLeft || cur.offsetLeft + cur.offsetWidth > tabsEl.scrollLeft + tabsEl.clientWidth)) tabsEl.scrollLeft = cur.offsetLeft - 12;
     pane.setAttribute('aria-labelledby', 'dpt-' + id);
     fail('');
-    const ext = TABS.find((t) => t.id === id)?.ext;
-    if (ext) { pane.innerHTML = ''; try { ext.render(pane, dept, sub); } catch (e) { pane.innerHTML = `<p class="error">${esc(e.message || String(e))}</p>`; } }
-    else ({ overview: drawOverview, members: drawMembers, courses: drawCourses, meetings: drawMeetings, history: drawHistory, ranks: drawRanks })[id]();
+    const extOf = (x) => {
+      pane.innerHTML = toggles();
+      const el = pane.querySelector('.dp-secbody') || pane;
+      try { x.render(el, dept, sub); } catch (e) { el.innerHTML = `<p class="error">${esc(e.message || String(e))}</p>`; }
+    };
+    const tx = TABS.find((t) => t.id === id)?.ext;
+    if (tx) extOf(tx);
+    else if (id === 'roster') { if (memberList) drawMembers(sub); else extOf(rosterExt); }
+    else if (id === 'events') { if (sub === 'meetings') drawMeetings(); else extOf(eventsExt); }
+    else if (id === 'manage') { if (sub === 'ranks') drawRanks(); else drawHistory(); }
+    else ({ overview: drawOverview, courses: drawCourses })[id]();
     loadFaces(pane);
   }
+  // The toggles at the top of a page that took others in (Events: Upcoming | Meetings; Manage: History | Ranks &
+  // Permissions): one page, its parts as toggles (owner, 0.33.0). Only when there are two or more to pick from.
+  function toggles() {
+    const list = SECS[tab] || [];
+    return list.length > 1 ? `<div class="dp-toggles" role="group" aria-label="${esc(TABS.find((t) => t.id === tab)?.label || '')}">${list.map(([k, l]) => `<button type="button" data-sec="${k}" aria-pressed="${secOf[tab] === k}">${esc(l)}</button>`).join('')}</div><div class="dp-secbody"></div>` : '';
+  }
+  pane.addEventListener('click', (e) => {
+    const b = e.target.closest('.dp-toggles [data-sec]');
+    if (b && b.getAttribute('aria-pressed') !== 'true') show(tab, false, b.dataset.sec);
+  });
   tabsEl.onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) show(b.dataset.tab); };
   tabsEl.onkeydown = (e) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
@@ -219,22 +278,22 @@ async function renderDept(body, tool) {
     const attention = [
       // Applications and attendance come from my_todo(), so this card agrees with the sidebar badge and Home.
       ...(todo && Number(todo.apps) ? [{ ico: 'resume', name: plural(Number(todo.apps), 'application') + ' to review', why: todo.apps_oldest ? 'Oldest ' + when(todo.apps_oldest) : 'Waiting for a decision', go: 'applications', btn: 'Review' }] : []),
-      ...(todo ? (todo.attendance_list || []).slice(0, 3).map((m) => ({ ico: 'calendar', name: 'Take attendance for ' + m.title, why: when(m.at), go: 'meetings', btn: 'Take attendance' })) : []),
+      ...(todo ? (todo.attendance_list || []).slice(0, 3).map((m) => ({ ico: 'calendar', name: 'Take attendance for ' + m.title, why: when(m.at), go: 'events', sub: 'meetings', btn: 'Take attendance' })) : []),
       // Failed rank changes: like my_todo(), the last 7 days and not dismissed.
       ...hist.filter((c) => c.status === 'failed' && !dismissed['failed_change:' + c.id] && (!todo || Date.now() - new Date(c.created_at) < 7 * 864e5)).slice(0, 3).map((c) => ({ id: c.target_discord_id, name: nameOf(c.target_discord_id, c.target_name), why: 'Change failed: ' + (c.error || 'try again'), flag: ['bad', 'Failed'] })),
       ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: dpLastActive(p) ? 'Not active since ' + new Date(dpLastActive(p)).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'No shifts or meetings yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
     ];
-    const attnHtml = seeAct || editM || attention.length ? `<section class="card dp-card dv-attn"><div class="dp-head"><h2>Needs Your Attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
+    const attnHtml = seeAct || editM || attention.length ? `<section class="card dp-card dv-attn"><div class="dp-head"><h2>Needs Your Attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="roster" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
           ${attention.length ? `<div class="dp-list">${attention.map((a) => `<div class="dp-mini">${a.ico ? `<span class="hd-ico" style="--c:${dep.color};--icon:${iconUrl(a.ico)}" aria-hidden="true"></span>` : face({ name: a.name, discordId: a.id, avatarUrl: a.av || byId[a.id]?.avatar_url || '', size: 'm' })}
-              <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div>${a.go ? `<button type="button" class="ghost small-btn" data-go="${a.go}">${a.btn}</button>` : `<span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span>`}</div>`).join('')}</div>`
+              <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div>${a.go ? `<button type="button" class="ghost small-btn" data-go="${a.go}"${a.sub ? ` data-sub="${a.sub}"` : ''}>${a.btn}</button>` : `<span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span>`}</div>`).join('')}</div>`
             : `<p class="muted small">${seeAct ? `Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.` : 'Nothing needs you right now.'}</p>`}
         </section>` : '';
-    const wire = (root) => root.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; show(b.dataset.go); });
+    const wire = (root) => root.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; show(b.dataset.go, false, b.dataset.sub || ''); });
     window.dvOverview(pane, dept, attnHtml, wire);
   }
 
   // ---------- Members ----------
-  const memState = { q: '', filter: 'all', sort: 'rank' };
+  const memState = { q: '', filter: 'all', sort: 'rank', rank: 'all' };
   const SORTS = seeAct ? { rank: 'Year', hours: 'Hours', recent: 'Last shift', name: 'Name' } : { rank: 'Year', name: 'Name' };
   const extras = {};   // DEPT_MEMBER_EXTRAS results for this render: id -> Map(discord_id -> { html, sort, title })
   let extrasLoaded = null;
@@ -245,8 +304,14 @@ async function renderDept(body, tool) {
     return extrasLoaded;
   }
   if (word === 'rank') SORTS.rank = 'Rank';
-  function drawMembers() {
+  // The rank toggles at the top of Roster (owner, 0.33.0: they replace the saved Views in the side menu).
+  const rankTabs = () => ranks.slice().reverse().filter((r) => people.some((p) => p.rank_role_id === r.id));
+  function drawMembers(sub) {
+    if (sub && /^year:/.test(sub)) memState.rank = sub.slice(5);
+    if (memState.rank !== 'all' && !rankTabs().some((r) => r.id === memState.rank)) memState.rank = 'all';
+    const rt = rankTabs();
     pane.innerHTML = `
+      ${rt.length > 1 ? `<div class="dp-toggles dp-ranktog" role="group" aria-label="${Word}">${[['all', 'Everyone', people.length], ...rt.map((r) => [r.id, r.rank_label, people.filter((p) => p.rank_role_id === r.id).length])].map(([k, l, n]) => `<button type="button" data-rank="${esc(k)}" aria-pressed="${memState.rank === k}">${esc(l)} <span class="count">${n}</span></button>`).join('')}</div>` : ''}
       <div class="dp-mtools">
         <label class="ma-search dp-q"><span class="h-glass" aria-hidden="true"></span><input type="search" id="dp-q" placeholder="Find a member" autocomplete="off" aria-label="Find a member" value="${esc(memState.q)}"></label>
         <div class="chips dp-filters" role="group" aria-label="Show">
@@ -257,6 +322,13 @@ async function renderDept(body, tool) {
       </div>
       <div id="dp-add-box"></div>
       <div class="card dp-members" id="dp-list"></div>`;
+    pane.querySelector('.dp-ranktog')?.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-rank]'); if (!b) return;
+      memState.rank = b.dataset.rank;
+      pane.querySelectorAll('.dp-ranktog [data-rank]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      try { history.replaceState(null, '', `${route}/roster${memState.rank === 'all' ? '' : '/year:' + memState.rank}`); } catch { /* fine */ }
+      drawRows();
+    });
     const q = pane.querySelector('#dp-q');
     q.oninput = () => { memState.q = q.value; drawRows(); };
     pane.querySelector('.dp-filters').onclick = (e) => {
@@ -269,7 +341,7 @@ async function renderDept(body, tool) {
     if (editM) pane.querySelector('#dp-add-open').onclick = openAdd;
     drawRows();
     if (window.DEPT_MEMBER_EXTRAS.length && !extrasLoaded) loadExtras().then(() => {
-      if (!pane.isConnected || tab !== 'members') return;
+      if (!pane.isConnected || tab !== 'roster') return;
       const sel = pane.querySelector('#dp-sort');
       if (sel) sel.innerHTML = Object.entries(SORTS).map(([k, l]) => `<option value="${k}"${memState.sort === k ? ' selected' : ''}>${esc(l)}</option>`).join('');
       drawRows();
@@ -278,7 +350,7 @@ async function renderDept(body, tool) {
   function drawRows() {
     const list = pane.querySelector('#dp-list');
     const term = memState.q.trim().toLowerCase();
-    let rows = people.filter((p) => (!term || cleanName(p.display_name).toLowerCase().includes(term))
+    let rows = people.filter((p) => (memState.rank === 'all' || p.rank_role_id === memState.rank) && (!term || cleanName(p.display_name).toLowerCase().includes(term))
       && (memState.filter === 'all' || (memState.filter === 'on' ? p.on_shift : dpInactive(p))));
     const last = (p) => (p.on_shift ? Infinity : p.last_shift_at ? new Date(p.last_shift_at).getTime() : 0);
     if (memState.sort === 'hours') rows = rows.slice().sort((a, b) => Number(b.week_hours || 0) - Number(a.week_hours || 0));
@@ -289,7 +361,7 @@ async function renderDept(body, tool) {
     }
     if (memState.sort === 'name') rows = rows.slice().sort((a, b) => cleanName(a.display_name).localeCompare(cleanName(b.display_name)));
     if (!people.length) { list.innerHTML = `<p class="muted small">Nobody is in ${esc(dept)} yet. Use Add someone to bring people in.</p>`; return; }
-    if (!rows.length) { list.innerHTML = `<p class="muted small">${term ? 'Nobody matches that name.' : memState.filter === 'on' ? 'Nobody is on shift.' : 'Nobody is inactive.'}</p>`; return; }
+    if (!rows.length) { list.innerHTML = `<p class="muted small">${term ? 'Nobody matches that name.' : memState.filter === 'on' ? 'Nobody is on shift.' : memState.filter === 'inactive' ? 'Nobody is inactive.' : 'Nobody here yet.'}</p>`; return; }
     list.innerHTML = rows.map((p) => {
       const pend = pending[p.discord_id], name = cleanName(p.display_name);
       return `<div class="dp-row" data-id="${esc(p.discord_id)}">
@@ -462,7 +534,7 @@ async function renderDept(body, tool) {
       const er = f.querySelector('.error'); go.disabled = true; er.hidden = true;
       const { error } = await sb.rpc('dept_add', { target: picked, department: dept, rank_role_id: rank, reason: f.querySelector('textarea').value.trim() || null });
       if (error) { er.textContent = error.message; er.hidden = false; go.disabled = false; return; }
-      dpTab[dept] = 'members';
+      dpTab[dept] = 'roster';
       renderDept(body, tool);
     };
   }
@@ -512,7 +584,7 @@ async function renderDept(body, tool) {
         ${m.moved_at && m.status === 'scheduled' ? `<span class="dp-moved">Moved${m.moved_from_at ? ' from ' + esc(dpWhenShort(m.moved_from_at)) : ''}${m.moved_from_channel_id && m.moved_from_channel_id !== m.voice_channel_id ? (m.moved_from_at ? ', ' : ' from ') + esc(chanName(m.moved_from_channel_id) || 'another channel') : ''}</span>` : ''}</div>${st}</div>`;
   }
   function drawMeetings() {
-    pane.innerHTML = `
+    pane.innerHTML = `${toggles().replace('<div class="dp-secbody"></div>', '')}
       <div class="dp-head dp-mhead"><h2>Upcoming</h2>${manageMt ? '<button class="refresh" type="button" id="dp-new-meet">Schedule a meeting</button>' : ''}</div>
       <div id="dp-mt-form"></div>
       <div class="card dp-mlist">${upcoming.length ? upcoming.map((m) => meetRow(m)).join('') : `<p class="muted small">No meetings planned. Schedule one and CareBeyond Helper posts it in the ${esc(dept)} channel.</p>`}</div>
@@ -729,13 +801,13 @@ async function renderDept(body, tool) {
   // Ranks down the side, permissions across. "Change members" also has a change window: the lowest and highest rank
   // that rank may manage. Each tick saves straight away (set_rank_perm / set_rank_window).
   const PERMS = [
-    ['dept.view', 'See this page', 'Overview and members'],
+    ['dept.view', 'See this page', 'Overview and the full roster'],
     ['activity.view', 'See activity', 'Hours and inactivity'],
     ['members.edit', 'Edit members', 'Ranks, add, remove'],
-    ['history.view', 'See history', 'Changes and reasons'],
-    ['meetings.manage', 'Run meetings', 'Schedule and cancel'],
-    ['meetings.attendance', 'Attendance', 'Attendance and notes'],
-  ['posts.manage', 'Post updates', 'Post as From the Director'],
+    ['history.view', 'See history', 'Changes and reasons, in Manage'],
+    ['meetings.manage', 'Run meetings', 'Schedule, move and cancel meetings in Events'],
+    ['meetings.attendance', 'Attendance', 'Meeting attendance and notes'],
+    ['posts.manage', 'Post updates', 'Post as From the Director'],
     ['applications.review', 'Review applications', 'Review and decide'],
     ['applications.settings', 'Edit applications', 'Forms, settings, stages'],
     ['courses.manage', 'Edit courses', 'Create and edit courses'],
@@ -747,7 +819,7 @@ async function renderDept(body, tool) {
     (permQ.data || []).forEach((x) => { if (rankById[x.role_id]) held[x.role_id + '|' + x.perm] = x; });
     const low = rows.slice().sort((a, b) => a.rank_order - b.rank_order);
     const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.filter((x) => x.rank_order < r.rank_order).map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
-    pane.innerHTML = `<div class="card dp-perms-card">
+    pane.innerHTML = `${toggles().replace('<div class="dp-secbody"></div>', '')}<div class="card dp-perms-card">
       <div class="dp-head"><h2>Who Can Do What</h2><span class="muted small-meta">The Director and executives can always do everything.</span></div>
       <p class="error" id="dp-perm-err" hidden></p>
       <div class="dp-pgrid" role="table" aria-label="Rank permissions">
@@ -787,7 +859,7 @@ async function renderDept(body, tool) {
   function drawHistory() {
     const F = [['all', 'All'], ['set_rank', `${Word} changes`], ['add', 'Added'], ['remove', 'Removed']];
     const rows = hist.filter((c) => histState.f === 'all' || c.action === histState.f);
-    pane.innerHTML = `<div class="chips dp-filters" role="group" aria-label="Show">${F.map(([k, l]) => `<button type="button" class="chip${histState.f === k ? ' on' : ''}" data-h="${k}" aria-pressed="${histState.f === k}">${l}</button>`).join('')}</div>
+    pane.innerHTML = `${toggles().replace('<div class="dp-secbody"></div>', '')}<div class="chips dp-filters" role="group" aria-label="Show">${F.map(([k, l]) => `<button type="button" class="chip${histState.f === k ? ' on' : ''}" data-h="${k}" aria-pressed="${histState.f === k}">${l}</button>`).join('')}</div>
       <div class="card dp-hist">${rows.length ? rows.map((c) => changeRow(c, true)).join('') : `<p class="muted small">${hist.length ? 'Nothing of that kind yet.' : `No changes in ${esc(dept)} yet.`}</p>`}</div>
       ${hist.length >= 100 ? '<p class="muted small">Showing the latest 100 changes.</p>' : ''}`;
     pane.querySelector('.dp-filters').onclick = (e) => { const b = e.target.closest('[data-h]'); if (b) { histState.f = b.dataset.h; drawHistory(); } };

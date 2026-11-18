@@ -38,10 +38,10 @@
   function pageCounts(d) {
     const t = window.deskTodo[d.name] || {}, n = (v) => Number(v || 0);
     return {
-      members: n(t.inactive_alert) ? { n: n(t.inactive_alert), sev: 'red' } : n(t.inactive_note) ? { n: n(t.inactive_note), sev: 'orange' } : null,
-      meetings: n(t.attendance) ? { n: n(t.attendance), sev: 'red' } : null,
+      roster: n(t.inactive_alert) ? { n: n(t.inactive_alert), sev: 'red' } : n(t.inactive_note) ? { n: n(t.inactive_note), sev: 'orange' } : null,
+      events: n(t.attendance) ? { n: n(t.attendance), sev: 'red' } : null,
       applications: n(t.apps) ? { n: n(t.apps), sev: 'red' } : null,
-      history: n(t.failed) ? { n: n(t.failed), sev: 'red' } : null,
+      manage: n(t.failed) ? { n: n(t.failed), sev: 'red' } : null,
       courses: n(t.courses) ? { n: n(t.courses) + n(t.courses_note), sev: 'red' } : n(t.courses_note) ? { n: n(t.courses_note), sev: 'orange' } : null,
     };
   }
@@ -51,25 +51,32 @@
     const red = Number(t.red ?? (Number(t.apps || 0) + Number(t.attendance || 0) + Number(t.failed || 0))), orange = Number(t.orange || 0);
     return red ? { n: red, sev: 'red' } : orange ? { n: orange, sev: 'orange' } : null;
   }
-  // The department window's menu. `grp`: 'main' for everyone's pages, 'lead' for leaders' pages, 'tool' for the
-  // Administration hospital tools (admin-tools.js). Same pages, same order and same permissions as dept.js's tabs.
+  // The department window's menu (0.33.0, owner). `grp`: 'main' (Overview, Roster, Shifts, Events, Courses), 'lead'
+  // (Applications, Sessions, Tickets, Manage), 'tool' (the Administration Hospital Tools, admin-tools.js). The same
+  // pages, order and permissions as dept.js's tabs (the phone menu): change both together.
   function deptPages(d) {
     const can = (p) => hasPerm(p, d.name), director = !!access.exec || myDirects.includes(d.name);
     const member = director || inMyDept(d.name);
+    const seeDept = can('dept.view'), editM = can('members.edit'), seeAct = can('activity.view'), seeHist = can('history.view');
+    const meet = seeDept || can('meetings.manage') || can('meetings.attendance');
+    // Not in this department and not an executive: only what a permission here opens (no Overview, Roster or Shifts).
+    const outsider = !access.exec && !inMyDept(d.name);
     const base = `#directors/${d.id}`, pc = pageCounts(d), cnt = (k) => pc[k] || {};
     const ext = (window.DEPT_TABS || []).filter((x) => { try { return x.show(d.name); } catch { return false; } });
     const extItem = (x, grp) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.icon || (x.id === 'applications' ? 'resume' : x.id === 'courses' ? 'graduation-cap' : 'clipboard'), tab: x.id, grp, ...cnt(x.id) });
     const one = (id, grp) => ext.filter((x) => x.id === id && !x.tool).map((x) => extItem(x, grp));
+    const has = (id) => ext.some((x) => x.id === id && !x.tool);
+    const KNOWN = ['roster', 'shifts', 'events', 'courses', 'applications', 'sessions', 'tickets'];
     return [
-      (member || can('dept.view')) && { href: base, label: 'Overview', icon: 'home', tab: 'overview', grp: 'main' },
-      ...one('roster', 'main'), ...one('events', 'main'),
+      !outsider && (member || seeDept) && { href: base, label: 'Overview', icon: 'home', tab: 'overview', grp: 'main' },
+      !outsider && (has('roster') || seeDept || editM || seeAct) && { href: base + '/roster', label: 'Roster', icon: 'people', tab: 'roster', grp: 'main', ...cnt('roster') },
+      ...(outsider ? [] : one('shifts', 'main')),
+      (has('events') || meet) && { href: base + '/events', label: 'Events', icon: 'calendar', tab: 'events', grp: 'main', ...cnt('events') },
       ...one('courses', 'main'),
-      (can('dept.view') || can('courses.manage') || can('courses.assess')) && !ext.some((x) => x.id === 'courses') && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', grp: 'main', tag: 'Soon' },
-      can('dept.view') && { href: base + '/members', label: 'Members', icon: 'people', tab: 'members', grp: 'lead', ...cnt('members') },
-      (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && { href: base + '/meetings', label: 'Meetings', icon: 'calendar', tab: 'meetings', grp: 'lead', ...cnt('meetings') },
-      ...ext.filter((x) => !x.tool && !['roster', 'events', 'courses'].includes(x.id)).map((x) => extItem(x, 'lead')),
-      can('history.view') && { href: base + '/history', label: 'History', icon: 'history', tab: 'history', grp: 'lead', ...cnt('history') },
-      director && { href: base + '/ranks', label: 'Ranks & Permissions', icon: 'star', tab: 'ranks', grp: 'lead' },
+      (seeDept || can('courses.manage') || can('courses.assess')) && !ext.some((x) => x.id === 'courses') && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', grp: 'main', tag: 'Soon' },
+      ...one('applications', 'lead'), ...one('sessions', 'lead'), ...one('tickets', 'lead'),
+      ...ext.filter((x) => !x.tool && !KNOWN.includes(x.id)).map((x) => extItem(x, 'lead')),
+      (seeHist || editM || director) && { href: base + '/manage', label: 'Manage', icon: 'shield', tab: 'manage', grp: 'lead', ...cnt('manage') },
       ...ext.filter((x) => x.tool).map((x) => ({ ...extItem(x, 'tool'), n: undefined })),
     ].filter(Boolean);
   }
@@ -93,9 +100,8 @@
     const h = hash();
     if (it.tab) {   // department page: #directors/<id>[/<tab>[/<sub>]]
       const [a, b, c] = h.slice(1).split('/'), [, id] = it.href.slice(1).split('/');
-      const [, , , dd] = h.slice(1).split('/');
-      if (a !== 'directors' || b !== id || (c || 'overview') !== it.tab) return false;
-      return it.view ? dd === it.view : !(it.tab === 'roster' && dd && dd !== 'all');   // a saved view, or the plain page
+      const old = { members: 'roster', meetings: 'events', history: 'manage', ranks: 'manage' };   // old links (0.33.0)
+      return a === 'directors' && b === id && (old[c] || c || 'overview') === it.tab;
     }
     if (it.dept) return h.startsWith(it.href + '/') || h === it.href;
     if (it.href === '#') return h === '#' || h === '';
@@ -176,14 +182,12 @@
     sub.inert = !d || page.hidden;   // out of view: not focusable
     if (!d || page.hidden) return;
     const pages = deptPages(d), rank = rankIn(d);
-    const views = pages.some((p) => p.tab === 'roster') && window.dvViews ? window.dvViews(d) : [];   // deptviews.js
     const group = (g) => pages.filter((p) => p.grp === g).map(link).join('');
     sub.style.setProperty('--c', d.color);
     sub.setAttribute('aria-label', d.name);
     sub.innerHTML = `<div class="ws-in">
       <a class="ws-head" href="#directors/${d.id}"><span class="ws-tile" style="${icon(d.icon)}" aria-hidden="true"></span><span class="ws-name"><b>${esc(d.name)}</b>${rank ? `<small>${esc(rank === 'Director' ? 'You’re the Director' : rank === 'Executive' ? 'Executive View' : rank)}</small>` : ''}</span></a>
       ${group('main')}
-      ${views.length ? `<div class="ds-cat">Views</div>${views.map(link).join('')}` : ''}
       ${pages.some((p) => p.grp === 'lead') ? `<div class="ds-cat">Leaders</div>${group('lead')}` : ''}
       ${pages.some((p) => p.grp === 'tool') ? `<div class="ds-cat">Hospital Tools</div>${group('tool')}` : ''}</div>`;
   }

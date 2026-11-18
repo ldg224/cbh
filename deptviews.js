@@ -3,8 +3,8 @@
 // Back end: Alpha's DEPT-OVERVIEW-CONTRACT (0078/0079: my_department_overview, dept_post_*, dept_set_target,
 // dept_targets, dept_roster_view) and Bravo's EVENTS-CONTRACT (0075-0077: events_feed, my_whats_on, event_rsvp,
 // event_get, event_kinds_list, event_save, event_cancel). Errors from the database are shown as written.
-// dept.js calls dvOverview() for its Overview tab; the Roster and Events tabs register through DEPT_TABS; desk.js asks
-// dvViews() for the saved views in the window's menu; #events and #events/<id> is the hospital-wide list and one event.
+// dept.js calls dvOverview() for its Overview tab; the Roster and Events tabs register through DEPT_TABS (dept.js draws
+// leaders' Roster itself, with the member list); #events and #events/<id> is the hospital-wide list and one event.
 
 window.DEPT_TABS = window.DEPT_TABS || [];
 const dvRanks = {};   // department -> its ranks [{ id, rank_label, rank_order, badge_color }], highest first
@@ -12,7 +12,6 @@ async function dvLoadRanks(dept) {
   if (dvRanks[dept]) return dvRanks[dept];
   const { data } = await sb.from('roles').select('id, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept);
   dvRanks[dept] = (data || []).sort((a, b) => b.rank_order - a.rank_order);
-  window.deskRefresh?.();   // the window's menu lists the Years
   return dvRanks[dept];
 }
 const dvLeader = (dept) => !!access.exec || myDirects.includes(dept) || hasPerm('activity.view', dept);
@@ -23,21 +22,6 @@ const dvMins = (m) => { m = Math.round(Number(m || 0)); return m >= 60 ? `${Math
 const dvHello = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
 const dvFirst = () => cleanName(($('name')?.textContent || '').trim()).split(/\s+/)[0] || '';
 const dvDeptOf = (name) => DEPARTMENTS.find((d) => d.name === name);
-
-// The saved views in the window's menu (desk.js). Leaders: Most minutes, Top performing and every rank. Members: their
-// own rank (the database allows "all" and their own Year; rankings are for leaders).
-window.dvViews = (d) => {
-  if (!dvRanks[d.name]) { dvLoadRanks(d.name); return []; }
-  const base = `#directors/${d.id}/roster/`;
-  const ranks = dvRanks[d.name].filter((r) => r.rank_label !== 'Director');
-  if (dvLeader(d.name)) return [
-    { href: base + 'most_minutes', label: 'Most Minutes', icon: 'clock', tab: 'roster', view: 'most_minutes' },
-    { href: base + 'top', label: 'Top Performing', icon: 'star', tab: 'roster', view: 'top' },
-    ...ranks.slice().reverse().map((r) => ({ href: base + 'year:' + r.id, label: r.rank_label, icon: 'people', tab: 'roster', view: 'year:' + r.id })),
-  ];
-  const mine = dvMyRank(d.name);
-  return mine ? [{ href: base + 'year:' + mine.id, label: mine.rank_label, icon: 'people', tab: 'roster', view: 'year:' + mine.id }] : [];
-};
 
 // ---------- events ----------
 const dvDay = (iso) => { const d = new Date(iso); return { wd: d.toLocaleDateString([], { weekday: 'short' }).toUpperCase(), n: d.getDate() }; };
@@ -206,35 +190,37 @@ window.dvOverview = async (pane, dept, attention, wire) => {
   draw();
 };
 
-// ---------- Roster (everyone in the department) and its saved views ----------
-const DV_VIEWS = { all: 'Everyone', most_minutes: 'Most Minutes', top: 'Top Performing' };
+// ---------- Roster for members (everyone in the department) ----------
+// Leaders (dept.view, members.edit or activity.view) get dept.js's member list here instead, with its edit controls.
+// Members: Everyone, or their own Year, as toggles at the top (the database allows "all" and their own Year; the
+// rankings moved to Shifts as its Leaderboard, owner 0.33.0).
 window.DEPT_TABS.push({
   id: 'roster', label: 'Roster', icon: 'people',
   show: (dept) => inMyDept(dept) || dvLeader(dept),
   async render(pane, dept, sub) {
-    const leader = dvLeader(dept), ranks = await dvLoadRanks(dept);
-    const view = sub || 'all';
-    let period = 'week';
-    const views = [['all', 'Everyone'], ...(leader ? [['most_minutes', 'Most Minutes'], ['top', 'Top Performing']] : []),
-      ...ranks.filter((r) => r.rank_label !== 'Director' && (leader || dvMyRank(dept)?.id === r.id)).slice().reverse().map((r) => ['year:' + r.id, r.rank_label])];
-    const title = view.startsWith('year:') ? (ranks.find((r) => 'year:' + r.id === view)?.rank_label || 'Roster') : DV_VIEWS[view] || 'Roster';
+    const ranks = await dvLoadRanks(dept), mine = dvMyRank(dept);
+    const views = [['all', 'Everyone'], ...(mine && mine.rank_label !== 'Director' ? [['year:' + mine.id, mine.rank_label]] : [])];
+    let view = views.some(([k]) => k === sub) ? sub : 'all';
     const d = dvDeptOf(dept);
     async function draw() {
-      pane.innerHTML = `<div class="dv-rhead"><h2>${esc(title)}</h2>
-          ${leader ? `<div class="chips dv-period" role="group" aria-label="Period">${[['week', 'This week'], ['30d', 'Last 30 days']].map(([k, l]) => `<button type="button" class="chip${period === k ? ' on' : ''}" data-period="${k}" aria-pressed="${period === k}">${l}</button>`).join('')}</div>` : ''}</div>
-        <div class="chips dv-views" role="group" aria-label="Views">${views.map(([k, l]) => `<a class="chip${k === view ? ' on' : ''}" href="#directors/${d.id}/roster${k === 'all' ? '' : '/' + k}"${k === view ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</div>
-        <div class="dv-cards"><p class="muted small">Loading…</p></div>`;
-      pane.querySelectorAll('[data-period]').forEach((b) => b.onclick = () => { period = b.dataset.period; draw(); });
-      const { data, error } = await sb.rpc('dept_roster_view', { p_department: dept, p_view: view, p_period: period });
+      pane.innerHTML = `${views.length > 1 ? `<div class="dp-toggles" role="group" aria-label="Roster">${views.map(([k, l]) => `<button type="button" data-view="${esc(k)}" aria-pressed="${k === view}">${esc(l)}</button>`).join('')}</div>` : ''}
+        <div class="dv-cards">${typeof lines === 'function' ? `<div class="card dv-pc">${lines('50%', '30%')}</div>` : ''}</div>`;
+      pane.querySelectorAll('[data-view]').forEach((b) => b.onclick = () => {
+        if (b.dataset.view === view) return;
+        view = b.dataset.view;
+        try { history.replaceState(null, '', `#directors/${d.id}/roster${view === 'all' ? '' : '/' + view}`); } catch { /* fine */ }
+        draw();
+      });
+      const { data, error } = await sb.rpc('dept_roster_view', { p_department: dept, p_view: view, p_period: 'week' });
       const box = pane.querySelector('.dv-cards');
-      if (!box) return;
+      if (!box || !pane.isConnected) return;
       if (error) { box.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
       const rows = (data && data.rows) || [];
-      box.innerHTML = rows.length ? rows.map((r, i) => `<div class="card dv-pc">
-          <div class="dv-pch">${view === 'top' || view === 'most_minutes' ? `<span class="dv-place">${i + 1}</span>` : ''}${face({ name: r.name, discordId: r.discord_id, avatarUrl: r.avatar_url || '', size: 'm' })}
+      box.innerHTML = rows.length ? rows.map((r) => `<div class="card dv-pc">
+          <div class="dv-pch">${face({ name: r.name, discordId: r.discord_id, avatarUrl: r.avatar_url || '', size: 'm' })}
             <span class="dv-pcn"><strong>${esc(cleanName(r.name))}</strong>${dvBadge(dept, r.rank)}</span>${r.on_now ? '<span class="dv-on">On now</span>' : ''}</div>
           ${r.minutes != null ? `<div class="dv-trio"><div><b>${esc(dvMins(r.minutes))}</b><span>On shift</span></div><div><b>${Number(r.shifts || 0)}</b><span>Shifts</span></div><div><b>${Number(r.events_attended || 0)}</b><span>Events</span></div></div>` : ''}
-          ${r.last_active || r.score != null ? `<div class="dv-pcf">${r.last_active ? `<span>Last active ${esc(when(r.last_active))}</span>` : ''}${r.score != null ? `<span class="dv-score">Score ${Math.round(r.score)}</span>` : ''}</div>` : ''}
+          ${r.last_active ? `<div class="dv-pcf"><span>Last active ${esc(when(r.last_active))}</span></div>` : ''}
         </div>`).join('') : `<p class="muted small">Nobody here yet.</p>`;
       loadFaces(box);
     }
