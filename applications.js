@@ -427,6 +427,11 @@ const appUid = () => 'q' + Date.now().toString(36) + Math.random().toString(36).
 const appLocalKey = (k) => 'cbh-appdraft-' + k;
 
 async function appBuilder(el, dept, key) {
+  // 0.36.1: the builder's listeners live on el, which stays when you go Back and open a form again. They used to pile up,
+  // so each click ran once per earlier opening, on that opening's old draft: Up on a stage blanked its name (and saved
+  // null). Now each opening removes the previous one's listeners, and they stop once you leave the builder.
+  el._bdOff?.abort();
+  const bdOff = new AbortController(); el._bdOff = bdOff;
   appSetHash(appRoute(dept, 'forms/' + key));
   el.innerHTML = '<div class="card"><p class="muted small">Opening the application…</p></div>';
   const [{ data: forms, error }, { data: choices }, { data: ranks }, { data: revChoices }] = await Promise.all([
@@ -442,6 +447,7 @@ async function appBuilder(el, dept, key) {
   try { local = JSON.parse(localStorage.getItem(appLocalKey(key)) || 'null'); } catch { /* fine */ }
   let dirty = false;
   if (local && local.at && (!f.draft_saved_at || new Date(local.at) > new Date(f.draft_saved_at))) { draft = local.draft; dirty = true; }
+  draft.stages = (draft.stages || []).map((x) => (x == null ? '' : String(x)));   // a stage saved as null comes back empty to type into
   const sections = [...new Set((forms || []).map((x) => x.section || 'General').concat('General'))];
   const rankChoices = (choices || []).filter((r) => r.kind === 'rank'), extraChoices = (choices || []).filter((r) => r.kind !== 'rank' && r.kind !== 'department');
   const onLive = (rid) => rid === live.accept_rank_role_id || live.accept_role_ids.includes(rid);
@@ -519,8 +525,8 @@ async function appBuilder(el, dept, key) {
     drawStages(); drawList();
   }
   function drawStages() {
-    $e('#bd-stages').innerHTML = (draft.stages || []).length ? draft.stages.map((x, i) => `<span class="as-stage"><span class="as-n">${i + 1}</span>${esc(x)}
-      <button type="button" data-sup="${i}" aria-label="Move ${esc(x)} earlier"${i ? '' : ' disabled'}>↑</button><button type="button" data-srm="${i}" aria-label="Remove ${esc(x)}">×</button></span>`).join('')
+    $e('#bd-stages').innerHTML = (draft.stages || []).length ? draft.stages.map((x, i) => `<span class="as-stage"><span class="as-n">${i + 1}</span>${x ? esc(x) : `<input class="as-stage-in" data-si="${i}" maxlength="40" placeholder="Stage name" aria-label="Name for stage ${i + 1}">`}
+      <button type="button" data-sup="${i}" aria-label="Move ${esc(x || 'stage ' + (i + 1))} earlier"${i ? '' : ' disabled'}>↑</button><button type="button" data-srm="${i}" aria-label="Remove ${esc(x || 'stage ' + (i + 1))}">×</button></span>`).join('')
       : '<span class="muted small">No stages: straight from Received to the decision.</span>';
   }
   function drawList() {
@@ -559,7 +565,7 @@ async function appBuilder(el, dept, key) {
   async function save() {
     if (!dirty || saving) return;
     saving = true; dirty = false;
-    const { data, error: er } = await sb.rpc('app_form_draft_save', { form_key: key, draft });
+    const { data, error: er } = await sb.rpc('app_form_draft_save', { form_key: key, draft: { ...draft, stages: (draft.stages || []).map((x) => (x == null ? '' : String(x).trim())) } });
     saving = false;
     if (er) { failed = true; dirty = true; showSaved(); clearTimeout(saveT); saveT = setTimeout(save, 4000); return; }
     savedAt = data || new Date().toISOString(); f.draft = draft;
@@ -574,7 +580,9 @@ async function appBuilder(el, dept, key) {
 
   // ----- edits -----
   const qOf = (node) => draft.questions[+node.closest('[data-i]').dataset.i];
-  el.addEventListener('input', (e) => {
+  // Every listener below is removed by the next opening (bdOff) and does nothing once the builder has left the screen.
+  const on = (type, fn) => el.addEventListener(type, (e) => { if (!el.querySelector('#bd-list')) { bdOff.abort(); return; } return fn(e); }, { signal: bdOff.signal });
+  on('input', (e) => {
     const t = e.target;
     if (t.id === 'bd-t') draft.title = t.value;
     else if (t.id === 'bd-d') draft.description = t.value;
@@ -582,11 +590,13 @@ async function appBuilder(el, dept, key) {
     else if (t.id === 'bd-wait') draft.cooldown_days = Math.max(0, Math.min(365, +t.value || 0));
     else if (t.id === 'bd-need') { const n = Math.max(1, Math.min(10, +t.value || 1)); if (n > 1 && (draft.approvals_needed || 1) <= 1) { draft.final_by_exec = true; $e('#bd-final').checked = true; } draft.approvals_needed = n; }
     else if (t.classList.contains('bd-l')) qOf(t).label = t.value;
+    else if (t.classList.contains('as-stage-in')) draft.stages[+t.dataset.si] = t.value;
     else return;
     changed();
   });
-  el.addEventListener('change', (e) => {
+  on('change', (e) => {
     const t = e.target;
+    if (t.classList.contains('as-stage-in')) { draft.stages[+t.dataset.si] = t.value.trim(); drawStages(); return changed(); }
     if (t.name === 'bd-aud') { $e('#bd-ranks').hidden = t.value !== 'ranks'; if (t.value === 'all') draft.audience_ranks = []; }
     else if (t.closest('#bd-ranks')) draft.audience_ranks = [...$e('#bd-ranks').querySelectorAll('input:checked')].map((x) => x.value);
     else if (t.id === 'bd-open') draft.open = t.checked;
@@ -600,7 +610,7 @@ async function appBuilder(el, dept, key) {
     else return;
     changed();
   });
-  el.addEventListener('keydown', (e) => {
+  on('keydown', (e) => {
     const t = e.target;
     if (e.key !== 'Enter') return;
     if (t.classList.contains('bd-newopt')) {
@@ -608,9 +618,10 @@ async function appBuilder(el, dept, key) {
       const v = t.value.trim(), q = draft.questions[+t.dataset.i];
       if (v && !(q.options || []).includes(v)) { q.options = [...(q.options || []), v]; drawList(); changed(); el.querySelector(`.bd-newopt[data-i="${t.dataset.i}"]`)?.focus(); }
     } else if (t.id === 'bd-newstage') { e.preventDefault(); $e('#bd-addstage').click(); }
+    else if (t.classList.contains('as-stage-in')) { e.preventDefault(); t.blur(); }
   });
   const move = (from, to) => { const qs = draft.questions; if (to < 0 || to >= qs.length) return; const [x] = qs.splice(from, 1); qs.splice(to, 0, x); drawList(); changed(); };
-  el.addEventListener('click', async (e) => {
+  on('click', async (e) => {
     const t = e.target.closest('button'); if (!t) return;
     const d = t.dataset;
     if (t.id === 'bd-back') { await flush(); return appTab(el, dept, 'forms'); }
@@ -623,7 +634,7 @@ async function appBuilder(el, dept, key) {
     if (d.dn) return move(+d.dn, +d.dn + 1);
     if (d.rm) { draft.questions.splice(+d.rm, 1); drawList(); return changed(); }
     if (d.orm) { const [i, j] = d.orm.split(':').map(Number); draft.questions[i].options.splice(j, 1); drawList(); return changed(); }
-    if (t.id === 'bd-addstage') { const v = $e('#bd-newstage').value.trim(); if (v && !draft.stages.includes(v) && draft.stages.length < 8) { draft.stages.push(v); $e('#bd-newstage').value = ''; drawStages(); changed(); } return; }
+    if (t.id === 'bd-addstage') { const v = $e('#bd-newstage').value.trim(); if (v && !draft.stages.some((x) => x.trim() === v) && draft.stages.length < 8) { draft.stages.push(v); $e('#bd-newstage').value = ''; drawStages(); changed(); } return; }
     if (d.sup) { const i = +d.sup; [draft.stages[i - 1], draft.stages[i]] = [draft.stages[i], draft.stages[i - 1]]; drawStages(); return changed(); }
     if (d.srm) { draft.stages.splice(+d.srm, 1); drawStages(); return changed(); }
     if (t.id === 'bd-preview') return appPreview(draft, dept);
@@ -640,7 +651,9 @@ async function appBuilder(el, dept, key) {
     }
     if (t.id === 'bd-publish') {
       const err = $e('#bd-err'); err.hidden = true;
-      t.disabled = true; await flush();
+      t.disabled = true;
+      if ((draft.stages || []).some((x) => !String(x || '').trim())) { draft.stages = draft.stages.map((x) => String(x || '').trim()).filter(Boolean); drawStages(); dirty = true; }
+      await flush();
       if (failed) { t.disabled = false; err.textContent = 'The draft couldn’t be saved, so it can’t be published yet.'; err.hidden = false; return; }
       const { error: er } = await sb.rpc('app_form_publish', { form_key: key });
       t.disabled = false;
@@ -662,10 +675,10 @@ async function appBuilder(el, dept, key) {
 
   // drag to reorder (the arrow buttons do the same for keyboards and phones)
   let dragFrom = null;
-  el.addEventListener('dragstart', (e) => { const it = e.target.closest?.('.bd-item'); if (!it) return; dragFrom = +it.dataset.i; it.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-  el.addEventListener('dragend', (e) => { e.target.closest?.('.bd-item')?.classList.remove('dragging'); el.querySelectorAll('.drop-over').forEach((x) => x.classList.remove('drop-over')); });
-  el.addEventListener('dragover', (e) => { const it = e.target.closest?.('.bd-item'); if (dragFrom == null || !it) return; e.preventDefault(); el.querySelectorAll('.drop-over').forEach((x) => x !== it && x.classList.remove('drop-over')); it.classList.add('drop-over'); });
-  el.addEventListener('drop', (e) => { const it = e.target.closest?.('.bd-item'); if (dragFrom == null || !it) return; e.preventDefault(); const to = +it.dataset.i; const from = dragFrom; dragFrom = null; if (from !== to) move(from, to); });
+  on('dragstart', (e) => { const it = e.target.closest?.('.bd-item'); if (!it) return; dragFrom = +it.dataset.i; it.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+  on('dragend', (e) => { e.target.closest?.('.bd-item')?.classList.remove('dragging'); el.querySelectorAll('.drop-over').forEach((x) => x.classList.remove('drop-over')); });
+  on('dragover', (e) => { const it = e.target.closest?.('.bd-item'); if (dragFrom == null || !it) return; e.preventDefault(); el.querySelectorAll('.drop-over').forEach((x) => x !== it && x.classList.remove('drop-over')); it.classList.add('drop-over'); });
+  on('drop', (e) => { const it = e.target.closest?.('.bd-item'); if (dragFrom == null || !it) return; e.preventDefault(); const to = +it.dataset.i; const from = dragFrom; dragFrom = null; if (from !== to) move(from, to); });
 
   fill(); showSaved();
   if (dirty) { status('Recovered unsaved changes from this browser. Saving…'); save(); }
