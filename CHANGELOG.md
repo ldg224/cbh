@@ -3,6 +3,19 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.32.2 (2026-11-18)
+
+**Changed:**
+- **A tidier outer menu:** Home, CBH Chart, Check In, Shift Manager and Apply, then your departments, then Help (Rules & Info and Support Tickets).
+- **Sessions and Tickets now live inside each department**, in the Leaders part of its menu. Sessions are for the people who run them; Tickets shows only that team's tickets.
+- Courses and the Staff Directory are no longer in the outer menu; courses are in each department.
+- Bot Commands are now part of Rules & Info.
+- "My shift" is now **Shift Manager**, and "Contact a team" is now **Support Tickets**, with a quick "Report a website problem" option.
+- Every menu label and page title is in Title Case.
+- Old links still work.
+
+Database change: no.
+
 ## 0.32.1 (2026-11-18)
 
 **Fixed:**
