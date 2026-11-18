@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.34.0 (2026-11-19)
+
+**Changed:**
+- **Department Overview redesigned:** your own header with your Discord photo, one clear Next up, Department News, your team with photos, and Your Week as a graph against the weekly target. Empty sections stay hidden for members, and invite the people who can fill them.
+- Real Discord profile pictures now show for everyone on the Overview, not just admins.
+
+Database change: yes (0082, my_department_overview: additive).
+
 ## 0.33.1 (2026-11-19)
 
 **Fixed:**
