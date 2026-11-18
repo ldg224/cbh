@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.33.1 (2026-11-19)
+
+**Fixed:**
+- The department Overview link always opens Overview, instead of the last tab you had open.
+- The greeting keeps titles like Dr. with your name ("Good morning, Dr. Turtle").
+
+Database change: no.
+
 ## 0.33.0 (2026-11-19)
 
 **Changed:**
