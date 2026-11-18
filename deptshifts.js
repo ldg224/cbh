@@ -12,6 +12,7 @@
 
 const DS_PARTS = [['now', 'On Now'], ['week', 'This Week'], ['leaderboard', 'Leaderboard']];
 const dsState = {};   // department -> { metric, period } for this visit
+let dsTimer = null;   // the one change check; a new visit to Shifts replaces it
 const dsOrdinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
 const dsDur = (a, b) => dvMins((new Date(b || Date.now()) - new Date(a)) / 60000);
 const dsDay = (iso) => new Date(iso).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
@@ -26,8 +27,12 @@ window.DEPT_TABS.push({
   async render(pane, dept, sub) {
     const d = dvDeptOf(dept);
     const st = dsState[dept] || (dsState[dept] = { metric: 'minutes', period: 'week' });
-    let part = DS_PARTS.some(([k]) => k === sub) ? sub : 'now';
-    let shownSig = null, timer = null;
+    // sub: '' | 'week' | 'leaderboard' | 'leaderboard/top' (the old Roster "Top Performing" link lands here).
+    const [subPart, subMetric] = String(sub || '').split('/');
+    let part = DS_PARTS.some(([k]) => k === subPart) ? subPart : 'now';
+    if (part === 'leaderboard' && ['minutes', 'top'].includes(subMetric)) st.metric = subMetric;
+    let shownSig = null;
+    clearInterval(dsTimer);
     dvLoadRanks(dept);   // rank badge colours
 
     pane.innerHTML = `<div class="ds">
@@ -39,9 +44,13 @@ window.DEPT_TABS.push({
     pane.querySelectorAll('[data-part]').forEach((b) => b.onclick = () => {
       part = b.dataset.part;
       pane.querySelectorAll('[data-part]').forEach((x) => x.setAttribute('aria-pressed', x === b));
-      try { history.replaceState(null, '', `#directors/${d.id}/shifts${part === 'now' ? '' : '/' + part}`); } catch { /* fine without it */ }
+      setUrl();
       load();
     });
+    function setUrl() {
+      const tail = part === 'now' ? '' : part === 'leaderboard' && st.metric === 'top' ? '/leaderboard/top' : '/' + part;
+      try { history.replaceState(null, '', `#directors/${d.id}/shifts${tail}`); } catch { /* fine without it */ }
+    }
     ch.querySelector('button').onclick = () => load();
 
     const fetchPart = () => sb.rpc('dept_shifts', { p_department: dept, p_part: part, p_period: st.period, p_metric: st.metric });
@@ -50,7 +59,7 @@ window.DEPT_TABS.push({
       body.setAttribute('aria-busy', 'true');
       const { data, error } = await fetchPart();
       body.removeAttribute('aria-busy');
-      if (!pane.isConnected) return;
+      if (!body.isConnected) return;
       if (error) { body.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
       shownSig = part + dsSig(data);
       body.innerHTML = part === 'now' ? drawNow(data) : part === 'week' ? drawWeek(data) : drawBoard(data);
@@ -58,12 +67,12 @@ window.DEPT_TABS.push({
       loadFaces(body);
     }
     // Quiet change check: never redraws, only offers Refresh.
-    timer = setInterval(async () => {
-      if (!pane.isConnected) { clearInterval(timer); return; }
+    const timer = dsTimer = setInterval(async () => {
+      if (!body.isConnected) { clearInterval(timer); return; }
       if (document.hidden || shownSig === null || !ch.hidden) return;
       const want = part;
       const { data, error } = await fetchPart();
-      if (!error && want === part && pane.isConnected && part + dsSig(data) !== shownSig) ch.hidden = false;
+      if (!error && want === part && body.isConnected && part + dsSig(data) !== shownSig) ch.hidden = false;
     }, 30000);
 
     const person = (r, extra = '') => `${face({ name: r.name, discordId: r.discord_id, avatarUrl: r.avatar_url || '', size: 'm' })}
@@ -117,13 +126,14 @@ window.DEPT_TABS.push({
         ${mine ? `<p class="ds-mine-line">${mine}</p>` : ''}
         ${placed.length ? `<div class="card ds-list ds-board">${placed.map((r) => `<div class="ds-row${r.me ? ' me' : ''}${r.place <= 3 ? ' p' + r.place : ''}">
             <span class="ds-place">${r.place}</span>${person(r)}
-            <span class="ds-nums"><span><b>${esc(dvMins(r.minutes))}</b><small>On shift</small></span><span><b>${Number(r.shifts || 0)}</b><small>${r.shifts == 1 ? 'Shift' : 'Shifts'}</small></span>${top ? `<span><b>${Math.round(r.score || 0)}</b><small>Score</small></span>` : ''}</span></div>`).join('')}</div>`
+            <span class="ds-nums"><span><b>${esc(dvMins(r.minutes))}</b><small>On shift</small></span>${top ? '' : `<span><b>${Number(r.shifts || 0)}</b><small>${r.shifts == 1 ? 'Shift' : 'Shifts'}</small></span>`}
+              <span><b>${Number(r.events_attended || 0)}</b><small>Events</small></span>${top ? `<span><b>${Math.round(r.score || 0)}</b><small>Score</small></span>` : ''}</span></div>`).join('')}</div>`
           : `<div class="card ds-empty"><p class="muted small">Nobody in ${esc(dept)} has been on shift ${when} yet.</p></div>`}
         ${placed.length && rest ? `<p class="muted small ds-rest">${rest} ${rest === 1 ? 'person has' : 'people have'} no minutes ${when}.</p>` : ''}`;
     }
 
     function wire() {
-      body.querySelectorAll('[data-metric]').forEach((b) => b.onclick = () => { st.metric = b.dataset.metric; load(); });
+      body.querySelectorAll('[data-metric]').forEach((b) => b.onclick = () => { st.metric = b.dataset.metric; setUrl(); load(); });
       body.querySelectorAll('[data-period]').forEach((b) => b.onclick = () => { st.period = b.dataset.period; load(); });
     }
     load();
