@@ -214,3 +214,18 @@ returns jsonb language sql stable security definer set search_path = '' as $$
 $$;
 revoke execute on function public.course_view(uuid) from public, anon;
 grant execute on function public.course_view(uuid) to authenticated;
+
+-- People to assign (the Assign dialog): by name, or everyone holding a rank. Only for people who can assign this course.
+create or replace function public.course_assign_people(cid uuid, q text default null, rank_id text default null)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object('discord_id', m.discord_id, 'name', m.display_name, 'avatar_url', m.avatar_url,
+      'assigned', exists (select 1 from public.course_assignments a where a.course_id = cid and a.discord_id = m.discord_id)) order by m.display_name), '[]'::jsonb)
+  from (select * from public.members m
+        where public.course_assign_ok(cid)
+          and ((rank_id is not null and rank_id = any (m.role_ids))
+               or (rank_id is null and char_length(btrim(coalesce(q, ''))) >= 2
+                   and (m.display_name ilike '%' || btrim(q) || '%' or m.username ilike '%' || btrim(q) || '%')))
+        order by m.display_name limit 200) m
+$$;
+revoke execute on function public.course_assign_people(uuid, text, text) from public, anon;
+grant execute on function public.course_assign_people(uuid, text, text) to authenticated;
