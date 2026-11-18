@@ -3,6 +3,19 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.33.0 (2026-11-19)
+
+**Changed:**
+- **Departments have one menu:** Overview, Roster, Shifts, Events and Courses, and for leaders Applications, Sessions, Tickets and Manage.
+- Members is now part of Roster (leaders keep every control there), Meetings is part of Events, and History with Ranks & Permissions is Manage, each as toggles at the top of one page.
+- The side-menu Views are gone: Roster has rank toggles at the top, and old links still work.
+- You only see the departments you're in (owners see every department).
+
+**Added:**
+- **Shifts** in every department: who's on now, your week against the target with your shift log (leaders see the whole team), and a Leaderboard for the whole department (Most Minutes or Top Performing, this week or the last 30 days).
+
+Database change: yes (0081 dept_shifts, additive).
+
 ## 0.32.5 (2026-11-19)
 
 **Added:**
