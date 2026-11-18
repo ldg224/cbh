@@ -172,6 +172,44 @@ a.cx-row:hover { border-color: var(--blue); }
 .cx-sbar b { display: inline-block; width: 16px; color: var(--teal-ink); }
 .cx-foot { margin-top: 18px; display: grid; gap: 8px; }
 
+/* ---------- v1.1: game-matched details, orders, fill as you go ---------- */
+.cx-pt2 { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
+.cx-pt2 input { font: inherit; font-size: 16px; color: var(--text); padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); min-width: 0; width: 100%; }
+.cx-addrow { display: flex; gap: 8px; }
+.cx-addrow input, .cx-ord input, .cx-ord-x input { flex: 1; min-width: 0; font: inherit; font-size: 15px; color: var(--text); padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.cx-hist { display: grid; gap: 10px; }
+.cx-allerg { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.cx-allerg .f { flex: 1 1 220px; }
+.cx-allerg .chip { min-height: 44px; }
+.cx-ordlist { display: grid; gap: 6px; }
+.cx-ordlist:empty { display: none; }
+.cx-ord { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--raised); border-radius: 10px; padding: 8px 10px; }
+.cx-ord b { font-size: 14px; }
+.cx-orders { display: grid; gap: 8px; margin-bottom: 12px; padding: 14px 16px; }
+.cx-orders h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--teal-ink); }
+.cx-orders .cx-ord { justify-content: space-between; }
+.cx-ord.back { background: #f0fbf5; }
+.cx-ord-l, .cx-ord-r { display: grid; gap: 1px; }
+.cx-ord-r { justify-items: end; text-align: right; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; justify-content: flex-end; }
+.cx-ord small { font-size: 12px; color: var(--muted); }
+.cx-ord-x { flex-basis: 100%; display: flex; gap: 8px; }
+.cx-ord-x:empty { display: none; }
+.cx-wait { font-size: 12.5px; font-weight: 600; color: #8a5a00; }
+.cx-room { font-size: 12px; font-weight: 700; color: var(--blue-deep); background: #e3eefb; border-radius: 6px; padding: 1px 7px; margin-left: 6px; white-space: nowrap; vertical-align: 1px; }
+.cx-age { font-weight: 600; color: var(--muted); }
+.cx-symline { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.cx-symtag { font-size: 12.5px; font-weight: 600; background: var(--raised); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; }
+.cx-dxline { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; font-size: 15px; }
+.cx-pending { font-weight: 700; color: #8a5a00; }
+.cx-dx { font-weight: 700; }
+.cx-histline { grid-column: 1 / -1; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.cx-sep { color: var(--muted); }
+.cx-sub { display: grid; gap: 8px; }
+.cx-was { font-style: normal; font-size: 11px; color: var(--muted); }
+.cx-pw { color: var(--muted); background: var(--raised); }
+.cx-actions .cx-again { border-color: rgba(46, 211, 198, .8); background: var(--teal-wash); color: var(--text); font-weight: 700; }
+.cx-dock { display: none; }
+
 /* ---------- phones ---------- */
 @media (max-width: 560px) {
   .cx-top { flex-direction: column-reverse; align-items: stretch; }
@@ -187,9 +225,15 @@ a.cx-row:hover { border-color: var(--blue); }
   .cx-head-r { justify-items: start; }
   .cx-meta { justify-content: flex-start; }
   .cx-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .cx-actions button { padding: 10px 6px; }
+  .cx-actions button { padding: 10px 4px; font-size: 13px; white-space: nowrap; }
   .cx-actions .refresh { grid-column: 1 / -1; margin-left: 0; }
   .cx-savebar { bottom: calc(var(--desk-tabs, 0px) + env(safe-area-inset-bottom, 0px) + 8px); padding-left: 12px; }
   .cx-pad { bottom: calc(var(--desk-tabs, 0px) + env(safe-area-inset-bottom, 0px) + 8px); }
+  /* Fill as you go: "+ Vitals again" and Discharge stay in reach while scrolling the timeline. */
+  .cx-dock { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; position: sticky; z-index: 5; bottom: calc(var(--desk-tabs, 0px) + env(safe-area-inset-bottom, 0px) + 8px);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; box-shadow: 0 8px 24px rgba(11, 30, 74, .12); margin: 12px 0; order: 9; }
+  .cx-dock button { padding: 12px 8px; font-weight: 700; border-radius: 10px; }
+  .cx-pt2 { grid-template-columns: 90px minmax(0, 1fr); }
+  .cx-ord-r { justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { .cx-row { transition: none; } }
