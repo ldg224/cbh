@@ -75,8 +75,12 @@ async function renderDept(body, tool) {
           <span class="dp-pill">${exec ? 'Executive View' : director ? 'You direct this department' : esc((window.myRanks || []).filter((r) => r.department === dept).sort((a, b) => b.rank_order - a.rank_order)[0]?.rank_label || 'Team view')}</span></div></div>
     </section>`;
   // Overview's own data starts now, alongside the department's, instead of after it.
-  if ((seeDept || member) && (!linked || linked === 'overview') && !dpTab[dept] && window.dvPrefetch) window.dvPrefetch(dept);
-  body.innerHTML = `${bannerHtml}
+  // Overview is the tab about to open (one test for the prefetch and the first paint; outsiders never get Overview).
+  // Overview draws its own header (0.34.0), so the banner stays out of its first paint and is hidden while it shows.
+  const ovFirst = (seeDept || member) && (exec || inMyDept(dept)) && (!linked || linked === 'overview') && !dpTab[dept];
+  if (ovFirst && window.dvPrefetch) window.dvPrefetch(dept);
+  body.classList.toggle('dp-ov', !!ovFirst);
+  body.innerHTML = `${ovFirst ? '' : bannerHtml}
     <div class="dp-tabwrap" aria-hidden="true"><div class="dp-tabs dp-tabs-sk">${['70px', '58px', '54px', '64px'].map((w) => `<span class="dp-tsk">${sk(w, 12)}</span>`).join('')}</div></div>
     <div aria-busy="true" aria-label="Loading ${esc(dept)}">${window.dvOvSkel ? window.dvOvSkel() : `<div class="card">${lines('40%', '70%', '55%')}</div>`}</div>`;
 
@@ -203,7 +207,7 @@ async function renderDept(body, tool) {
     : id === 'roster' && /^(most_minutes|top)$/.test(sub || '') && TABS.some((t) => t.id === 'shifts') ? ['shifts', sub === 'top' ? 'leaderboard/top' : 'leaderboard'] : [id, sub]);
   const secOf = {};   // the open toggle on Events and Manage
   if (linked) [linked, linkedSub] = resolve(linked, linkedSub);
-  if (!TABS.length) { body.innerHTML = `${bannerHtml}<div class="card"><p class="muted small">${outsider ? `You’re not in ${esc(dept)}.` : `You don’t have anything to see in ${esc(dept)} yet.`}</p></div>`; return; }
+  if (!TABS.length) { body.classList.remove('dp-ov'); body.innerHTML = `${bannerHtml}<div class="card"><p class="muted small">${outsider ? `You’re not in ${esc(dept)}.` : `You don’t have anything to see in ${esc(dept)} yet.`}</p></div>`; return; }
   const reopen = dpTab[dept]; delete dpTab[dept];
   if (reopen && ALIAS[reopen]) secOf[ALIAS[reopen][0]] = ALIAS[reopen][1];   // e.g. back to Meetings after saving one
   let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || (reopen && resolve(reopen)[0]) || TABS[0].id;
@@ -232,6 +236,7 @@ async function renderDept(body, tool) {
     if (id0 === linked) linkedSub = '';
     if (!TABS.some((t) => t.id === id)) id = TABS[0].id;
     tab = id;
+    body.classList.toggle('dp-ov', id === 'overview');   // the Overview has its own header: hide the banner (0.34.0)
     if (SECS[id]) {
       const has = (k) => SECS[id].some(([x]) => x === k);
       sub = has(sub) ? sub : has(secOf[id]) ? secOf[id] : SECS[id][0][0];

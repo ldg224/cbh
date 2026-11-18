@@ -23,8 +23,11 @@ const dvHello = () => { const h = new Date().getHours(); return h < 12 ? 'Good m
 // The name in the Overview greeting: the first name, or title + name when the name starts with one ("Dr. Turtle", not
 // "Dr."; 0.33.1).
 const DV_TITLE = /^(dr|doctor|prof|professor|nurse|sister|mr|mrs|ms|mx|miss|sir|dame|capt|captain|chief|sgt|lt)\.?$/i;
-const dvFirst = () => { const w = cleanName(($('name')?.textContent || '').trim()).split(/\s+/).filter(Boolean);
-  return w.length > 1 && DV_TITLE.test(w[0]) ? w[0] + ' ' + w[1] : w[0] || ''; };
+// The short name ("Maia", "Dr. Turtle", "Nurse. Raven"); trailing punctuation goes ("Alex." -> "Alex"). 0.34.0: takes a
+// name (the Overview passes the member's own), else the header's.
+const dvFirst = (n) => { const w = cleanName(String(n || $('name')?.textContent || '').trim()).split(/\s+/).filter(Boolean);
+  const out = w.length > 1 && DV_TITLE.test(w[0]) ? w[0] + ' ' + w[1] : w[0] || '';
+  return out.replace(/[.,;:|]+$/, ''); };
 const dvDeptOf = (name) => DEPARTMENTS.find((d) => d.name === name);
 
 // ---------- events ----------
@@ -71,7 +74,7 @@ function dvPost(p, canPost) {
   return `<article class="dv-post" data-post="${p.id}">
       <div class="dv-ph"><strong>${esc(p.title)}</strong>${p.pinned ? '<span class="dv-pin">Pinned</span>' : ''}</div>
       <p class="dv-pb">${esc(p.body)}</p>
-      <div class="dv-pm"><span>${esc(cleanName(p.author_name || ''))} · ${esc(when(p.created_at))}${p.edited_by_name ? ' · edited' : ''}${p.mirror ? ' · also in Discord' : ''}</span>
+      <div class="dv-pm">${p.author_avatar_url !== undefined ? face({ name: p.author_name || '', avatarUrl: p.author_avatar_url || '', discordId: p.author_discord_id || ('post-' + p.id), size: 'xs' }) : ''}<span>${esc(cleanName(p.author_name || ''))} ·${esc(when(p.created_at))}${p.edited_by_name ? ' · edited' : ''}${p.mirror ? ' · also in Discord' : ''}</span>
         ${canPost ? `<span class="dv-pact"><button type="button" class="linkish" data-pedit="${p.id}">Edit</button><button type="button" class="linkish danger" data-pdel="${p.id}">Delete</button></span>` : ''}</div>
     </article>`;
 }
@@ -120,13 +123,19 @@ function dvWirePosts(sec, dept, posts, canPost, redraw) {
   });
 }
 
-// ---------- Overview (dept.js drawOverview) ----------
-// attention: the leaders' "Needs your attention" card (HTML from dept.js, or ''). wire(root): dept.js's [data-go] buttons.
-// Still outlines in the Overview's own shape (hello line, two columns of cards) while it loads (0.32.4).
+// ---------- Overview "Next Up" (0.34.0, Alpha; owner picked direction A of https://claude.ai/artifact/LW9bLE8UrrELaaNZ7ai1bw) ----------
+// Your own header (Discord photo, name, rank, the department's pulse), ONE "Next up" action, then Department News,
+// Your Team, Your Week (minutes over the week against the target line), What's On and Courses. A card with nothing in
+// it is left out for members, or becomes an invite for the person who can fill it. dept.js hides its banner on this tab.
+// Back end: my_department_overview (0078 + 0082: me.avatar_url, my_week.days, team, last_shift, avatars), course_list.
+// Your Team: 'faces' (everyone, green ring when on shift) is the owner's default; 'pulse' (On now + this week's top 3)
+// is the alternative shown in the screenshots. Switch here if the owner picks it.
+const DV_TEAM = 'faces';
 window.dvOvSkel = () => {
   const card = (...ws) => `<section class="card dv-card">${sk('34%', 14)}<span style="display:block;height:16px"></span>${lines(...ws)}</section>`;
-  return `<div class="dv-hello">${sk('260px', 26)}<span style="display:block;height:8px"></span>${sk('200px', 13)}</div>
-    <div class="dv-ov"><div class="dv-col">${card('80%', '62%', '70%')}${card('90%', '55%')}</div><div class="dv-col">${card('60%', '45%')}${card('50%')}</div></div>`;
+  return `<div class="nu-hero nu-sk" aria-hidden="true"><span class="nu-me-sk"></span><div>${sk('220px', 22)}<span style="display:block;height:8px"></span>${sk('140px', 12)}</div></div>
+    <div class="card nu-next nu-sk-next">${sk('50%', 14)}<span style="display:block;height:8px"></span>${sk('70%', 12)}</div>
+    <div class="nu-grid"><div class="dv-col">${card('80%', '62%')}${card('90%', '55%')}</div><div class="dv-col">${card('60%', '45%')}</div></div>`;
 };
 // dept.js starts the Overview's requests as soon as a department opens; dvOverview uses them if they're fresh.
 const dvOvPending = {};
@@ -136,58 +145,146 @@ const dvOvFetch = (dept) => Promise.all([
   dvLoadRanks(dept),
 ]);
 window.dvPrefetch = (dept) => { dvOvPending[dept] = { at: Date.now(), p: dvOvFetch(dept) }; };
+const dvDayName = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString([], { weekday: 'long' });
+// Calendar days, not 24-hour blocks: a shift that ended at 5 pm yesterday is "yesterday" at 9 am today.
+const dvAgo = (iso) => { const day = (t) => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x; };
+  const d = Math.round((day(Date.now()) - day(iso)) / 864e5);
+  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 7 ? new Date(iso).toLocaleDateString([], { weekday: 'long' }) : when(iso); };
+
+// Your Week: cumulative minutes Monday to Sunday, the target as a dashed line, today's point marked. Days still to
+// come are left blank. Plain SVG drawn to one scale; colours come from the department (--dept-tab) and the theme.
+function dvWeekGraph(days, target) {
+  const done = days.filter((d) => d.cumulative != null);
+  // No minutes and no target: a short strip instead of a tall empty chart.
+  const W = 300, H = target || done.some((x) => x.cumulative > 0) ? 120 : 52, L = 8, R = 8, T = H > 60 ? 14 : 10, B = 22;
+  const top = Math.max(60, target || 0, ...done.map((d) => d.cumulative)) * 1.12;
+  const x = (i) => L + (i * (W - L - R)) / 6, y = (m) => T + (H - T - B) * (1 - m / top);
+  const pts = done.map((d, i) => [x(i), y(d.cumulative)]);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = pts.length ? `${line} L${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L${pts[0][0].toFixed(1)} ${y(0)} Z` : '';
+  const lab = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const tgtY = target ? y(target) : null;
+  return `<svg class="nu-graph" viewBox="0 0 ${W} ${H}" role="img" aria-label="Minutes on shift this week${done.length ? ': ' + dvMins(done[done.length - 1].cumulative) : ''}${target ? ', target ' + dvMins(target) : ''}">
+      <line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" class="nu-g-base"/>
+      ${target ? `<line x1="${L}" x2="${W - R}" y1="${tgtY.toFixed(1)}" y2="${tgtY.toFixed(1)}" class="nu-g-tgt"/><text x="${W - R}" y="${(tgtY - 4).toFixed(1)}" text-anchor="end" class="nu-g-tl">Target ${esc(dvMins(target))}</text>` : ''}
+      ${area ? `<path d="${area}" class="nu-g-area"/><path d="${line}" class="nu-g-line"/>` : ''}
+      ${done.map((d, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(d.cumulative).toFixed(1)}" r="${i === done.length - 1 ? 4.5 : 2.6}" class="${i === done.length - 1 ? 'nu-g-now' : 'nu-g-dot'}"/>`).join('')}
+      ${lab.map((l, i) => `<text x="${x(i).toFixed(1)}" y="${H - 5}" text-anchor="middle" class="nu-g-x${i === done.length - 1 ? ' on' : ''}">${l}</text>`).join('')}
+    </svg>`;
+}
+
 window.dvOverview = async (pane, dept, attention, wire) => {
-  const d = dvDeptOf(dept) || { id: '', color: '#3a82d0' };
+  const d = dvDeptOf(dept) || { id: '', color: '#3a82d0', icon: 'clock' };
   const pre = dvOvPending[dept];
   delete dvOvPending[dept];
-  pane.innerHTML = `${attention}${window.dvOvSkel()}`;
+  pane.innerHTML = `${window.dvOvSkel()}`;
   const [ovQ, coursesQ] = await (pre && Date.now() - pre.at < 15000 ? pre.p : dvOvFetch(dept));
   if (!pane.isConnected) return;
   if (ovQ.error || !ovQ.data) {
     pane.innerHTML = `${attention}<div class="card"><p class="${ovQ.error ? 'error' : 'muted small'}">${esc(ovQ.error ? ovQ.error.message : 'Nothing to show yet.')}</p></div>`;
     wire(pane); return;
   }
-  const ov = ovQ.data, me = ov.me || {}, wk = ov.my_week || null, events = ov.whats_on || [], posts = ov.posts || [];
+  const ov = ovQ.data, me = ov.me || {}, wk = ov.my_week || {}, events = ov.whats_on || [], posts = ov.posts || [];
+  const team = ov.team || [], meRow = team.find((t) => t.me), onNow = ov.on_now || [];
   const mine = (coursesQ.data || []).filter((c) => c.mine), done = mine.filter((c) => c.complete).length;
-  const next = mine.find((c) => !c.complete && !c.lock);
-  const sub = wk && wk.target ? (wk.minutes >= wk.target ? 'You’ve met this week’s target. Nice work.' : `${dvMins(wk.target - wk.minutes)} to go to this week’s target.`)
-    : mine.length && done < mine.length ? `${plural(mine.length - done, 'course')} left in ${dept}.` : me.rank ? `${me.rank} · ${dept}` : dept;
+  const nextCourse = mine.find((c) => !c.complete && !c.lock);
+  const leader = !!(me.can_manage || me.leader), canPost = !!me.can_post;
+  const base = `#directors/${d.id}`;
+  const myName = cleanName(me.name || ($('name')?.textContent || ''));
+
+  // ---- header ----
+  const rankPill = me.rank ? `<span class="nu-pill">${esc(me.rank)}</span>` : access.exec ? '<span class="nu-pill">Executive View</span>' : '';
+  const nOn = onNow.length;
+  const hero = `<section class="nu-hero" style="--icon:${iconUrl(d.icon)}">
+      <span class="nu-me">${face({ name: myName, discordId: myDiscordId || '', avatarUrl: me.avatar_url || '', size: 'l' })}</span>
+      <div class="nu-hi"><h2>${esc(dvHello())}${dvFirst(me.name) ? ', ' + esc(dvFirst(me.name)) : ''}</h2>
+        <div class="nu-sub">${rankPill}<span>${esc(dept)} · ${plural(Number(ov.department?.members || team.length), 'member')}</span></div></div>
+      <div class="nu-live"><span class="${nOn ? 'on' : ''}">${nOn ? `${nOn} on shift now` : 'Nobody on shift'}</span></div>
+    </section>`;
+
+  // ---- Next up: the one most useful thing to do now ----
+  const soon = events.find((e) => e.status === 'live') || events.find((e) => e.status === 'scheduled' && new Date(e.starts_at) - Date.now() < 864e5);
+  const hasClock = !!document.querySelector('[data-desk="clock"]');
+  const N = (ico, k, title, sub, acts) => `<section class="nu-next" style="--icon:${iconUrl(ico)}"><span class="nu-nico" aria-hidden="true"></span>
+      <div class="nu-nt"><span class="nu-k">${esc(k)}</span><strong>${esc(title)}</strong>${sub ? `<span class="nu-ns">${esc(sub)}</span>` : ''}</div>
+      <div class="nu-acts">${acts}</div></section>`;
+  const btn = (label, attrs, pri) => `<${attrs.startsWith('href') ? 'a' : 'button type="button"'} class="${pri ? 'nu-b pri' : 'nu-b'}" ${attrs}>${esc(label)}</${attrs.startsWith('href') ? 'a' : 'button'}>`;
+  let next, nextIsCourse = false, nextEvent = null;
+  if (meRow && meRow.on_shift) next = N('clock', meRow.on_shift === 'break' ? 'On break' : 'On shift now', `You're on shift in ${dept}`, `${dvMins(wk.minutes)} this week`, btn('Shift Manager', 'href="#shifts"', true));
+  else if (soon) {
+    nextEvent = soon;
+    const live = soon.status === 'live';
+    const acts = live ? btn('Open event', `href="#events/${soon.id}"`, true)
+      : soon.rsvp && soon.can_rsvp ? `${btn('Maybe', `data-nrsvp="maybe" data-ev="${soon.id}" aria-pressed="${soon.my_rsvp === 'maybe'}"`)}${btn(soon.my_rsvp === 'going' ? 'Going' : "I'm going", `data-nrsvp="going" data-ev="${soon.id}" aria-pressed="${soon.my_rsvp === 'going'}"`, true)}` : btn('Details', `href="#events/${soon.id}"`, true);
+    next = N('calendar', live ? 'Happening now' : 'Next up · ' + dpRel(soon.starts_at).toLowerCase(), soon.title,
+      `${new Date(soon.starts_at).toLocaleDateString([], { weekday: 'short' })} ${dvTime(soon.starts_at)}${soon.location_text ? ' · ' + soon.location_text : ''}${soon.going ? ' · ' + soon.going + ' going' : ''}`, acts);
+  } else if (nextCourse && (nextIsCourse = true)) next = N('graduation-cap', 'Next up', `Finish ${nextCourse.title}`, `${done} of ${plural(mine.length, 'course')} done in ${dept}`, btn(done ? 'Continue' : 'Start course', `href="${base}/courses"`, true));
+  else if (leader && !events.length) next = N('calendar', 'Next up', `Nothing planned for ${dept} this week`, 'An event or a post gives your team something to see here.',
+    `${canPost ? btn('Write a post', 'data-npost') : ''}${btn('Plan an event', `href="${base}/events"`, true)}`);
+  else next = N('clock', 'Next up', wk.shifts ? `Back on shift in ${dept}` : `Start your first shift this week`, wk.target ? `${dvMins(wk.minutes)} of ${dvMins(wk.target)} so far` : '',
+    hasClock ? btn('Start shift', 'data-nclock', true) : btn('Shift Manager', 'href="#shifts"', true));
+
+  // ---- Department News ----
+  const news = posts.length || canPost ? `<section class="card dv-card dv-posts-sec nu-news"><div class="dp-head"><h2>Department News</h2>${canPost && posts.length ? '<button type="button" class="ghost small-btn" data-pnew>New post</button>' : ''}</div>
+      ${posts.length ? '' : `<div class="nu-invite"><span class="nu-iico" style="--icon:${iconUrl('megaphone')}" aria-hidden="true"></span><div><b>Write your first post</b><span>It shows here for everyone in ${esc(dept)}, and in Discord if you like.</span></div><button type="button" class="ghost small-btn" data-pnew>New post</button></div>`}
+      <div class="dv-posts">${posts.map((p) => dvPost(p, canPost)).join('')}</div></section>` : '';
+
+  // ---- Your Team ----
+  const ls = ov.last_shift;
+  const lastLine = nOn ? `${onNow.slice(0, 2).map((p) => esc(dvFirst(p.name))).join(' and ')}${nOn > 2 ? ` and ${nOn - 2} more` : ''} ${nOn === 1 ? 'is' : 'are'} on shift`
+    : ls ? `Last shift: ${esc(dvFirst(ls.name))}, ${esc(dvAgo(ls.ended_at))}, ${esc(dvMins(ls.minutes))}` : `No shifts in ${esc(dept)} yet`;
+  const faceOf = (p, size) => face({ name: p.name, discordId: p.discord_id, avatarUrl: p.avatar_url || '', size });
+  let teamHtml;
+  if ((window.dvTeamMode || DV_TEAM) === 'pulse') {
+    const top = team.filter((t) => Number(t.week_minutes) > 0).sort((a, b) => b.week_minutes - a.week_minutes).slice(0, 3);
+    teamHtml = `<section class="card dv-card nu-team"><div class="dp-head"><h2>On Now</h2><a class="linkish" href="${base}/shifts">Shifts</a></div>
+        ${nOn ? `<div class="nu-onrow">${onNow.map((p) => `<span class="nu-on">${faceOf(p, 's')}<span>${esc(cleanName(p.name))}${p.status === 'break' ? '<small>On break</small>' : ''}</span></span>`).join('')}</div>` : `<p class="muted small nu-quiet">Nobody's on shift. ${ls ? `Last shift: ${esc(dvFirst(ls.name))}, ${esc(dvAgo(ls.ended_at))}.` : ''}</p>`}
+        <h3 class="nu-h3">Top This Week</h3>
+        ${top.length ? `<ol class="nu-top">${top.map((t, i) => `<li><span class="nu-place">${i + 1}</span>${faceOf(t, 's')}<span class="nu-tn">${esc(cleanName(t.name))}${t.me ? ' <em>You</em>' : ''}</span><b>${esc(dvMins(t.week_minutes))}</b></li>`).join('')}</ol>`
+          : `<p class="muted small nu-quiet">Nobody has been on shift this week yet.</p>`}</section>`;
+  } else {
+    teamHtml = `<section class="card dv-card nu-team"><div class="dp-head"><h2>Your Team</h2><a class="linkish" href="${base}/roster">Roster</a></div>
+        <div class="nu-faces">${team.map((t) => `<a class="nu-face${t.on_shift ? ' on' : ''}" href="${base}/roster" title="${esc(cleanName(t.name))}${t.on_shift ? (t.on_shift === 'break' ? ', on break' : ', on shift') : ''}">${faceOf(t, 'm')}<small>${esc(dvFirst(t.name))}</small><em>${esc(t.rank || '')}</em></a>`).join('')}</div>
+        <p class="nu-last"><span class="nu-lico" style="--icon:${iconUrl('clock')}" aria-hidden="true"></span>${lastLine}</p></section>`;
+  }
+
+  // ---- Your Week ----
+  const days = wk.days || [];
+  const tgt = wk.target || null;
+  const weekHtml = `<section class="card dv-card nu-week"><div class="dp-head"><h2>Your Week</h2><a class="linkish" href="${base}/shifts/week">Shifts</a></div>
+      <div class="nu-wnum"><b>${esc(dvMins(wk.minutes))}</b><span>${tgt ? `of ${esc(dvMins(tgt))} target` : 'on shift'} · ${plural(Number(wk.shifts || 0), 'shift')}</span>${tgt && wk.minutes >= tgt ? '<span class="dv-streak">Target met</span>' : ''}</div>
+      ${days.length ? dvWeekGraph(days, tgt) : ''}
+      ${tgt ? '' : me.can_manage ? `<p class="nu-notgt">No target set. <a class="linkish" href="${base}/manage/ranks">Set a target</a></p>` : '<p class="nu-notgt">No target set</p>'}
+    </section>`;
+
+  // ---- What's On (events beyond the one in Next up) and Courses ----
+  const rest = events.filter((e) => !nextEvent || e.id !== nextEvent.id);
+  const evHtml = rest.length ? `<section class="card dv-card"><div class="dp-head"><h2>What's On</h2><a class="linkish" href="${base}/events">All events</a></div>
+      <div class="dv-evs">${rest.slice(0, 4).map((e) => dvEventRow(e)).join('')}</div></section>` : '';
+  const crHtml = mine.length && !(nextIsCourse && mine.length === 1) ? `<section class="card dv-card"><div class="dp-head"><h2>Courses</h2><a class="linkish" href="${base}/courses">All courses</a></div>
+      <div class="dv-big">${done} <span>of ${mine.length} ${mine.length === 1 ? 'course' : 'courses'}</span></div>
+      <div class="dv-bar dept"><i style="width:${Math.round((done / mine.length) * 100)}%"></i></div></section>` : '';
+
   const draw = () => {
-    pane.innerHTML = `
-      <div class="dv-hello"><h2>${esc(dvHello())}${dvFirst() ? ', ' + esc(dvFirst()) : ''}</h2><p>${esc(sub)}</p></div>
-      ${attention}
-      <div class="dv-ov">
-        <div class="dv-col">
-          <section class="card dv-card"><div class="dp-head"><h2>What's On</h2><button type="button" class="linkish" data-dvgo="events">All events</button></div>
-            ${events.length ? `<div class="dv-evs">${events.map((e) => dvEventRow(e)).join('')}</div>` : `<p class="muted small">Nothing planned for the next week.</p>`}
-          </section>
-          <section class="card dv-card dv-posts-sec"><div class="dp-head"><h2>From the Director</h2>${me.can_post ? '<button type="button" class="ghost small-btn" data-pnew>New post</button>' : ''}</div>
-            <div class="dv-posts">${posts.length ? posts.map((p) => dvPost(p, me.can_post)).join('') : `<p class="muted small">No posts yet.</p>`}</div>
-          </section>
-        </div>
-        <div class="dv-col">
-          ${wk ? `<section class="card dv-card"><div class="dp-head"><h2>My Week</h2>${wk.streak > 1 ? `<span class="dv-streak">${wk.streak} weeks on target</span>` : ''}</div>
-            <div class="dv-trio"><div><b>${esc(dvMins(wk.minutes))}</b><span>On shift</span></div><div><b>${Number(wk.shifts || 0)}</b><span>${wk.shifts == 1 ? 'Shift' : 'Shifts'}</span></div><div><b>${Number(wk.sessions || 0)}</b><span>${wk.sessions == 1 ? 'Session' : 'Sessions'}</span></div></div>
-            ${wk.target ? `<div class="dv-tgt"><span>Weekly target</span><span>${esc(dvMins(wk.minutes))} of ${esc(dvMins(wk.target))}</span></div>
-              <div class="dv-bar" role="progressbar" aria-label="Weekly target" aria-valuenow="${Math.min(100, wk.percent || 0)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100, wk.percent || 0)}%"></i></div>` : ''}
-          </section>` : ''}
-          ${mine.length ? `<section class="card dv-card"><div class="dp-head"><h2>My Progress</h2><button type="button" class="linkish" data-dvgo="courses">Courses</button></div>
-            <div class="dv-big">${done} <span>of ${mine.length} ${mine.length === 1 ? 'course' : 'courses'}</span></div>
-            <div class="dv-bar dept"><i style="width:${Math.round((done / mine.length) * 100)}%"></i></div>
-            ${next ? `<a class="dv-next" href="#directors/${d.id}/courses"><span><small>Next course</small><strong>${esc(next.title)}</strong></span><span class="dv-go">Start</span></a>` : ''}
-          </section>` : ''}
-          <section class="card dv-card"><div class="dp-head"><h2>On Now</h2>${(ov.on_now || []).length ? `<span class="dv-count">${ov.on_now.length}</span>` : ''}</div>
-            ${(ov.on_now || []).length ? `<div class="dv-who">${ov.on_now.map((p) => `<div class="dv-person">${face({ name: p.name, discordId: p.discord_id, size: 's' })}<span class="dv-pn">${esc(cleanName(p.name))}${p.status === 'break' ? '<small>On break</small>' : ''}</span>${dvBadge(dept, p.rank)}</div>`).join('')}</div>`
-              : `<p class="muted small">Nobody from ${esc(dept)} is on shift.</p>`}
-          </section>
-        </div>
-      </div>`;
+    pane.innerHTML = `${hero}${attention}${next}
+      <div class="nu-grid"><div class="dv-col">${news}${teamHtml}</div><div class="dv-col">${weekHtml}${evHtml}${crHtml}</div></div>`;
     wire(pane);
-    pane.querySelectorAll('[data-dvgo]').forEach((b) => b.onclick = () => { location.hash = `#directors/${d.id}/${b.dataset.dvgo}`; });
     dvWireRsvp(pane, events);
-    dvWirePosts(pane.querySelector('.dv-posts-sec'), dept, posts, me.can_post, async () => {
-      const { data } = await sb.rpc('dept_posts', { p_department: dept, p_limit: 4 });
-      posts.splice(0, posts.length, ...(data || [])); draw();
+    const sec = pane.querySelector('.dv-posts-sec');
+    if (sec) dvWirePosts(sec, dept, posts, canPost, async () => {
+      window.dvOverview(pane, dept, attention, wire);
+    });
+    pane.querySelector('[data-npost]')?.addEventListener('click', () => { const b = pane.querySelector('.dv-posts-sec [data-pnew]'); b?.click(); b?.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+    pane.querySelector('[data-nclock]')?.addEventListener('click', () => document.querySelector('[data-desk="clock"]')?.click());
+    pane.querySelectorAll('[data-nrsvp]').forEach((b) => b.onclick = async () => {
+      const e = events.find((x) => String(x.id) === b.dataset.ev); if (!e) return;
+      const want = e.my_rsvp === b.dataset.nrsvp ? null : b.dataset.nrsvp;
+      pane.querySelectorAll('[data-nrsvp]').forEach((x) => { x.disabled = true; });
+      const { data, error } = await sb.rpc('event_rsvp', { p_id: e.id, p_response: want });
+      if (error) { pane.querySelectorAll('[data-nrsvp]').forEach((x) => { x.disabled = false; }); b.closest('.nu-next').insertAdjacentHTML('beforeend', `<p class="error dv-err">${esc(error.message)}</p>`); return; }
+      Object.assign(e, { going: data.going, maybe: data.maybe, my_rsvp: data.my_rsvp });
+      pane.querySelectorAll('[data-nrsvp]').forEach((x) => { x.disabled = false; x.setAttribute('aria-pressed', String(e.my_rsvp === x.dataset.nrsvp)); if (x.dataset.nrsvp === 'going') x.textContent = e.my_rsvp === 'going' ? 'Going' : "I'm going"; });
+      const ns = b.closest('.nu-next').querySelector('.nu-ns'); if (ns) ns.textContent = ns.textContent.replace(/ · \d+ going$/, '') + (e.going ? ` · ${e.going} going` : '');
     });
     loadFaces(pane);
   };
