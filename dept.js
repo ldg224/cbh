@@ -198,7 +198,7 @@ async function renderDept(body, tool) {
   // Old links and remembered tabs land on the page that took them over (0.33.0).
   const ALIAS = { members: ['roster', ''], meetings: ['events', 'meetings'], history: ['manage', 'history'], ranks: ['manage', 'ranks'] };
   const resolve = (id, sub) => (ALIAS[id] ? [ALIAS[id][0], sub || ALIAS[id][1]]
-    : id === 'roster' && /^(most_minutes|top)$/.test(sub || '') && TABS.some((t) => t.id === 'shifts') ? ['shifts', 'leaderboard'] : [id, sub]);
+    : id === 'roster' && /^(most_minutes|top)$/.test(sub || '') && TABS.some((t) => t.id === 'shifts') ? ['shifts', sub === 'top' ? 'leaderboard/top' : 'leaderboard'] : [id, sub]);
   const secOf = {};   // the open toggle on Events and Manage
   if (linked) [linked, linkedSub] = resolve(linked, linkedSub);
   if (!TABS.length) { body.innerHTML = `${bannerHtml}<div class="card"><p class="muted small">${outsider ? `You’re not in ${esc(dept)}.` : `You don’t have anything to see in ${esc(dept)} yet.`}</p></div>`; return; }
@@ -801,7 +801,7 @@ async function renderDept(body, tool) {
   // Ranks down the side, permissions across. "Change members" also has a change window: the lowest and highest rank
   // that rank may manage. Each tick saves straight away (set_rank_perm / set_rank_window).
   const PERMS = [
-    ['dept.view', 'See this page', 'Overview and the full roster'],
+    ['dept.view', 'See this page', 'Overview, and the full member list on Roster'],
     ['activity.view', 'See activity', 'Hours and inactivity'],
     ['members.edit', 'Edit members', 'Ranks, add, remove'],
     ['history.view', 'See history', 'Changes and reasons, in Manage'],

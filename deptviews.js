@@ -362,7 +362,8 @@ window.dvTargetsCard = async (pane, dept, ranks) => {
 const dvMine = () => DEPARTMENTS.filter((d) => canSee('dir:' + d.name));
 const dvTicketsFor = (dept) => !!access.exec || myLeads.includes(dept);
 window.DEPT_TABS.push({ id: 'sessions', label: 'Sessions', icon: 'controller', show: (dept) => canSee('sessions') && (inMyDept(dept) || dvLeader(dept)), render: (pane) => renderSessions(pane) });
-window.DEPT_TABS.push({ id: 'tickets', label: 'Tickets', icon: 'inbox', show: (dept) => dvTicketsFor(dept) && !(dept === 'Administration' && access.admin), render: (pane, dept) => renderTeamTickets(pane, dept) });
+// Administration has one Tickets: the Hospital Tools one (admin-tools.js), for every lead there.
+window.DEPT_TABS.push({ id: 'tickets', label: 'Tickets', icon: 'inbox', show: (dept) => dvTicketsFor(dept) && !(dept === 'Administration' && (access.admin || (typeof adminTicketLead === 'function' && adminTicketLead()))), render: (pane, dept) => renderTeamTickets(pane, dept) });
 // Old links land on the same thing in your department (or the closest page you can see).
 function dvRedirect() {
   const h = location.hash;
