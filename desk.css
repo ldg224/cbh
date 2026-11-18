@@ -15,17 +15,16 @@ body.desk > .bar { display: none; }
 body.desk .page-head .back { display: none; }
 .desk-side, .desk-top, .desk-scrim { display: none; }
 body.desk .desk-side, body.desk .desk-top { display: flex; }
-/* the window */
-body.desk main { max-width: none; margin: 0 16px 0 0; padding: 28px clamp(20px, 3vw, 40px) 40px; background: #fff; border-radius: 16px;
-  box-shadow: 0 0 0 1px var(--win-line), 0 8px 28px rgba(11, 30, 74, .10); min-height: calc(100vh - var(--desk-top) - 16px); box-sizing: border-box; }
-body.desk main > * { max-width: 1080px; margin-left: auto; margin-right: auto; }
+/* the window: two columns. Column 1 is the department's INNER MENU (#win-sub): 0 wide outside a department and
+   228px inside one, so opening a department slides it in and the PAGE moves over; leaving reverses it (0.32.1,
+   owner). Column 2 holds everything else, starting at the window's left padding and filling up to 1180px. */
+body.desk main { --pad: clamp(20px, 2.6vw, 36px); max-width: none; margin: 0 16px 0 0; padding: 0 0 40px; background: #fff; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--win-line), 0 8px 28px rgba(11, 30, 74, .10); min-height: calc(100vh - var(--desk-top) - 16px); box-sizing: border-box;
+  display: grid; grid-template-columns: 0px minmax(0, 1fr); align-content: start; transition: grid-template-columns .2s ease-out; }
+body.desk.in-dept main { grid-template-columns: 228px minmax(0, 1fr); }
+body.desk main::before { content: ""; grid-column: 2; grid-row: 1; height: 26px; }
+body.desk main > :not(.win-sub) { grid-column: 2; margin-left: var(--pad); margin-right: var(--pad); max-width: 1180px; width: auto; justify-self: stretch; box-sizing: border-box; }
 body.desk .foot { max-width: none; padding: 14px 16px 18px; margin: 0; }
-/* a department: its own menu down the window's left, full height, flush with the window's edges */
-body.desk.in-dept main { padding: 0; overflow: hidden; }
-body.desk.in-dept main > :not(#page) { margin: 16px 28px 0; }
-body.desk.in-dept #page { max-width: none; display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: calc(100vh - var(--desk-top) - 16px); }
-body.desk.in-dept #page > :not(.win-sub) { grid-column: 2; padding: 0 clamp(20px, 2.6vw, 36px); max-width: 1040px; width: 100%; box-sizing: border-box; }
-body.desk.in-dept #page > #page-body { padding-top: 26px; padding-bottom: 40px; }
 body.desk.in-dept .page-head:has(#page-title[hidden]) { display: none; }
 
 /* ---------- the top bar ---------- */
@@ -91,7 +90,11 @@ body.desk.in-dept .page-head:has(#page-title[hidden]) { display: none; }
 .ds-n.orange { background: #e8890c; }
 
 /* ---------- the department's menu, inside the window ---------- */
-.win-sub { grid-column: 1; grid-row: 1 / span 3; background: #f6f9fd; border-right: 1px solid #e1e8f2; padding: 16px 12px 24px; display: flex; flex-direction: column; gap: 1px; }
+.win-sub { grid-column: 1; grid-row: 1 / span 40; min-width: 0; overflow: hidden; background: #f6f9fd; box-shadow: inset -1px 0 0 #e1e8f2; align-self: stretch; }
+.ws-in { width: 228px; box-sizing: border-box; padding: 16px 12px 24px; display: flex; flex-direction: column; gap: 1px;
+  transform: translateX(-100%); transition: transform .2s ease-out; }
+body.desk.in-dept .ws-in { transform: none; }
+@media (prefers-reduced-motion: reduce) { body.desk main, .ws-in { transition: none; } }
 .ws-head { display: flex; align-items: center; gap: 11px; padding: 6px 8px 16px; text-decoration: none; color: var(--text); }
 .ws-tile { width: 34px; height: 34px; border-radius: 10px; flex: none; position: relative; background: var(--c); box-shadow: 0 2px 8px color-mix(in srgb, var(--c) 30%, transparent); }
 .ws-tile::after { content: ""; position: absolute; inset: 8px; background: #fff; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
@@ -114,12 +117,10 @@ body.desk.in-dept .page-head:has(#page-title[hidden]) { display: none; }
 @media (max-width: 860px) {
   :root { --desk-top: 58px; }
   body.desk { padding: calc(var(--desk-top) + env(safe-area-inset-top, 0px)) 0 0; }
-  body.desk main { margin: 0 8px; padding: 18px 14px 28px; border-radius: 16px; min-height: calc(100vh - var(--desk-top) - 8px); }
-  body.desk.in-dept main { padding: 0; }
-  body.desk.in-dept main > :not(#page) { margin: 12px 12px 0; }
-  body.desk.in-dept #page { display: block; min-height: 0; }
-  body.desk.in-dept #page > :not(.win-sub) { padding: 0 12px; }
-  body.desk.in-dept #page > #page-body { padding-top: 0; padding-bottom: 28px; }
+  body.desk main { margin: 0 8px; border-radius: 16px; min-height: calc(100vh - var(--desk-top) - 8px); }
+  body.desk main, body.desk.in-dept main { display: block; padding: 0 0 28px; transition: none; }
+  body.desk main::before { display: block; height: 14px; }
+  body.desk main > :not(.win-sub) { margin-left: 12px; margin-right: 12px; }
   .win-sub { display: none; }
   .desk-top { height: calc(var(--desk-top) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); gap: 8px; }
   .desk-top .ds-brand { width: auto; flex: 1; min-width: 0; }

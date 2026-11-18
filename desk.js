@@ -176,22 +176,25 @@
         ${typeof joinGameBtn === 'function' ? joinGameBtn(code, 'ds-join') : ''}` : ''}</div>`;
   }
   // The department's own menu inside the window (computers; phones keep dept.js's tabs).
+  // It lives at the start of the window for good (0.32.1): leaving a department just drops body.in-dept, so the menu
+  // slides out (desk.css) still showing the department you left, instead of vanishing.
   function drawSub() {
-    const d = deptHere(), page = $('page');
+    const d = deptHere(), page = $('page'), main = document.querySelector('main');
+    if (sub.parentNode !== main) main.prepend(sub);
     document.body.classList.toggle('in-dept', !!d && !page.hidden);
-    if (!d || page.hidden) { sub.remove(); return; }
+    sub.inert = !d || page.hidden;   // out of view: not focusable
+    if (!d || page.hidden) return;
     const pages = deptPages(d), rank = rankIn(d);
     const views = pages.some((p) => p.tab === 'roster') && window.dvViews ? window.dvViews(d) : [];   // deptviews.js
     const group = (g) => pages.filter((p) => p.grp === g).map(link).join('');
     sub.style.setProperty('--c', d.color);
     sub.setAttribute('aria-label', d.name);
-    sub.innerHTML = `
+    sub.innerHTML = `<div class="ws-in">
       <a class="ws-head" href="#directors/${d.id}"><span class="ws-tile" style="${icon(d.icon)}" aria-hidden="true"></span><span class="ws-name"><b>${esc(d.name)}</b>${rank ? `<small>${esc(rank === 'Director' ? 'You’re the Director' : rank === 'Executive' ? 'Executive view' : rank)}</small>` : ''}</span></a>
       ${group('main')}
       ${views.length ? `<div class="ds-cat">Views</div>${views.map(link).join('')}` : ''}
       ${pages.some((p) => p.grp === 'lead') ? `<div class="ds-cat">Leaders</div>${group('lead')}` : ''}
-      ${pages.some((p) => p.grp === 'tool') ? `<div class="ds-cat">Hospital tools</div>${group('tool')}` : ''}`;
-    if (sub.parentNode !== page) page.prepend(sub);
+      ${pages.some((p) => p.grp === 'tool') ? `<div class="ds-cat">Hospital tools</div>${group('tool')}` : ''}</div>`;
   }
   function drawAll() { if (!document.body.classList.contains('desk')) return; drawTop(); drawSide(); drawSub(); }
 
