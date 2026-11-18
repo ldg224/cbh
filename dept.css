@@ -277,3 +277,4 @@ button.dp-quiet:hover { filter: brightness(.96); text-decoration: underline; }
 .dp-toggles button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .dp-toggles .count { font-size: 11.5px; font-weight: 700; opacity: .6; }
 .dp-secbody:empty { display: none; }
+#dp-pane { min-width: 0; }   /* #page-body is a grid: without this, a wide toggle row stretched the page on phones */
