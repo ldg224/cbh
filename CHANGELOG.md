@@ -3,6 +3,22 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.28.0 (2026-11-18)
+
+**Added:**
+- Two new departments: **Medical** (blue) and **Surgical** (green), each with a Director and Year 1 to Year 5, their own department page, meetings, courses, office access and an application form (closed until it's opened).
+  - Medical: Medical Director, Attending Physician, Medical Fellow, Resident Physician, Medical Intern, Medical Student.
+  - Surgical: Surgical Director, Attending Surgeon, Chief Resident, Surgical Resident, Surgical Assistant, Surgical Technician.
+
+**Changed:**
+- Departments now come from one list, so new ones can be added quickly.
+- Administration's colour is now purple (#7B61FF).
+
+**Bot:**
+- Knows the Medical and Surgical ranks, pings them for meetings and gives their Directors Board of Directors.
+
+Database change: yes, migrations 0060 (one departments list) and 0061 (Medical and Surgical); already applied.
+
 ## 0.27.2 (2026-11-18)
 
 **Fixed:**
