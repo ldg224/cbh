@@ -3,6 +3,25 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.31.0 (2026-11-18)
+
+**Added:**
+- **CBH Check-in:** players who want to be patients check in from Discord (#check-in) or the website while a session is live.
+  - Required: character name, age, Roblox username, symptoms. Optional: pain, when it started, allergies, history, last meal.
+  - "Your visit" shows their place in line, who's coming and their room.
+  - Status DMs, a live waiting board, a discharge summary, and a 1 to 5 rating.
+
+**Changed:**
+- **The CBH Chart is now for live patients only.** Every case starts from a check-in, and NPCs aren't charted.
+  - The Chart page is a live Queue (Waiting, In care, Discharged today) with a recommended next patient.
+  - Staff on shift tap Take patient and confirm or correct the patient's answers.
+  - Vitals follow the game's order, and CO2 and Pulse are added.
+  - New: orders with results, a diagnosis, and discharge advice the patient receives.
+- Staff see their own average rating. Directors see their department's, and owners see everything.
+- "Log a patient" is replaced by the Queue: in the sidebar, on the shift card ("Take next") and on the phone tab.
+
+Database change: yes, migrations 0067 to 0070 (Chart v2 and Check-in); already applied.
+
 ## 0.30.0 (2026-11-18)
 
 **Added:**
