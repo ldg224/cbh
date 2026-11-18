@@ -79,10 +79,10 @@ async function renderRecords(body) {
 async function startScreen(box) {
   const recent = recentRecords();
   box.innerHTML = `<div class="rc-start">
-    ${recent.length ? `<section class="rc-sec"><h2 class="ma-day">Recently opened</h2><div class="rc-chips">${recent.map((r) => `<button type="button" class="rc-chip" data-person="${esc(r.id)}" data-name="${esc(r.name)}">${face({ name: r.name, discordId: r.id, size: 's' })}<span>${esc(r.name)}</span></button>`).join('')}</div></section>` : ''}
+    ${recent.length ? `<section class="rc-sec"><h2 class="ma-day">Recently Opened</h2><div class="rc-chips">${recent.map((r) => `<button type="button" class="rc-chip" data-person="${esc(r.id)}" data-name="${esc(r.name)}">${face({ name: r.name, discordId: r.id, size: 's' })}<span>${esc(r.name)}</span></button>`).join('')}</div></section>` : ''}
     <div class="rc-two">
-      <section class="rc-sec"><h2 class="ma-day">Recently actioned</h2><div class="card rc-list" id="rc-acted"><p class="muted small">Loading…</p></div></section>
-      <section class="rc-sec"><h2 class="ma-day">Most warnings</h2><div class="card rc-list" id="rc-warned"><p class="muted small">Loading…</p></div></section>
+      <section class="rc-sec"><h2 class="ma-day">Recently Actioned</h2><div class="card rc-list" id="rc-acted"><p class="muted small">Loading…</p></div></section>
+      <section class="rc-sec"><h2 class="ma-day">Most Warnings</h2><div class="card rc-list" id="rc-warned"><p class="muted small">Loading…</p></div></section>
     </div></div>`;
   paintFaces(box);
   const since = new Date(Date.now() - 7 * 864e5).toISOString();

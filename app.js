@@ -455,23 +455,22 @@ async function loadDepartments() {
 }
 const PAGES = [
   // The Executive and Admin hub tools are tabs on the Administration page since 0.29.0 (admin-tools.js); old links redirect.
-  { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [] },
+  { id: 'exec', aud: 'exec', title: 'Executive Hub', icon: 'crown', wide: true, tools: [] },
   // Directors hub: sessions, plus one page per department for its Director (execs see all four).
-  { id: 'directors', aud: 'director', title: 'Directors hub', icon: 'org-chart', wide: true, tools: [
+  { id: 'directors', aud: 'director', title: 'Directors Hub', icon: 'org-chart', wide: true, tools: [
     { id: 'sessions', title: 'Sessions', icon: 'calendar', layout: 'sessions', wide: true },   // pinned on top
     ...deptTools(),
   ] },
-  { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
+  { id: 'admin', aud: 'admin', title: 'Admin Hub', icon: 'shield', wide: true, tools: [
     { id: 'sessions',     title: 'Sessions',     icon: 'calendar', layout: 'sessions' },
     { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'review', aud: 'reviewer' },
   ] },
-  { id: 'shifts',   aud: 'staff',    title: 'Shifts',         icon: 'clock',   layout: 'shifts' },
-  { id: 'roster',   aud: 'staff',    title: 'Staff & roster', icon: 'people',  layout: 'people' },
-  { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'rules' },
-  { id: 'support',  aud: 'everyone', title: 'Support',        icon: 'help',    layout: 'support' },
-  { id: 'tickets',  aud: 'leads',    title: 'Team tickets',   icon: 'inbox',   layout: 'tickets' },   // leads who aren't admins
+  { id: 'shifts',   aud: 'staff',    title: 'Shift Manager',         icon: 'clock',   layout: 'shifts' },
+  { id: 'roster',   aud: 'staff',    title: 'Staff & Roster', icon: 'people',  layout: 'people' },
+  { id: 'rules',    aud: 'everyone', title: 'Rules & Info',   icon: 'book',    layout: 'rules' },
+  { id: 'tickets',  aud: 'leads',    title: 'Team Tickets',   icon: 'inbox',   layout: 'tickets' },   // leads who aren't admins
   { id: 'review',   aud: 'reviewer-lead', title: 'Applications', icon: 'resume', layout: 'review' },   // review-team leads who aren't admins
-  { id: 'contact',  aud: 'everyone', title: 'Contact a team', icon: 'chat',    layout: 'contact' },
+  { id: 'contact',  aud: 'everyone', title: 'Support Tickets', icon: 'chat',    layout: 'contact' },
   { id: 'apply',    aud: 'everyone', title: 'Apply',          icon: 'resume',  layout: 'apply' },
   // Events everyone can see, and one event (#events/<id>; the bot's "Details" button). deptviews.js, 0.32.0.
   { id: 'events',   aud: 'everyone', title: 'Events',         icon: 'calendar', layout: 'events' },
@@ -625,7 +624,7 @@ const COMMAND_GROUPS = [
   { aud: 'everyone', title: 'Everyone', cmds: [
     ['/login', 'code', 'Log in to this website with the code from "Log in with a code".'],
   ] },
-  { aud: 'admin', title: 'Admins · moderation', note: 'Each is saved as a case (see Mod actions), posted to #server-logs, and the member gets a DM where possible. You can\u2019t act on someone with the same or a higher role.', cmds: [
+  { aud: 'admin', title: 'Admins · Moderation', note: 'Each is saved as a case (see Mod actions), posted to #server-logs, and the member gets a DM where possible. You can\u2019t act on someone with the same or a higher role.', cmds: [
     ['/warn', 'member reason', 'Warn a member.'],
     ['/timeout', 'member length reason', 'Time out for 10 minutes, 1 hour, 6 hours, 1 day, 3 days or 1 week.'],
     ['/untimeout', 'member [reason]', 'Remove a timeout.'],
@@ -899,6 +898,7 @@ async function renderThread(body, ticket, { staff, back }) {
 
 async function renderContact(body) {
   body.innerHTML = `
+    <p class="c-web"><button type="button" class="linkish" id="c-web">Report a website problem</button></p>
     <form class="card case-form" id="c-form">
       <div class="team-pick" id="c-team">${TEAMS.map((t, i) => `
         <button type="button" class="team${i === 0 ? ' on' : ''}" data-t="${esc(t.id)}" style="--c:${hex(t.color)}">
@@ -910,7 +910,7 @@ async function renderContact(body) {
       <p class="error" id="c-err" hidden></p>
       <div class="f-actions"><button class="refresh" type="submit">Send</button></div>
     </form>
-    <h2 class="menu-label aud-everyone"><span class="aud-dot"></span>Your tickets</h2>
+    <h2 class="menu-label aud-everyone"><span class="aud-dot"></span>Your Tickets</h2>
     <div class="card" id="c-list"><p class="muted small">Loading…</p></div>`;
   let team = TEAMS[0].id;
   body.querySelector('#c-team').onclick = (e) => {
@@ -918,11 +918,13 @@ async function renderContact(body) {
     team = b.dataset.t;
     body.querySelectorAll('#c-team .team').forEach((x) => x.classList.toggle('on', x === b));
   };
-  // #contact/website (Support's "Report a problem"): Administration, with the subject started.
-  if (location.hash.split('/')[1] === 'website') {
+  // "Report a website problem" (and #contact/website): Administration, with the subject started.
+  const webProblem = () => {
     body.querySelector('#c-team [data-t="Administration"]')?.click();
-    const s = body.querySelector('#c-subject'); s.value = 'Website problem: '; body.querySelector('#c-body').focus();
-  }
+    const s = body.querySelector('#c-subject'); if (!s.value) s.value = 'Website problem: '; body.querySelector('#c-body').focus();
+  };
+  body.querySelector('#c-web').onclick = webProblem;
+  if (location.hash.split('/')[1] === 'website') webProblem();
   body.querySelector('#c-form').onsubmit = async (e) => {
     e.preventDefault();
     const err = body.querySelector('#c-err'); err.hidden = true;
@@ -1105,7 +1107,7 @@ async function renderShifts(body) {
       </div>`).join('')}</div>`
       : '<div class="card"><p class="muted small">Nobody is on shift right now.</p></div>'}
 
-    <h2 class="menu-label aud-staff"><span class="aud-dot"></span>Your shifts</h2>
+    <h2 class="menu-label aud-staff"><span class="aud-dot"></span>Your Shifts</h2>
     ${weeks.length ? weeks.map((w) => `
       <div class="card sh-week">
         <div class="sh-week-head"><strong>${esc(w.label)}</strong><span>${hrs(w.secs)} · ${w.list.length} ${w.list.length === 1 ? 'shift' : 'shifts'}</span></div>
@@ -1442,7 +1444,7 @@ async function renderSessions(body) {
   body.innerHTML = `<div class="pg-sess">
     ${liveBlock}
     <div class="ss-form-slot" id="ss-form-slot"></div>
-    <h2 class="menu-label aud-director"><span class="aud-dot"></span>Next 7 days</h2>
+    <h2 class="menu-label aud-director"><span class="aud-dot"></span>Next 7 Days</h2>
     <div class="ss-week">${days.map((dd, i) => `<div class="ss-day${i === 0 ? ' today' : ''}">
       <div class="ss-day-h"><strong>${i === 0 ? 'Today' : dd.d.toLocaleDateString([], { weekday: 'short', timeZone: 'Australia/Sydney' })}</strong>
         <span>${dd.d.toLocaleDateString([], { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}</span></div>

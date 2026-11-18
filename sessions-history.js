@@ -81,7 +81,7 @@
     if (!el) return;
     let max = STEP;
     el.classList.add('sh-history');
-    el.innerHTML = `<h2 class="sh-htitle">Past sessions</h2><div class="sh-hbody"><div class="card sh-hload">${typeof lines === 'function' ? lines('40%', '70%', '55%') : '<p class="muted small">Loading…</p>'}</div></div>`;
+    el.innerHTML = `<h2 class="sh-htitle">Past Sessions</h2><div class="sh-hbody"><div class="card sh-hload">${typeof lines === 'function' ? lines('40%', '70%', '55%') : '<p class="muted small">Loading…</p>'}</div></div>`;
     const body = el.querySelector('.sh-hbody');
     async function load() {
       const { data, error } = await sb.rpc('session_history', { max_rows: max });

@@ -216,7 +216,7 @@ async function renderRoles(body) {
         <div class="ro-grid">${RO_DEPT.map(([k, l, h]) => sw('d:' + k, isDir || !!dmap[r.id + '|' + k], l, h, isDir || (k === 'members.edit' && r.rank_order <= Math.min(...ranks.map((x) => x.rank_order))))).join('')}</div>
         ${!isDir && w ? `<div class="ro-win">Can change members from <select data-win="lo">${ranks.filter((x) => x.rank_order < r.rank_order).map((x) => `<option value="${x.rank_order}"${x.rank_order === w.window_lo ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>
           to <select data-win="hi">${ranks.filter((x) => x.rank_order < r.rank_order).map((x) => `<option value="${x.rank_order}"${x.rank_order === w.window_hi ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select></div>` : ''}</section>` : ''}
-      <section class="card ro-sec"><div class="ro-sh"><h3>Bot commands</h3><span class="muted small-meta">CareBeyond Helper’s moderation commands in Discord</span></div>
+      <section class="card ro-sec"><div class="ro-sh"><h3>Bot Commands</h3><span class="muted small-meta">CareBeyond Helper’s moderation commands in Discord</span></div>
         ${all ? '<p class="ro-note">The Hospital Director and Chief Operations Officer can always use every command.</p>' : none ? '<p class="ro-note">Bot and booster roles can’t be given commands.</p>' : ''}
         <div class="ro-grid">${RO_CMDS.map(([k, l, h]) => sw('c:' + k, all || cset.has(r.id + '|' + k), l, h, all || none)).join('')}</div></section>
       <form class="card ro-sec" id="ro-disc"><div class="ro-sh"><h3>Discord</h3><span class="muted small-meta">The role’s permissions across the server. CareBeyond Helper applies them.</span></div>

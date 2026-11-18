@@ -137,7 +137,7 @@ function applyForm(body, f, preview) {
     const { error } = await sb.from('form_submissions').insert({ form_key: f.key, submitter_discord_id: myDiscordId, answers });
     if (error) { if (btn) btn.disabled = false; err.textContent = error.message; err.hidden = false; return; }
     body.innerHTML = `<div class="card center sent"><span class="t-ico big" style="--c:#2ed3c6;--icon:${iconUrl('verified')}" aria-hidden="true"></span>
-      <h2 class="form-title">Application sent</h2><p class="muted">You’ll get a DM from CareBeyond Helper with the decision.</p>
+      <h2 class="form-title">Application Sent</h2><p class="muted">You’ll get a DM from CareBeyond Helper with the decision.</p>
       <button class="ghost" id="ap-done">Done</button></div>`;
     body.querySelector('#ap-done').onclick = () => renderApplyPage(body);
   };
@@ -272,7 +272,7 @@ async function appDetail(el, dept, id) {
         </section>` : ''}
         <section class="card app-decide" id="app-decide">${decideHtml()}</section>
         <section class="card app-notes">
-          <div class="app-notes-h"><h3 class="app-h">Team notes</h3>${appThumbs(ups, downs)}</div>
+          <div class="app-notes-h"><h3 class="app-h">Team Notes</h3>${appThumbs(ups, downs)}</div>
           <div class="app-note-list">${d.notes.map((n) => `
             <div class="app-note${n.body ? '' : ' vote-only'}">
               <div class="app-note-meta"><strong>${esc(cleanName(n.author_name || 'Someone'))}</strong>${n.vote ? `<span class="app-v ${n.vote > 0 ? 'up' : 'down'}"><span class="app-vi" style="--icon:${iconUrl(n.vote > 0 ? 'thumb-up' : 'thumb-down')}" aria-label="${n.vote > 0 ? 'Thumbs up' : 'Thumbs down'}"></span></span>` : ''}
@@ -469,7 +469,7 @@ async function appBuilder(el, dept, key) {
       </div>
       <div class="app-col">
         <section class="card app-fs bd-side">
-          <h3 class="app-h">Who can see and apply</h3>
+          <h3 class="app-h">Who Can See and Apply</h3>
           <label class="bd-radio"><input type="radio" name="bd-aud" value="all"> Everyone not in ${esc(dept)}</label>
           <label class="bd-radio"><input type="radio" name="bd-aud" value="ranks"> Only these ranks</label>
           <div class="app-roles bd-ranks" id="bd-ranks">${(ranks || []).map((r) => `<label class="app-role"><input type="checkbox" value="${esc(r.id)}"><span>${esc(r.rank_label || r.name)}</span></label>`).join('')}</div>
@@ -486,7 +486,7 @@ async function appBuilder(el, dept, key) {
           <label class="f as-wait"><span>Wait before reapplying after “Not accepted”</span><span class="as-days"><input id="bd-wait" type="number" min="0" max="365"> days</span></label>
         </section>
         <section class="card app-fs bd-side${canRev ? '' : ' bd-locked'}">
-          <h3 class="app-h">Who reviews</h3>
+          <h3 class="app-h">Who Reviews</h3>
           <p class="app-hint">${canRev ? 'Directors and executives can always change this list.' : `Only executives and the ${esc(dept)} Director can change this.`}</p>
           <label class="bd-radio"><input type="radio" name="bd-rev" value="dept"${canRev ? '' : ' disabled'}> Everyone who can review ${esc(dept)} applications</label>
           <label class="bd-radio"><input type="radio" name="bd-rev" value="roles"${canRev ? '' : ' disabled'}> Only these roles</label>

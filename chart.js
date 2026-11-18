@@ -106,7 +106,7 @@
 
   // ---------- registration (no edits to app.js) ----------
   PAGES.push({ id: 'chart', aud: 'chart', title: 'CBH Chart', icon: 'stethoscope', layout: 'chart' });
-  PAGES.push({ id: 'checkin', aud: 'checkin', title: 'Check in', icon: 'nurse', layout: 'checkin' });
+  PAGES.push({ id: 'checkin', aud: 'checkin', title: 'Check In', icon: 'nurse', layout: 'checkin' });
   if (typeof TOOL_FOLDER === 'object') { TOOL_FOLDER.chart = 'operations'; TOOL_FOLDER.checkin = 'help'; }
   const deskDraw = window.deskDraw;
   if (deskDraw) {
@@ -146,7 +146,7 @@
   // Phone bottom tabs: the queue in the middle while on shift, with the waiting count.
   window.chartTab = () => ME?.can_read ? `<a class="cx-fab" href="#chart" aria-label="Patient queue, ${waitingRows().length} waiting"><span class="cx-fab-b" aria-hidden="true">${waitingRows().length}<small>WAITING</small></span><span>Queue</span></a>` : '';
   // Members: "Check in" (or "Your visit") in My stuff and on Home, only while it means something.
-  const ciLabel = () => CI?.active ? 'Your visit' : CI?.feedback_due?.length ? 'Rate your visit' : CI?.can_check_in ? 'Check in' : '';
+  const ciLabel = () => CI?.active ? 'Your Visit' : CI?.feedback_due?.length ? 'Rate Your Visit' : CI?.can_check_in ? 'Check In' : '';
   window.checkinNav = (link) => ciLabel() && (CI.active || CI.feedback_due?.length || !ME?.can_write) ? link({ href: '#checkin', label: ciLabel(), icon: 'nurse' }) : '';
   window.checkinHome = () => {
     const home = $('home'); if (!home) return;
@@ -564,7 +564,7 @@
     const editable = ['name', 'age', 'roblox_username', 'onset', 'allergies', 'history', 'last_intake'];
     const state = ci.state === 'claimed' ? '<span class="cx-wait">Taken · no room yet</span>' : ci.state === 'in_room' ? `<span class="cx-room">${esc(c.room || 'In a room')}</span>` : `<span class="st cx-st">${esc(ci.state)}</span>`;
     return `<div class="card cx-ci">
-      <div class="cx-ci-h"><h3>From their check-in</h3><span class="cx-meta">${ci.source === 'website' ? 'Website' : 'Discord'} · checked in ${esc(hhmm(ci.created_at))} · waited ${mins(ci.waited_seconds)} min${ci.staff_name ? ' · taken by ' + esc(cleanName(ci.staff_name)) : ''}</span>${state}</div>
+      <div class="cx-ci-h"><h3>From Their Check-In</h3><span class="cx-meta">${ci.source === 'website' ? 'Website' : 'Discord'} · checked in ${esc(hhmm(ci.created_at))} · waited ${mins(ci.waited_seconds)} min${ci.staff_name ? ' · taken by ' + esc(cleanName(ci.staff_name)) : ''}</span>${state}</div>
       ${canEdit && (ci.state === 'claimed' || ci.state === 'in_room') ? `<div class="cx-roomrow"><label class="f"><span>Room</span><input id="cx-room-in" type="text" maxlength="20" value="${esc(c.room || '')}" placeholder="ER 3, Exam 2, Trauma Bay 1" autocomplete="off"></label>
         <button type="button" class="refresh small-btn" id="cx-room-go">${ci.state === 'in_room' ? 'Change room' : 'Set room'}</button>
         <span class="cx-roomacts"><button type="button" class="cx-link" id="cx-release">Give back to the queue</button><button type="button" class="cx-link" id="cx-left">Left without being seen</button></span><div id="cx-ci-x"></div></div>` : ''}
@@ -740,7 +740,7 @@
       const S = (c.symptoms || []).map((s) => s.id || s.label);
       const before = { room: c.room || '', age: pt.age ?? '', symptoms: JSON.stringify(S), diagnosis: D.v, ...Object.fromEntries(['allergies', 'nkda', 'past_history', 'last_intake', 'onset'].map((k) => [k, H[k] ?? (k === 'nkda' ? false : '')])) };
       const SY = symptomsUI(S, 'cx-e-'), HI = historyUI(H, 'cx-eh-'), DX = diagnosisUI(D, 'cx-e-');
-      box.innerHTML = `<div class="card cx-comp cx-details"><h3>Edit details</h3>
+      box.innerHTML = `<div class="card cx-comp cx-details"><h3>Edit Details</h3>
         <div class="cx-pt2"><label class="f"><span>Age</span><input id="cx-e-age" type="number" inputmode="numeric" min="0" max="120" value="${esc(pt.age ?? '')}"></label>
           <label class="f"><span>Room</span><input id="cx-e-room" type="text" maxlength="20" value="${esc(c.room || '')}" autocomplete="off"></label></div>
         ${(CAT.symptoms || []).length ? `<div class="cx-sub" id="cx-e-sym"><span class="cx-gl">Symptoms</span>${SY.html}</div>` : ''}
@@ -827,7 +827,7 @@
   const PT_SYMPTOMS = ['Pain', 'Headache', 'Dizzy', 'Nausea', 'Vomiting', 'Fever', 'Cough', 'Sneezing', 'Runny nose', 'Shortness of breath',
     'Chest pain', 'Thirst / dry mouth', 'Wound', 'Deformity', 'Rash / swelling', 'Confusion', 'Seizure'];
   async function drawCheckin(body) {
-    setPageTitle('nurse', 'Check in', 'everyone');
+    setPageTitle('nurse', 'Check In', 'everyone');
     document.title = 'Check in · CareBeyond';
     body.innerHTML = '<p class="muted">Loading…</p>';
     await loadCI();
@@ -846,7 +846,7 @@
     const F = { symptoms: [], pain: null, nkda: false };
     body.innerHTML = `<form class="cx-form cx-ptform" id="cx-ci" novalidate>
       <p class="cx-ctx-l">A session is running.${CI.est_wait_min != null ? ` Wait is about ${esc(CI.est_wait_min)} min.` : ''}</p>
-      <section class="cx-sec"><h3>About you</h3>
+      <section class="cx-sec"><h3>About You</h3>
         <label class="f"><span>Your character's name</span><input id="ci-name" type="text" maxlength="80" autocomplete="off" required></label>
         <div class="cx-pt2"><label class="f"><span>Age</span><input id="ci-age" type="number" inputmode="numeric" min="0" max="120" required></label>
           <label class="f"><span>Roblox username</span><input id="ci-rbx" type="text" maxlength="40" autocomplete="off" required></label></div>
@@ -909,7 +909,7 @@
   }
 
   async function drawVisit(body) {
-    setPageTitle('nurse', 'Your visit', 'everyone');
+    setPageTitle('nurse', 'Your Visit', 'everyone');
     document.title = 'Your visit · CareBeyond';
     let board = null;
     try { board = await api('checkin_board'); } catch { /* the board is a bonus */ }
@@ -922,7 +922,7 @@
     body.innerHTML = `${flash ? `<p class="cx-flash" role="status">${esc(flash)}</p>` : ''}
       <div class="card cx-visit ${esc(a.state)}"><span class="cx-gl">${a.state === 'waiting' ? 'Waiting' : a.state === 'claimed' ? 'Taken' : 'In a room'}</span>${big}
         <p class="muted">We'll message you on Discord too. Stay in game near the ER entrance.</p></div>
-      ${board ? `<div class="card cx-board"><h3>Waiting board</h3>${board.map((r) => `<div class="cx-brow${r.id === a.id ? ' me' : ''}">
+      ${board ? `<div class="card cx-board"><h3>Waiting Board</h3>${board.map((r) => `<div class="cx-brow${r.id === a.id ? ' me' : ''}">
           <span>${r.state === 'waiting' ? `<b>${esc(r.position ?? '')}</b> ` : ''}${esc(r.board_name)}${r.id === a.id ? ' (you)' : ''}</span>
           <span class="${r.state === 'waiting' ? 'cx-wait' : 'cx-ok'}">${r.state === 'waiting' ? `${esc(r.waited_min ?? mins(r.waited_seconds))} min` : `with ${esc(r.with_name || '')}${r.room ? ' · ' + esc(r.room) : ''}`}</span></div>`).join('')}
           <p class="muted small">First name and last initial only. The order follows urgency, so it can change.</p></div>` : ''}
@@ -933,7 +933,7 @@
     flash = '';
     body.querySelector('#cv-edit').onclick = () => {
       const x = body.querySelector('#cv-x');
-      x.innerHTML = `<div class="card cx-comp"><h3>More details</h3>
+      x.innerHTML = `<div class="card cx-comp"><h3>More Details</h3>
         <div class="cx-pt2 wide"><label class="f"><span>When did it start?</span><input id="cv-onset" type="text" maxlength="200"></label><label class="f"><span>Allergies</span><input id="cv-all" type="text" maxlength="200"></label></div>
         <label class="f"><span>Medical history</span><input id="cv-hist" type="text" maxlength="200"></label><label class="f"><span>Last ate or drank</span><input id="cv-oral" type="text" maxlength="200"></label>
         <div class="cx-grp"><span class="cx-gl">Pain</span><div class="cx-chips">${[0, 2, 4, 6, 8, 10].map((n) => `<button type="button" class="chip" data-vp="${n}">${n}</button>`).join('')}</div></div>
@@ -982,7 +982,7 @@
         ${s.follow_up ? `<span><b>Advice</b>${esc(s.follow_up)}</span>` : ''}
         <small class="muted">${esc(s.disposition_label || '')}${s.minutes != null ? ` · ${esc(s.minutes)} minutes` : ''}</small>
       </div>
-      ${s.rated ? '<p class="cx-flash">Thanks for rating your care.</p>' : `<div class="card cx-rate"><h3>How was your care?</h3>
+      ${s.rated ? '<p class="cx-flash">Thanks for rating your care.</p>' : `<div class="card cx-rate"><h3>How Was Your Care?</h3>
         <div class="cx-stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="cx-star" data-star="${n}" role="radio" aria-checked="false" aria-label="${n} out of 5">${n}</button>`).join('')}</div>
         <label class="f"><span>Anything to add? <em>(optional)</em></span><textarea id="cr-c" rows="2" maxlength="500"></textarea></label>
         <div class="cx-err-slot"></div><button type="button" class="refresh" id="cr-go" disabled>Send rating</button></div>`}`;

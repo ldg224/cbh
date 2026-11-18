@@ -15,13 +15,13 @@ window.deptOfficeCard = async function (pane, dept, ranks) {
   const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   const card = document.createElement('div');
   card.className = 'card dp-office';
-  card.innerHTML = `<div class="dp-head"><h2>Office access</h2><span class="muted small-meta">Who can open the ${esc(dept)} Office in Discord. CareBeyond Helper gives and takes the key.</span></div>
+  card.innerHTML = `<div class="dp-head"><h2>Office Access</h2><span class="muted small-meta">Who can open the ${esc(dept)} Office in Discord. CareBeyond Helper gives and takes the key.</span></div>
     ${key.active ? '' : '<p class="dp-office-note">Switched on when the new Discord roles go live. You can set it up now.</p>'}
     <p class="error" id="of-err" hidden></p>
-    <h3 class="dp-office-h">Ranks that always have it</h3>
+    <h3 class="dp-office-h">Ranks That Always Have It</h3>
     <div class="dp-office-ranks">${ranks.slice().sort((a, b) => b.rank_order - a.rank_order).map((r) => `<label class="dp-ochip" style="--c:${r.badge_color ? hex(r.badge_color) : '#9aa9c4'}">
       <input type="checkbox" data-orank="${esc(r.id)}"${on.has(r.id) ? ' checked' : ''}><span>${esc(r.rank_label)}</span></label>`).join('')}</div>
-    <h3 class="dp-office-h">Also let in</h3>
+    <h3 class="dp-office-h">Also Let In</h3>
     <div class="dp-office-list">${extras.length ? extras.map((x) => { const nm = cleanName(x.display_name || 'Someone who left');
       return `<div class="dp-orow">${face({ name: nm, discordId: x.discord_id, avatarUrl: x.avatar_url, size: 's' })}
         <span class="dp-otxt"><b>${esc(nm)}</b><small>${x.until ? 'Until ' + esc(day(x.until)) : 'No end date'}${x.added_by_name ? ' · ' + esc(cleanName(x.added_by_name)) : ''}</small></span>

@@ -54,7 +54,7 @@ async function renderCases(body) {
     <div class="ma-top">
       <div class="ma-stats" id="ma-stats">${['This week', 'Active warnings', 'Pending', maSupervisor ? 'Waiting for review' : 'Didn’t go through']
         .map((l, i) => `<button type="button" class="ma-stat" data-stat="${i}"><span class="ma-stat-n">–</span><span class="ma-stat-l">${l}</span></button>`).join('')}</div>
-      <button type="button" class="refresh ma-new" id="ma-new">New action</button>
+      <button type="button" class="refresh ma-new" id="ma-new">New Action</button>
     </div>
     <div class="ma-tools">
       <label class="ma-search"><span class="h-glass" aria-hidden="true"></span><input id="ma-q" type="search" placeholder="Search a name or reason" aria-label="Search mod actions" autocomplete="off"></label>
@@ -168,7 +168,7 @@ async function renderCases(body) {
       const filtered = st.type !== 'all' || st.source !== 'all' || st.mine || st.q || st.pendingOnly || st.review;
       list.innerHTML = `<div class="card ma-empty"><strong>${filtered ? 'Nothing matches these filters.' : 'No mod actions yet.'}</strong>
         <span>${filtered ? 'Try a different search or filter.' : 'Actions you take here, with slash commands or in game show up in this list.'}</span>
-        ${filtered ? '<button type="button" class="ghost small-btn" id="ma-clear">Clear filters</button>' : '<button type="button" class="refresh small-btn" id="ma-first">New action</button>'}</div>`;
+        ${filtered ? '<button type="button" class="ghost small-btn" id="ma-clear">Clear filters</button>' : '<button type="button" class="refresh small-btn" id="ma-first">New Action</button>'}</div>`;
       $b('#ma-clear')?.addEventListener('click', clearFilters);
       $b('#ma-first')?.addEventListener('click', () => openCasePanel({}, () => load(true)));
       return;
@@ -352,7 +352,7 @@ function openCasePanel(preset, onDone) {
   wrap.className = 'ma-panel-wrap';
   wrap.innerHTML = `<div class="ma-scrim"></div>
     <aside class="ma-panel" role="dialog" aria-modal="true" aria-labelledby="map-title">
-      <div class="ma-phead"><h2 id="map-title">New action</h2><button type="button" class="h-x" aria-label="Close">&times;</button></div>
+      <div class="ma-phead"><h2 id="map-title">New Action</h2><button type="button" class="h-x" aria-label="Close">&times;</button></div>
       <ol class="ma-steps">${['Who', 'What', 'Why'].map((l, i) => `<li data-step="${i + 1}"><span>${i + 1}</span>${l}</li>`).join('')}</ol>
       <div class="ma-pbody" id="map-body"></div>
       <div class="ma-pfoot" id="map-foot"></div>
@@ -466,7 +466,7 @@ function openCasePanel(preset, onDone) {
     } else {
       bodyEl.innerHTML = `<div class="ma-sent"><span class="ma-sent-ico" aria-hidden="true"></span><strong>${s.where === 'discord' ? 'Sent' : 'Saved'}</strong>
         <span>${s.where === 'discord' ? 'CareBeyond Helper is carrying it out. The list shows Pending, then Done. If it can’t, you’ll see why at the top of Mod actions.' : 'The record is saved and posted to #server-logs.'}</span></div>`;
-      foot.innerHTML = `<button type="button" class="ghost" id="map-again">New action</button><button type="button" class="refresh" id="map-done">Done</button>`;
+      foot.innerHTML = `<button type="button" class="ghost" id="map-again">New Action</button><button type="button" class="refresh" id="map-done">Done</button>`;
       foot.querySelector('#map-done').onclick = close;
       foot.querySelector('#map-again').onclick = () => { Object.assign(s, { step: 1, action: null, person: null, roblox: null, history: null, reason: '', gameLen: '' }); draw(); };
       foot.querySelector('#map-done').focus();

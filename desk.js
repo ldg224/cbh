@@ -26,14 +26,14 @@
   // ---------- what this person can use ----------
   const hash = () => location.hash || '#';
   // The OUTER MENU (owner, 0.32.2): only what's yours wherever you are. Sessions, Courses and Tickets live in each
-  // department's INNER MENU now; Commands is part of Rules & info; Help sits at the bottom.
+  // department's INNER MENU now; Commands is part of Rules & Info; Help (Rules & Info, Support Tickets) sits at the bottom.
   function myStuff() {
     return [
-      canSee('staff') && myDepartments.length && { href: '#shifts', label: 'My shift', icon: 'clock' },
+      canSee('staff') && myDepartments.length && { href: '#shifts', label: 'Shift Manager', icon: 'clock' },
       { href: '#apply', label: 'Apply', icon: 'resume' },
     ].filter(Boolean);
   }
-  const HELP = [{ href: '#rules', label: 'Rules & info', icon: 'book' }, { href: '#support', label: 'Support', icon: 'help' }, { href: '#contact', label: 'Contact a team', icon: 'chat' }];
+  const HELP = [{ href: '#rules', label: 'Rules & Info', icon: 'book' }, { href: '#contact', label: 'Support Tickets', icon: 'chat' }];
   // What each department page has waiting (my_todo, migration 0046): red = needs action now, orange = a note.
   function pageCounts(d) {
     const t = window.deskTodo[d.name] || {}, n = (v) => Number(v || 0);
@@ -69,7 +69,7 @@
       (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && { href: base + '/meetings', label: 'Meetings', icon: 'calendar', tab: 'meetings', grp: 'lead', ...cnt('meetings') },
       ...ext.filter((x) => !x.tool && !['roster', 'events', 'courses'].includes(x.id)).map((x) => extItem(x, 'lead')),
       can('history.view') && { href: base + '/history', label: 'History', icon: 'history', tab: 'history', grp: 'lead', ...cnt('history') },
-      director && { href: base + '/ranks', label: 'Ranks & permissions', icon: 'star', tab: 'ranks', grp: 'lead' },
+      director && { href: base + '/ranks', label: 'Ranks & Permissions', icon: 'star', tab: 'ranks', grp: 'lead' },
       ...ext.filter((x) => x.tool).map((x) => ({ ...extItem(x, 'tool'), n: undefined })),
     ].filter(Boolean);
   }
@@ -117,7 +117,7 @@
         ${window.chartNav ? window.chartNav(link) : ''}
         ${window.checkinNav ? window.checkinNav(link) : ''}
         ${myStuff().map((it) => link(it)).join('')}
-        ${depts.length ? `<div class="ds-cat">${depts.length === 1 ? 'Your department' : 'Your departments'}</div>${depts.map(deptLink).join('')}` : ''}
+        ${depts.length ? `<div class="ds-cat">${depts.length === 1 ? 'Your Department' : 'Your Departments'}</div>${depts.map(deptLink).join('')}` : ''}
         <div class="ds-grow"></div>
         <div class="ds-cat">Help</div>
         ${HELP.map((it) => link(it)).join('')}
@@ -181,11 +181,11 @@
     sub.style.setProperty('--c', d.color);
     sub.setAttribute('aria-label', d.name);
     sub.innerHTML = `<div class="ws-in">
-      <a class="ws-head" href="#directors/${d.id}"><span class="ws-tile" style="${icon(d.icon)}" aria-hidden="true"></span><span class="ws-name"><b>${esc(d.name)}</b>${rank ? `<small>${esc(rank === 'Director' ? 'You’re the Director' : rank === 'Executive' ? 'Executive view' : rank)}</small>` : ''}</span></a>
+      <a class="ws-head" href="#directors/${d.id}"><span class="ws-tile" style="${icon(d.icon)}" aria-hidden="true"></span><span class="ws-name"><b>${esc(d.name)}</b>${rank ? `<small>${esc(rank === 'Director' ? 'You’re the Director' : rank === 'Executive' ? 'Executive View' : rank)}</small>` : ''}</span></a>
       ${group('main')}
       ${views.length ? `<div class="ds-cat">Views</div>${views.map(link).join('')}` : ''}
       ${pages.some((p) => p.grp === 'lead') ? `<div class="ds-cat">Leaders</div>${group('lead')}` : ''}
-      ${pages.some((p) => p.grp === 'tool') ? `<div class="ds-cat">Hospital tools</div>${group('tool')}` : ''}</div>`;
+      ${pages.some((p) => p.grp === 'tool') ? `<div class="ds-cat">Hospital Tools</div>${group('tool')}` : ''}</div>`;
   }
   function drawAll() { if (!document.body.classList.contains('desk')) return; drawTop(); drawSide(); drawSub(); }
 

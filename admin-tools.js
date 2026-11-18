@@ -8,13 +8,13 @@ const hp = (perm) => !!access.exec || (window.myHperms || []).includes(perm);
 // Tickets for Administration: leads_team('Administration') in the database (0065: Director, Leader and Team Member).
 const adminTicketLead = () => !!access.exec || (window.myRanks || []).some((r) => r.department === ADMIN_DEPT && ['Director', 'Leader', 'Team Member'].includes(r.rank_label));
 const ADMIN_TOOLS = [
-  { id: 'cases',    label: 'Mod actions',     icon: 'law',         layout: 'cases',    old: ['#admin/cases'],    can: () => hp('hosp.mod') || hp('hosp.records') },
+  { id: 'cases',    label: 'Mod Actions',     icon: 'law',         layout: 'cases',    old: ['#admin/cases'],    can: () => hp('hosp.mod') || hp('hosp.records') },
   { id: 'records',  label: 'Records',         icon: 'user-folder', layout: 'records',  old: ['#admin/records'],  can: () => hp('hosp.records') || hp('hosp.incidents') },
-  { id: 'logs',     label: 'Discord logs',    icon: 'history',     layout: 'logs',     old: ['#admin/logs'],     can: () => hp('hosp.logs') },
+  { id: 'logs',     label: 'Discord Logs',    icon: 'history',     layout: 'logs',     old: ['#admin/logs'],     can: () => hp('hosp.logs') },
   { id: 'tickets',  label: 'Tickets',         icon: 'inbox',       layout: 'tickets',  old: ['#admin/tickets'],  can: adminTicketLead },
-  { id: 'staff',    label: 'Staff directory', icon: 'people',      layout: 'people',   old: [],                  can: () => !!access.exec || (window.myRanks || []).some((r) => r.department === ADMIN_DEPT) },
+  { id: 'staff',    label: 'Staff Directory', icon: 'people',      layout: 'people',   old: [],                  can: () => !!access.exec || (window.myRanks || []).some((r) => r.department === ADMIN_DEPT) },
   { id: 'activity', label: 'Activity',        icon: 'bar-chart',   layout: 'reports',  old: ['#exec/reports'],   can: () => !!access.exec, owner: true },
-  { id: 'settings', label: 'Bot settings',    icon: 'settings',    layout: 'settings', old: ['#exec/settings'],  can: () => !!access.exec, owner: true },
+  { id: 'settings', label: 'Bot Settings',    icon: 'settings',    layout: 'settings', old: ['#exec/settings'],  can: () => !!access.exec, owner: true },
   { id: 'roles',    label: 'Roles',           icon: 'star',        layout: 'roles',    old: ['#exec/roles'],     can: () => !!access.exec, owner: true },
 ];
 const adminHref = (tab) => '#directors/administration/' + tab;

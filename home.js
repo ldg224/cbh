@@ -7,7 +7,7 @@ const FOLDERS = [
   { id: 'moderation', title: 'Moderation', blurb: 'Keep the server safe', icon: 'shield', g: ['#2b3aa8', '#5c72ff'], tint: '#f5f6ff' },
   { id: 'people', title: 'People', blurb: 'Staff, departments and applicants', icon: 'people', g: ['#0d7d74', '#2ed3c6'], tint: '#f1fbfa' },
   { id: 'operations', title: 'Operations', blurb: 'Sessions, shifts, hours and settings', icon: 'settings', g: ['#3d2a8f', '#6a4fd6'], tint: '#f5f3ff' },
-  { id: 'help', title: 'Help and info', blurb: 'For everyone', icon: 'book', g: ['#22579f', '#4cacf0'], tint: '#f2f7fd' },
+  { id: 'help', title: 'Help & Info', blurb: 'For everyone', icon: 'book', g: ['#22579f', '#4cacf0'], tint: '#f2f7fd' },
 ];
 const TOOL_FOLDER = {
   'admin/cases': 'moderation', 'admin/records': 'moderation', 'admin/logs': 'moderation', 'admin/tickets': 'moderation',
@@ -141,7 +141,7 @@ function homeShell() {
       // Desk (phase 2): what needs you, then your departments; the sidebar replaces the folders.
       ? `<section class="h-sec" id="h-need-sec"></section><section class="h-sec" id="h-dept-sec"></section><section class="h-sec" id="h-pins-sec"></section>`
       : `<section class="h-sec" id="h-pins-sec"></section>
-    <section class="h-sec"><h2 class="h-label">Everything you can use</h2><div class="h-folders" id="h-folders"></div></section>`}`;
+    <section class="h-sec"><h2 class="h-label">Everything You Can Use</h2><div class="h-folders" id="h-folders"></div></section>`}`;
 }
 
 async function renderHome() {
@@ -213,7 +213,7 @@ function drawNeeds() {
     : `<a class="hd-item" href="${x.href}" style="--c:${x.c}">
       <span class="hd-ico" style="--icon:${iconUrl(x.ico)}" aria-hidden="true"></span><span class="hd-txt"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></span>
       <span class="hd-go${note ? ' note' : ''}">${esc(x.b)}</span></a>`;
-  sec.innerHTML = (out.length ? `<h2 class="h-label">Needs you</h2><div class="hd-list">${out.map((x) => row(x)).join('')}</div>` : '')
+  sec.innerHTML = (out.length ? `<h2 class="h-label">Needs You</h2><div class="hd-list">${out.map((x) => row(x)).join('')}</div>` : '')
     + (notes.length ? `<div class="h-sec-head" style="margin-top:${out.length ? '22px' : '0'}"><h2 class="h-label">Notes</h2><button class="linkish" type="button" data-q="notes-off">Turn off quiet-member notes</button></div><div class="hd-list hd-notes">${notes.map((x) => row(x, true)).join('')}</div>` : '');
   wireQuiet(sec);
 }
@@ -374,7 +374,7 @@ function openPinSettings(tools, turnOn) {
   const ov = document.createElement('div');
   ov.className = 'h-overlay';
   ov.innerHTML = `<section class="h-modal" role="dialog" aria-modal="true" aria-labelledby="pm-title">
-      <div class="h-modal-head"><h2 id="pm-title">Pinned tools</h2><button class="h-x" aria-label="Close">&times;</button></div>
+      <div class="h-modal-head"><h2 id="pm-title">Pinned Tools</h2><button class="h-x" aria-label="Close">&times;</button></div>
       <div class="h-modal-body" id="pm-body"></div>
       <div class="h-modal-foot"><button class="linkish" id="pm-cancel">Cancel</button><button class="refresh" id="pm-save">Save pins</button></div>
     </section>`;
@@ -505,7 +505,7 @@ function searchActions() {
   }
   if (canSee('admin')) a.push({ title: 'New mod action', words: 'warn timeout kick ban unban punish', href: adminHref('cases') });
   if (canSee('exec')) a.push({ title: 'Change the join code', sub: 'Bot settings', words: 'join code maple settings', href: adminHref('settings') });
-  a.push({ title: 'Contact a team', words: 'help support ticket', href: '#contact' });
+  a.push({ title: 'Support Tickets', words: 'help support ticket', href: '#contact' });
   return a;
 }
 const matchScore = (text, q) => { const t = text.toLowerCase(); if (t.startsWith(q)) return 3; if (t.split(/\s+/).some((w) => w.startsWith(q))) return 2; return t.includes(q) ? 1 : 0; };
@@ -604,7 +604,7 @@ async function renderFolder(body, f) {
     ${stats.length ? `<div class="fp-stats">${stats.map(([k, v]) => `<div class="card tight stat"><span class="muted small-meta">${k}</span><strong>${v}</strong></div>`).join('')}</div>` : ''}
     <div class="fp-cards">${rest.map((t) => cardHtml(t, true)).join('')}</div>
     ${depts.length ? `<h2 class="h-label">Departments</h2><div class="fp-cards four">${depts.map((t) => cardHtml(t, true)).join('')}</div>` : ''}
-    ${f.id === 'moderation' && canSee('admin') ? '<h2 class="h-label">Latest actions</h2><div class="card" id="fp-latest"><p class="muted small">Loading…</p></div>' : ''}`;
+    ${f.id === 'moderation' && canSee('admin') ? '<h2 class="h-label">Latest Actions</h2><div class="card" id="fp-latest"><p class="muted small">Loading…</p></div>' : ''}`;
   body.querySelectorAll('[data-q]').forEach((b) => { b.onclick = () => startCase(b.dataset.q, null); });
   if (!HC) { await loadHomeData(); if (body.isConnected) renderFolder(body, f); return; }
   const latest = body.querySelector('#fp-latest');

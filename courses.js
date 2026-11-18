@@ -57,7 +57,7 @@ window.DEPT_TABS.push({
 });
 window.DEPT_MEMBER_EXTRAS = window.DEPT_MEMBER_EXTRAS || [];
 window.DEPT_MEMBER_EXTRAS.push({
-  id: 'courses', label: 'Course progress',
+  id: 'courses', label: 'Course Progress',
   load: async (dept) => {
     const { data } = await sb.rpc('course_member_summary', { dept });
     return new Map(Object.entries(data || {}).map(([id, s]) => [id, {
@@ -89,9 +89,9 @@ async function crGrid(el, dept) {
   el.innerHTML = `
     <div class="cr-bar">
       ${crCanAssess(dept) ? `<button type="button" class="ghost" data-go="marking">Marking${marking.length ? ` <span class="cr-n">${marking.length}</span>` : ''}</button>` : ''}
-      ${crCanEdit(dept) ? '<button type="button" class="ghost" data-go="manage">Manage courses</button><button type="button" class="refresh" data-go="new">New course</button>' : ''}
+      ${crCanEdit(dept) ? '<button type="button" class="ghost" data-go="manage">Manage courses</button><button type="button" class="refresh" data-go="new">New Course</button>' : ''}
     </div>
-    ${mine.length ? `<section class="cr-sec"><h2 class="ma-day">Your courses</h2><div class="cr-grid">${mine.map(crBlock).join('')}</div></section>` : ''}
+    ${mine.length ? `<section class="cr-sec"><h2 class="ma-day">Your Courses</h2><div class="cr-grid">${mine.map(crBlock).join('')}</div></section>` : ''}
     ${others.length ? `<section class="cr-sec"><h2 class="ma-day">${mine.length ? 'Other' : 'All'} ${esc(dept)} courses</h2><div class="cr-grid">${others.map(crBlock).join('')}</div></section>` : ''}
     ${!list.length ? `<div class="card ma-empty"><strong>No courses yet.</strong>${crCanEdit(dept) ? '<span>Create one with New course.</span>' : ''}</div>` : ''}`;
   el.onclick = async (e) => {
@@ -208,7 +208,7 @@ async function crCourse(el, dept, cid, stepId) {
           <td><span class="cr-mini"><i style="width:${pct}%"></i></span>${r.counts.done} / ${r.counts.total}${r.complete ? ' <span class="cr-pill done">Done</span>' : ''}</td>
           ${quizzes.map((q) => { const t = (r.quizzes || []).filter((x) => x.item_id === q.id); const best = t.filter((x) => x.status === 'marked').sort((x, y) => (y.score || 0) - (x.score || 0))[0];
             const ended = t.filter((x) => x.status === 'ended'), locked = t.filter((x) => x.lock && x.lock !== 'off');
-            return `<td>${t.some((x) => x.status === 'marking') ? '<span class="cr-pill due">To mark</span>' : best ? `${best.score} / ${best.max_score}${best.passed ? '' : ' <span class="cr-pill late">Not passed</span>'}` : '–'}${ended.length ? ` <span class="cr-pill late" title="${esc(ended.map((x) => x.ended_reason).join('; '))}">${ended.length} ended</span>` : ''}${locked.length && (c.can_assess || c.can_edit) ? ` <button type="button" class="linkish cr-try" data-log="${locked[locked.length - 1].id}">Exit log</button>` : ''}${c.can_assess || c.can_edit ? ` <button type="button" class="linkish cr-try" data-try="${esc(q.id)}:${esc(r.discord_id)}" title="Give another try">+1 try</button>` : ''}</td>`; }).join('')}
+            return `<td>${t.some((x) => x.status === 'marking') ? '<span class="cr-pill due">To mark</span>' : best ? `${best.score} / ${best.max_score}${best.passed ? '' : ' <span class="cr-pill late">Not passed</span>'}` : '–'}${ended.length ? ` <span class="cr-pill late" title="${esc(ended.map((x) => x.ended_reason).join('; '))}">${ended.length} ended</span>` : ''}${locked.length && (c.can_assess || c.can_edit) ? ` <button type="button" class="linkish cr-try" data-log="${locked[locked.length - 1].id}">Exit Log</button>` : ''}${c.can_assess || c.can_edit ? ` <button type="button" class="linkish cr-try" data-try="${esc(q.id)}:${esc(r.discord_id)}" title="Give another try">+1 try</button>` : ''}</td>`; }).join('')}
           ${evals.map((e) => { const ev = (r.evaluations || []).find((x) => x.item_id === e.id && x.status === 'submitted');
             return `<td>${ev ? `<span class="cr-pill ${ev.passed ? 'done' : 'due'}">${ev.passed ? 'Passed' : 'Not yet'}</span>` : '–'}${c.can_assess ? ` <button type="button" class="linkish" data-eval="${esc(e.id)}:${esc(r.discord_id)}">${ev ? 'View' : 'Evaluate'}</button>` : ''}</td>`; }).join('')}
         </tr>`;
@@ -501,7 +501,7 @@ async function crQuiz(el, body, dept, c, it) {
   const startBtn = (label) => (c.mine && !c.lock && !blocked ? `<button type="button" class="refresh cr-start-btn" id="cr-start">${label}</button>` : '');
   const intro = (extra = '', label = locked ? 'Start exam' : 'Start') => locked ? `<div class="cr-lockrules">
       <p class="cr-lockfacts">${facts}</p>
-      <h3>Before you start</h3>
+      <h3>Before You Start</h3>
       <ul>
         ${fsOk ? '<li>The exam opens in <strong>full screen</strong>. Stay in full screen until you send your answers.</li>'
           : '<li>Your browser can’t go full screen, so <strong>stay on this page</strong> until you send your answers. Don’t switch apps or tabs.</li>'}
@@ -636,7 +636,7 @@ function crExamGuard(box, q, onEnded) {
     overlay.className = 'cr-lockwarn';
     overlay.setAttribute('role', 'alertdialog'); overlay.setAttribute('aria-modal', 'true'); overlay.setAttribute('aria-labelledby', 'cr-lw-h');
     overlay.innerHTML = `<div class="cr-lw-box"><span class="cr-lw-n" id="cr-lw-n">${secs}</span>
-      <h2 id="cr-lw-h">You left the exam</h2>
+      <h2 id="cr-lw-h">You Left the Exam</h2>
       <p>Return ${fsMode ? 'to full screen ' : ''}within <strong><span id="cr-lw-s">${secs}</span> seconds</strong> or your exam ends.</p>
       <p class="cr-lw-only">This is your only warning. Leaving again ends your exam.</p>
       <button type="button" class="cr-lw-btn" id="cr-lw-back">${fsMode ? 'Return to full screen' : 'I’m back'}</button></div>`;
@@ -686,11 +686,11 @@ async function crAttemptLog(aid) {
   wrap.className = 'app-pv';
   const label = { start: 'Started', exit: 'Left the exam', return: 'Came back', resume: 'Opened again', ended: 'Ended', timeout: 'Away 30 seconds' };
   wrap.innerHTML = `<div class="app-pv-box" role="dialog" aria-modal="true" aria-label="Exit log"><button type="button" class="app-pv-x">Close</button>
-    <div class="card cr-step"><h2 class="cr-step-h">Exit log</h2>
+    <div class="card cr-step"><h2 class="cr-step-h">Exit Log</h2>
     ${error || !d ? `<p class="error">${esc(error ? error.message : 'Not available.')}</p>` : `
       <p class="muted small">${d.lock === 'fullscreen' ? 'Computer only (full screen)' : 'Allow phones (stay on this page)'} · left ${d.exits} ${d.exits === 1 ? 'time' : 'times'}${d.status === 'ended' ? ` · <strong class="danger-text">Ended: ${esc(d.ended_reason || '')}</strong>` : ''}</p>
       <ol class="cr-log">${(d.events || []).map((e) => `<li><span class="cr-log-t">${esc(new Date(e.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }))}</span><strong>${esc(label[e.kind] || e.kind)}</strong>${e.detail ? ` <span class="muted">· ${esc(e.detail)}</span>` : ''}</li>`).join('')}</ol>
-      ${d.status === 'ended' ? `<h3 class="cr-qsec">Answers given (not marked)</h3>${(d.questions || []).filter((x) => x.type !== 'section').map((x, i) => { const a = (d.answers || {})[x.id]; const shown = Array.isArray(a) ? a.map((id) => (x.options || []).find((o) => o.id === id)?.text || id).join(', ') : (x.options || []).find((o) => o.id === a)?.text || a; return `<div class="cr-rq"><strong>${i + 1}. ${esc(x.text)}</strong><p class="cr-ans">${esc(shown || '–')}</p></div>`; }).join('')}` : ''}`}
+      ${d.status === 'ended' ? `<h3 class="cr-qsec">Answers Given (Not Marked)</h3>${(d.questions || []).filter((x) => x.type !== 'section').map((x, i) => { const a = (d.answers || {})[x.id]; const shown = Array.isArray(a) ? a.map((id) => (x.options || []).find((o) => o.id === id)?.text || id).join(', ') : (x.options || []).find((o) => o.id === a)?.text || a; return `<div class="cr-rq"><strong>${i + 1}. ${esc(x.text)}</strong><p class="cr-ans">${esc(shown || '–')}</p></div>`; }).join('')}` : ''}`}
     </div></div>`;
   document.body.append(wrap);
   const close = () => wrap.remove();
@@ -883,7 +883,7 @@ async function crManage(el, dept) {
   crSetHash(crRoute(dept, 'manage'));
   const { data, error } = await sb.rpc('course_admin_list', { dept });
   if (error) { el.innerHTML = ''; return liveError(el, error); }
-  el.innerHTML = `<div class="cr-bar"><button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button><span class="sp"></span><button type="button" class="refresh" id="cr-new">New course</button></div>
+  el.innerHTML = `<div class="cr-bar"><button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button><span class="sp"></span><button type="button" class="refresh" id="cr-new">New Course</button></div>
     <div class="card app-group">${(data || []).map((c) => `<div class="af-row"><div class="af-main"><div class="af-t">${esc(c.title)}</div><div class="af-s">${esc(c.kind || '')}${c.opens_at ? ' · opens ' + esc(crDate(c.opens_at)) : ''}</div></div>
       <div class="af-pills"><span class="ap-flag ${c.status === 'published' ? 'open' : ''}">${c.status === 'published' ? 'Published' : 'Not published'}</span>${c.has_draft && c.status === 'published' ? '<span class="ap-flag draft">Unpublished changes</span>' : ''}</div>
       <div class="af-pills"><button type="button" class="ghost small-btn" data-edit="${esc(c.id)}">Edit</button></div></div>`).join('') || '<p class="muted small">No courses yet.</p>'}</div>`;
@@ -923,7 +923,7 @@ async function crEditor(el, dept, cid) {
       </div>
       <div class="app-col">
         <section class="card app-fs bd-side">
-          <h3 class="app-h">Who it’s for</h3>
+          <h3 class="app-h">Who It’s For</h3>
           <div class="app-roles" id="ce-aud">${ranks.map((r) => `<label class="app-role"><input type="checkbox" value="${esc(r.id)}"><span>${esc(r.rank_label || r.name)}</span></label>`).join('')}</div>
           <span class="app-hint">None ticked = everyone in ${esc(dept)}.</span>
           <label class="f"><span>Kind</span><input id="ce-kind" maxlength="40" list="ce-kinds"><datalist id="ce-kinds"><option value="General skills"><option value="Evaluation course"><option value="Induction"><option value="Promotion"></datalist></label>
@@ -1158,7 +1158,7 @@ function crItemClick(it, ds) {
 const crMyDepts = () => DEPARTMENTS.filter((d) => crMember(d.name));
 // Shown for anyone in a department, or with an assigned course outside one (my_todo's courses_list, Bravo's desk.js).
 function crMyCoursesHref() { return crMyDepts().length || Object.values(window.deskTodo || {}).some((t) => (t.courses_list || []).length) ? '#courses' : null; }
-PAGES.push({ id: 'courses', aud: 'everyone', title: 'My courses', icon: 'graduation-cap', layout: 'mycourses' });
+PAGES.push({ id: 'courses', aud: 'everyone', title: 'My Courses', icon: 'graduation-cap', layout: 'mycourses' });
 
 // Where I am on a course: Passed, Waiting for marking, Not passed, In progress, Not started, or locked.
 function crMyStatus(c, v) {

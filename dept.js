@@ -153,7 +153,7 @@ async function renderDept(body, tool) {
     ...(seeDept || manageMt || attMt ? [{ id: 'meetings', label: 'Meetings', n: upcoming.length || null }] : []),
     ...(seeHist ? [{ id: 'history', label: 'History', n: hist.length || null }] : []),
     ...window.DEPT_TABS.filter((x) => !x.tool && !['roster', 'events'].includes(x.id) && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x })),
-    ...(director ? [{ id: 'ranks', label: 'Ranks & permissions' }] : []),
+    ...(director ? [{ id: 'ranks', label: 'Ranks & Permissions' }] : []),
     // Hospital tools (Administration only, by permission; admin-tools.js), after a divider.
     ...window.DEPT_TABS.filter((x) => x.tool && dpShows(x, dept)).map((x, i) => ({ id: x.id, label: x.label, ext: x, first: i === 0 })),
   ];
@@ -165,7 +165,7 @@ async function renderDept(body, tool) {
       <span class="dp-big" aria-hidden="true"></span>
       <div class="dp-b-row"><span class="dp-sq" aria-hidden="true"></span>
         <div><h1 class="dp-name">${esc(dept)}</h1>
-          <span class="dp-pill">${exec ? 'Executive view' : director ? 'You direct this department' : esc((window.myRanks || []).filter((r) => r.department === dept).sort((a, b) => b.rank_order - a.rank_order)[0]?.rank_label || 'Team view')}</span></div></div>
+          <span class="dp-pill">${exec ? 'Executive View' : director ? 'You direct this department' : esc((window.myRanks || []).filter((r) => r.department === dept).sort((a, b) => b.rank_order - a.rank_order)[0]?.rank_label || 'Team view')}</span></div></div>
     </section>
     <div class="dp-tabwrap"><button type="button" class="dp-tabarrow l" data-tabscroll="-1" aria-label="Scroll the tabs left" hidden><span aria-hidden="true"></span></button>
     <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `${t.first && TABS.some((x) => !(x.ext && x.ext.tool)) ? '<span class="dp-tsep" aria-hidden="true"></span>' : ''}<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}"${t.ext && t.ext.tool ? ' class="dp-tooltab"' : ''}>${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
@@ -218,7 +218,7 @@ async function renderDept(body, tool) {
       ...hist.filter((c) => c.status === 'failed' && !dismissed['failed_change:' + c.id] && (!todo || Date.now() - new Date(c.created_at) < 7 * 864e5)).slice(0, 3).map((c) => ({ id: c.target_discord_id, name: nameOf(c.target_discord_id, c.target_name), why: 'Change failed: ' + (c.error || 'try again'), flag: ['bad', 'Failed'] })),
       ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: dpLastActive(p) ? 'Not active since ' + new Date(dpLastActive(p)).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'No shifts or meetings yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
     ];
-    const attnHtml = seeAct || editM || attention.length ? `<section class="card dp-card dv-attn"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
+    const attnHtml = seeAct || editM || attention.length ? `<section class="card dp-card dv-attn"><div class="dp-head"><h2>Needs Your Attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
           ${attention.length ? `<div class="dp-list">${attention.map((a) => `<div class="dp-mini">${a.ico ? `<span class="hd-ico" style="--c:${dep.color};--icon:${iconUrl(a.ico)}" aria-hidden="true"></span>` : face({ name: a.name, discordId: a.id, avatarUrl: a.av || byId[a.id]?.avatar_url || '', size: 'm' })}
               <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div>${a.go ? `<button type="button" class="ghost small-btn" data-go="${a.go}">${a.btn}</button>` : `<span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span>`}</div>`).join('')}</div>`
             : `<p class="muted small">${seeAct ? `Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.` : 'Nothing needs you right now.'}</p>`}
@@ -414,7 +414,7 @@ async function renderDept(body, tool) {
     const box = pane.querySelector('#dp-add-box');
     if (box.innerHTML) { box.innerHTML = ''; return; }
     box.innerHTML = `<form class="card dp-add">
-      <div class="dp-head"><h2>Add someone to ${esc(dept)}</h2></div>
+      <div class="dp-head"><h2>Add Someone to ${esc(dept)}</h2></div>
       <label class="f"><span>Find a server member</span><input id="dp-aq" autocomplete="off" placeholder="Start typing a name"></label>
       <div id="dp-results" class="dp-results" role="listbox" aria-label="Server members"></div>
       <div class="f"><span>Starting ${word}</span><div class="dp-seg" role="radiogroup" aria-label="Starting ${word}">${canGive.slice().reverse().map((r, i) => `<button type="button" role="radio" data-r="${esc(r.id)}" aria-checked="${i === 0}" style="--c:${r.badge_color ? hex(r.badge_color) : '#9aa9c4'}">${esc(r.rank_label)}</button>`).join('')}</div></div>
@@ -742,7 +742,7 @@ async function renderDept(body, tool) {
     const low = rows.slice().sort((a, b) => a.rank_order - b.rank_order);
     const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.filter((x) => x.rank_order < r.rank_order).map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
     pane.innerHTML = `<div class="card dp-perms-card">
-      <div class="dp-head"><h2>Who can do what</h2><span class="muted small-meta">The Director and executives can always do everything.</span></div>
+      <div class="dp-head"><h2>Who Can Do What</h2><span class="muted small-meta">The Director and executives can always do everything.</span></div>
       <p class="error" id="dp-perm-err" hidden></p>
       <div class="dp-pgrid" role="table" aria-label="Rank permissions">
         <div class="dp-prow dp-phead" role="row"><span role="columnheader">${Word}</span>${PERMS.map(([k, l, h]) => `<span role="columnheader" title="${esc(h)}">${esc(l)}</span>`).join('')}</div>

@@ -31,8 +31,8 @@ window.dvViews = (d) => {
   const base = `#directors/${d.id}/roster/`;
   const ranks = dvRanks[d.name].filter((r) => r.rank_label !== 'Director');
   if (dvLeader(d.name)) return [
-    { href: base + 'most_minutes', label: 'Most minutes', icon: 'clock', tab: 'roster', view: 'most_minutes' },
-    { href: base + 'top', label: 'Top performing', icon: 'star', tab: 'roster', view: 'top' },
+    { href: base + 'most_minutes', label: 'Most Minutes', icon: 'clock', tab: 'roster', view: 'most_minutes' },
+    { href: base + 'top', label: 'Top Performing', icon: 'star', tab: 'roster', view: 'top' },
     ...ranks.slice().reverse().map((r) => ({ href: base + 'year:' + r.id, label: r.rank_label, icon: 'people', tab: 'roster', view: 'year:' + r.id })),
   ];
   const mine = dvMyRank(d.name);
@@ -158,7 +158,7 @@ window.dvOverview = async (pane, dept, attention, wire) => {
       ${attention}
       <div class="dv-ov">
         <div class="dv-col">
-          <section class="card dv-card"><div class="dp-head"><h2>What's on</h2><button type="button" class="linkish" data-dvgo="events">All events</button></div>
+          <section class="card dv-card"><div class="dp-head"><h2>What's On</h2><button type="button" class="linkish" data-dvgo="events">All events</button></div>
             ${events.length ? `<div class="dv-evs">${events.map((e) => dvEventRow(e)).join('')}</div>` : `<p class="muted small">Nothing planned for the next week.</p>`}
           </section>
           <section class="card dv-card dv-posts-sec"><div class="dp-head"><h2>From the Director</h2>${me.can_post ? '<button type="button" class="ghost small-btn" data-pnew>New post</button>' : ''}</div>
@@ -166,17 +166,17 @@ window.dvOverview = async (pane, dept, attention, wire) => {
           </section>
         </div>
         <div class="dv-col">
-          ${wk ? `<section class="card dv-card"><div class="dp-head"><h2>My week</h2>${wk.streak > 1 ? `<span class="dv-streak">${wk.streak} weeks on target</span>` : ''}</div>
+          ${wk ? `<section class="card dv-card"><div class="dp-head"><h2>My Week</h2>${wk.streak > 1 ? `<span class="dv-streak">${wk.streak} weeks on target</span>` : ''}</div>
             <div class="dv-trio"><div><b>${esc(dvMins(wk.minutes))}</b><span>On shift</span></div><div><b>${Number(wk.shifts || 0)}</b><span>${wk.shifts == 1 ? 'Shift' : 'Shifts'}</span></div><div><b>${Number(wk.sessions || 0)}</b><span>${wk.sessions == 1 ? 'Session' : 'Sessions'}</span></div></div>
             ${wk.target ? `<div class="dv-tgt"><span>Weekly target</span><span>${esc(dvMins(wk.minutes))} of ${esc(dvMins(wk.target))}</span></div>
               <div class="dv-bar" role="progressbar" aria-label="Weekly target" aria-valuenow="${Math.min(100, wk.percent || 0)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100, wk.percent || 0)}%"></i></div>` : ''}
           </section>` : ''}
-          ${mine.length ? `<section class="card dv-card"><div class="dp-head"><h2>My progress</h2><button type="button" class="linkish" data-dvgo="courses">Courses</button></div>
+          ${mine.length ? `<section class="card dv-card"><div class="dp-head"><h2>My Progress</h2><button type="button" class="linkish" data-dvgo="courses">Courses</button></div>
             <div class="dv-big">${done} <span>of ${mine.length} ${mine.length === 1 ? 'course' : 'courses'}</span></div>
             <div class="dv-bar dept"><i style="width:${Math.round((done / mine.length) * 100)}%"></i></div>
             ${next ? `<a class="dv-next" href="#directors/${d.id}/courses"><span><small>Next course</small><strong>${esc(next.title)}</strong></span><span class="dv-go">Start</span></a>` : ''}
           </section>` : ''}
-          <section class="card dv-card"><div class="dp-head"><h2>On now</h2>${(ov.on_now || []).length ? `<span class="dv-count">${ov.on_now.length}</span>` : ''}</div>
+          <section class="card dv-card"><div class="dp-head"><h2>On Now</h2>${(ov.on_now || []).length ? `<span class="dv-count">${ov.on_now.length}</span>` : ''}</div>
             ${(ov.on_now || []).length ? `<div class="dv-who">${ov.on_now.map((p) => `<div class="dv-person">${face({ name: p.name, discordId: p.discord_id, size: 's' })}<span class="dv-pn">${esc(cleanName(p.name))}${p.status === 'break' ? '<small>On break</small>' : ''}</span>${dvBadge(dept, p.rank)}</div>`).join('')}</div>`
               : `<p class="muted small">Nobody from ${esc(dept)} is on shift.</p>`}
           </section>
@@ -195,7 +195,7 @@ window.dvOverview = async (pane, dept, attention, wire) => {
 };
 
 // ---------- Roster (everyone in the department) and its saved views ----------
-const DV_VIEWS = { all: 'Everyone', most_minutes: 'Most minutes', top: 'Top performing' };
+const DV_VIEWS = { all: 'Everyone', most_minutes: 'Most Minutes', top: 'Top Performing' };
 window.DEPT_TABS.push({
   id: 'roster', label: 'Roster', icon: 'people',
   show: (dept) => inMyDept(dept) || dvLeader(dept),
@@ -203,7 +203,7 @@ window.DEPT_TABS.push({
     const leader = dvLeader(dept), ranks = await dvLoadRanks(dept);
     const view = sub || 'all';
     let period = 'week';
-    const views = [['all', 'Everyone'], ...(leader ? [['most_minutes', 'Most minutes'], ['top', 'Top performing']] : []),
+    const views = [['all', 'Everyone'], ...(leader ? [['most_minutes', 'Most Minutes'], ['top', 'Top Performing']] : []),
       ...ranks.filter((r) => r.rank_label !== 'Director' && (leader || dvMyRank(dept)?.id === r.id)).slice().reverse().map((r) => ['year:' + r.id, r.rank_label])];
     const title = view.startsWith('year:') ? (ranks.find((r) => 'year:' + r.id === view)?.rank_label || 'Roster') : DV_VIEWS[view] || 'Roster';
     const d = dvDeptOf(dept);
@@ -237,7 +237,7 @@ function dvEventForm(kinds, dept) {
   const date = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   const hosp = kinds.some((k) => k.can_create_hospital);
   return `<form class="card dv-eform">
-      <h3>New event</h3>
+      <h3>New Event</h3>
       <div class="dv-grid2">
         <label class="f"><span>Type</span><select name="kind">${kinds.filter((k) => k.can_create_department || k.can_create_hospital).map((k) => `<option value="${esc(k.kind)}">${esc(k.label)}</option>`).join('')}</select></label>
         <label class="f"><span>Title</span><input name="title" maxlength="120" required></label>
@@ -265,7 +265,7 @@ async function dvEventsList(pane, dept) {
   events.forEach((e) => { const k = new Date(e.starts_at).toDateString(); (days[k] ||= []).push(e); });
   const label = (k) => { const d = new Date(k), t = new Date(); const diff = Math.round((new Date(d.toDateString()) - new Date(t.toDateString())) / 864e5);
     return diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }); };
-  pane.innerHTML = `<div class="dv-rhead"><h2>${dept ? 'Events' : 'Coming up'}</h2>${kinds.length ? '<button type="button" class="refresh" data-enew>New event</button>' : ''}</div>
+  pane.innerHTML = `<div class="dv-rhead"><h2>${dept ? 'Events' : 'Coming Up'}</h2>${kinds.length ? '<button type="button" class="refresh" data-enew>New event</button>' : ''}</div>
     <div class="dv-eform-slot"></div>
     ${events.length ? Object.entries(days).map(([k, list]) => `<section class="dv-day"><h3 class="dv-dayh">${esc(label(k))}</h3><div class="card dv-evs">${list.map((e) => dvEventRow(e, { full: true })).join('')}</div></section>`).join('')
       : `<div class="card"><p class="muted small">Nothing planned for the next two weeks.</p></div>`}`;
@@ -336,7 +336,7 @@ window.dvTargetsCard = async (pane, dept, ranks) => {
   const rows = ranks.filter((r) => r.rank_label !== 'Director');
   const inp = (name, val, label) => `<input type="number" min="0" max="10080" step="15" inputmode="numeric" name="${name}" value="${val ?? ''}" placeholder="None" aria-label="${esc(label)}">`;
   pane.insertAdjacentHTML('beforeend', `<section class="card dv-targets">
-      <div class="dp-head"><h2>Weekly minutes target</h2><span class="muted small-meta">Shown on everyone's Overview. A rank's own target replaces the department's.</span></div>
+      <div class="dp-head"><h2>Weekly Minutes Target</h2><span class="muted small-meta">Shown on everyone's Overview. A rank's own target replaces the department's.</span></div>
       <form class="dv-tform"><div class="dv-trow"><span>${esc(dept)}</span>${inp('dept', data.department, dept + ' weekly target in minutes')}<em>min</em></div>
         ${rows.map((r) => `<div class="dv-trow"><span>${dvBadge(dept, r.rank_label) || esc(r.rank_label)}</span>${inp('r:' + r.id, byRank[r.id], r.rank_label + ' weekly target in minutes')}<em>min</em></div>`).join('')}
         <p class="error" hidden></p><div class="dv-fbtns"><span class="muted small-meta dv-saved" hidden>Saved</span><button type="submit" class="refresh">Save targets</button></div></form>
@@ -370,6 +370,7 @@ function dvRedirect() {
   const h = location.hash;
   const go = (to) => { location.replace(to); return true; };
   if (/^#commands(\/|$)/.test(h)) return go('#rules');
+  if (/^#support(\/|$)/.test(h)) return go('#contact');   // the Support FAQ page was dropped (owner, 0.32.2)
   if (/^#(admin|directors)\/sessions(\/|$)/.test(h)) {
     const d = dvMine()[0];
     return go(d ? `#directors/${d.id}/${canSee('sessions') ? 'sessions' : 'events'}` : '#events');
@@ -385,21 +386,5 @@ function dvRedirect() {
 LIVE.rules = (body) => {
   body.innerHTML = `<div class="card building-note"><span class="t-ico" style="--c:#3a82d0;--icon:${iconUrl('book')}" aria-hidden="true"></span>
       <div class="case-main"><strong>The hospital rules are being written</strong><span class="muted small-meta">They'll be here soon.</span></div></div>
-    <h2 class="dv-sec">Discord commands</h2>${commandsPage()}`;
-};
-
-// Support: how to use the site, report a website problem, and where the rules are.
-const DV_FAQ = [
-  ['How do I start a shift?', 'Tap Start shift at the top of any page. If you\u2019re in more than one department, you\u2019ll pick which one on My shift. End shift is in the same place, and Take a break is under your picture.'],
-  ['Where\u2019s my department?', 'In the menu on the left. Each department has its own menu: Overview, Roster, Events and Courses.'],
-  ['How do events work?', 'Your department\u2019s Events tab lists what\u2019s coming up. Tap Attend or Maybe so the host knows you\u2019re coming. Events are posted in Discord too.'],
-  ['How do I check in as a patient?', 'While a session is live, Check in appears in the menu. Fill in the form and you\u2019ll see your place in line.'],
-  ['Where are my courses?', 'In your department\u2019s Courses tab. Your progress is on its Overview.'],
-  ['Who can see my hours?', 'You and your department\u2019s leaders.'],
-];
-LIVE.support = (body) => {
-  body.innerHTML = `<section class="card dv-faq">${DV_FAQ.map(([q, a], i) => `<details${i === 0 ? ' open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
-    <section class="card dv-report"><div><h3>Something not working?</h3><p class="muted small">Tell Administration what happened and what you were trying to do.</p></div>
-      <a class="refresh" href="#contact/website">Report a problem</a></section>
-    <div class="dv-links"><a href="#rules">Rules & info</a><a href="#contact">Contact a team</a></div>`;
+    <h2 class="dv-sec">Discord Commands</h2>${commandsPage()}`;
 };
