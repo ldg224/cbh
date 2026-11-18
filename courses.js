@@ -10,7 +10,8 @@ const CR_COLOURS = ['#2ED3C6', '#3A82D0', '#5C72FF', '#6A4FD6', '#FF3D7E', '#FF5
 const CR_KINDS = { lesson: 'Written lesson', slides: 'Google Slides', link: 'Link', video: 'YouTube', file: 'File', quiz: 'Quiz', eval: 'Practical evaluation' };
 const CR_ICON = { lesson: '✎', slides: 'S', link: '↗', video: '▶', file: 'PDF', quiz: '?', eval: '★' };
 const crDept = (name) => DEPARTMENTS.find((d) => d.name === name) || { name, id: '', color: '#3a82d0' };
-const crRoute = (dept, rest = '') => `#directors/${crDept(dept).id}/courses${rest ? '/' + rest : ''}`;
+let crMine = false;   // true while a course is open inside My courses (#courses/<cid>), e.g. for someone outside its department
+const crRoute = (dept, rest = '') => (crMine ? `#courses${rest ? '/' + rest : ''}` : `#directors/${crDept(dept).id}/courses${rest ? '/' + rest : ''}`);
 const crSetHash = (h) => { try { history.replaceState(null, '', h); } catch { /* fine */ } };
 const crCanEdit = (dept) => hasPerm('courses.manage', dept);
 const crCanAssess = (dept) => hasPerm('courses.assess', dept);
@@ -66,6 +67,7 @@ window.DEPT_MEMBER_EXTRAS.push({
 });
 
 function crTab(el, dept, sub) {
+  crMine = false;
   const [a, b] = String(sub).split('/');
   if (a === 'marking' && crCanAssess(dept)) return crMarking(el, dept);
   if (a === 'edit' && b && crCanEdit(dept)) return crEditor(el, dept, b);
@@ -76,6 +78,7 @@ function crTab(el, dept, sub) {
 
 // ---------- course blocks ----------
 async function crGrid(el, dept) {
+  if (crMine) { crSetHash('#courses'); return LIVE.mycourses(el); }
   crSetHash(crRoute(dept));
   el.innerHTML = '<div class="card"><p class="muted small">Loading courses…</p></div>';
   const [{ data, error }, marking] = await Promise.all([sb.rpc('course_list', { dept }).then(async (r) => { await crLoadRanks(dept); return r; }),
@@ -140,7 +143,7 @@ async function crLoadRanks(dept) {
 async function crCourse(el, dept, cid, stepId) {
   await crLoadRanks(dept);
   const { data: c, error } = await sb.rpc('course_view', { cid });
-  if (error || !c) { el.innerHTML = '<button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button><div class="card"><p class="muted small">This course isn’t available to you.</p></div>'; el.querySelector('#cr-back').onclick = () => crGrid(el, dept); return; }
+  if (error || !c) { el.innerHTML = `<button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>${crMine ? 'My courses' : 'Courses'}</button><div class="card"><p class="muted small">This course isn’t available to you.</p></div>`; el.querySelector('#cr-back').onclick = () => crGrid(el, dept); return; }
   if (stepId && !c.lock) { const it = crItems(c).find((x) => x.id === stepId); if (it) return crStep(el, dept, c, it); }
   crSetHash(crRoute(dept, cid));
   const staff = c.can_edit || c.can_assess;
@@ -153,12 +156,14 @@ async function crCourse(el, dept, cid, stepId) {
   const due = c.due_at ? new Date(c.due_at) : null;
   let tab = 'contents';
   el.innerHTML = `
-    <button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>Courses</button>
+    <button type="button" class="back inline-back" id="cr-back"><span class="back-ico" aria-hidden="true"></span>${crMine ? 'My courses' : 'Courses'}</button>
     <section class="cr-hero" style="--c:${esc(c.color || '#2ED3C6')};--dept:${crDept(dept).color}">
       <div class="cr-pills">${crAudience(c, dept).replace('cr-pill aud', 'cr-pill hero')}<span class="cr-pill hero">${esc(c.kind || 'Course')}</span></div>
       <h2>${esc(c.title)}</h2>
       ${c.description ? `<p>${esc(c.description)}</p>` : ''}
+      ${c.assigned?.note ? `<p class="cr-asg-note"><b>Note from ${esc(cleanName(c.assigned.by || 'your department'))}:</b> ${esc(c.assigned.note)}</p>` : ''}
       <div class="cr-facts">
+        ${c.assigned ? `<div class="cr-fact">Assigned by<b>${esc(cleanName(c.assigned.by || 'your department'))}</b></div>` : ''}
         ${c.opens_at ? `<div class="cr-fact">${new Date(c.opens_at) > new Date() ? 'Opens' : 'Opened'}<b>${esc(crDate(c.opens_at))}</b></div>` : ''}
         ${due ? `<div class="cr-fact">Due<b>${esc(crDate(c.due_at))}</b></div>` : ''}
         ${c.mine ? `<div class="cr-fact">Your progress<b>${c.complete ? 'Completed' : `${c.counts.done} of ${c.counts.total} steps`}</b></div>` : ''}
@@ -167,6 +172,7 @@ async function crCourse(el, dept, cid, stepId) {
       <div class="cr-hero-acts">
         ${c.lock === 'date' ? `<span class="cr-pill hero">Opens ${esc(crDate(c.opens_at))}</span>` : c.lock === 'prereq' ? `<span class="cr-pill hero">Finish ${esc(c.prereq?.title || 'the course before')} first</span>`
           : next ? `<button type="button" class="cr-continue" data-step="${esc(next.id)}">Continue: ${esc(next.title)}</button>` : ''}
+        ${staff ? '<button type="button" class="cr-ghost" id="cr-assign">Assign</button>' : ''}
         ${c.can_edit ? '<button type="button" class="cr-ghost" id="cr-edit">Edit course</button>' : ''}
       </div>
     </section>
@@ -192,7 +198,7 @@ async function crCourse(el, dept, cid, stepId) {
   }
   async function drawProgress() {
     pane.innerHTML = '<div class="card"><p class="muted small">Loading progress…</p></div>';
-    const { data: rows, error: er } = await sb.rpc('course_progress_report', { cid });
+    const [{ data: rows, error: er }, { data: asg }] = await Promise.all([sb.rpc('course_progress_report', { cid }), sb.rpc('course_assignments_report', { cid })]);
     if (er) { pane.innerHTML = ''; return liveError(pane, er); }
     const quizzes = crItems(c).filter((i) => i.kind === 'quiz'), evals = crItems(c).filter((i) => i.kind === 'eval');
     pane.innerHTML = (rows || []).length ? `<div class="card cr-table-wrap"><table class="cr-table"><thead><tr><th>Member</th><th>Rank</th><th>Progress</th>${quizzes.map((q) => `<th>${esc(q.title)}</th>`).join('')}${evals.map((e) => `<th>${esc(e.title)}</th>`).join('')}</tr></thead><tbody>
@@ -207,6 +213,8 @@ async function crCourse(el, dept, cid, stepId) {
             return `<td>${ev ? `<span class="cr-pill ${ev.passed ? 'done' : 'due'}">${ev.passed ? 'Passed' : 'Not yet'}</span>` : '–'}${c.can_assess ? ` <button type="button" class="linkish" data-eval="${esc(e.id)}:${esc(r.discord_id)}">${ev ? 'View' : 'Evaluate'}</button>` : ''}</td>`; }).join('')}
         </tr>`;
       }).join('')}</tbody></table></div>` : '<div class="card"><p class="muted small">Nobody is on this course yet.</p></div>';
+    pane.insertAdjacentHTML('afterbegin', crAssignedCard(asg || []));
+    loadFaces(pane);
   }
   drawContents();
   el.querySelector('#cr-back').onclick = () => crGrid(el, dept);
@@ -214,6 +222,15 @@ async function crCourse(el, dept, cid, stepId) {
     const t = e.target.closest('[data-ctab]');
     if (t) { tab = t.dataset.ctab; el.querySelectorAll('[data-ctab]').forEach((x) => x.setAttribute('aria-selected', String(x === t))); return tab === 'progress' ? drawProgress() : drawContents(); }
     if (e.target.closest('#cr-edit')) return crEditor(el, dept, cid);
+    if (e.target.closest('#cr-assign, [data-assign]')) return crAssignDialog(c, dept, () => { if (tab === 'progress') drawProgress(); });
+    const un = e.target.closest('[data-unassign]');
+    if (un) {
+      if (!un.classList.contains('sure')) { un.classList.add('sure'); un.textContent = 'Unassign?'; return; }
+      un.disabled = true;
+      const { error: er } = await sb.rpc('course_unassign', { cid, who: un.dataset.unassign });
+      if (er) { un.disabled = false; un.textContent = er.message; return; }
+      return drawProgress();
+    }
     const lg = e.target.closest('[data-log]');
     if (lg) return crAttemptLog(+lg.dataset.log);
     const tr = e.target.closest('[data-try]');
@@ -682,6 +699,106 @@ async function crAttemptLog(aid) {
 }
 
 
+// ---------- assigning a course to people (0056) ----------
+// Owner: "assign certain courses to certain members". On top of the course's ranks: assigned people can open it,
+// but open dates and prerequisites still apply. They get a DM, it shows in My courses and as a To do.
+function crAssignedCard(list) {
+  if (!list.length) return '';
+  const now = Date.now(), done = list.filter((a) => a.complete).length;
+  return `<div class="card cr-asg">
+    <div class="cr-asg-h"><strong>Assigned: ${list.length} · done: ${done}</strong><button type="button" class="ghost" data-assign>Assign more</button></div>
+    <ul class="cr-asg-list">${list.map((a) => {
+      const late = !a.complete && a.due_at && new Date(a.due_at) < now;
+      return `<li>
+        ${face({ name: a.name, discordId: a.discord_id, avatarUrl: a.avatar_url, size: 's' })}
+        <span class="cr-asg-who"><strong>${esc(cleanName(a.name))}</strong><span class="muted small">${a.counts ? `${a.counts.done} of ${a.counts.total} steps · ` : ''}by ${esc(cleanName(a.assigned_by || ''))} ${esc(crDate(a.at))}${a.note ? ` · “${esc(a.note)}”` : ''}</span></span>
+        <span class="cr-asg-st">${a.complete ? '<span class="cr-pill done">Done</span>' : late ? `<span class="cr-pill late">Overdue, due ${esc(crDate(a.due_at))}</span>` : a.due_at ? `<span class="cr-pill due">Due ${esc(crDate(a.due_at))}</span>` : '<span class="cr-pill soon">No due date</span>'}
+          <button type="button" class="linkish cr-try" data-unassign="${esc(a.discord_id)}">Unassign</button></span>
+      </li>`;
+    }).join('')}</ul></div>`;
+}
+
+async function crAssignDialog(c, dept, after) {
+  const ranks = await crLoadRanks(dept);
+  document.querySelector('.app-pv')?.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'app-pv';
+  const picked = new Map();   // discord_id -> { name, avatar_url }
+  wrap.innerHTML = `<div class="app-pv-box" role="dialog" aria-modal="true" aria-label="Assign ${esc(c.title)}"><button type="button" class="app-pv-x">Close</button>
+    <form class="card cr-step cr-as" novalidate>
+      <h2 class="cr-step-h">Assign ${esc(c.title)}</h2>
+      <p class="muted small cr-as-rule">They can open it even if it isn’t for their rank. Open dates and prerequisites still apply.</p>
+      <label class="f"><span>People</span><input type="search" id="cr-as-q" placeholder="Search by name" autocomplete="off"></label>
+      <div class="cr-as-res" id="cr-as-res" role="listbox" aria-label="Search results"></div>
+      ${ranks.length ? `<div class="f"><span>Or everyone with a rank</span><div class="cr-as-ranks">${ranks.map((r) => `<button type="button" class="chip" data-rank="${esc(r.id)}">${esc(r.rank_label || r.name)}</button>`).join('')}</div></div>` : ''}
+      <div class="cr-as-picked" id="cr-as-picked"></div>
+      <div class="cr-as-row">
+        <label class="f"><span>Due (optional)</span><input type="date" id="cr-as-due" min="${new Date().toISOString().slice(0, 10)}"></label>
+      </div>
+      <label class="f"><span>Note (optional)</span><textarea id="cr-as-note" rows="2" maxlength="500" placeholder="e.g. Finish this before your first shift"></textarea></label>
+      <p class="error" hidden></p>
+      <div class="f-actions"><button type="button" class="linkish" data-x>Cancel</button><button class="refresh" type="submit" disabled>Assign</button></div>
+    </form></div>`;
+  document.body.append(wrap);
+  const f = wrap.querySelector('form'), q = f.querySelector('#cr-as-q'), res = f.querySelector('#cr-as-res'), box = f.querySelector('#cr-as-picked');
+  const go = f.querySelector('[type=submit]'), err = f.querySelector('.error');
+  const close = () => wrap.remove();
+  wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('.app-pv-x, [data-x]')) close(); });
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  function drawPicked() {
+    box.innerHTML = picked.size ? `<span class="muted small">${picked.size} ${picked.size === 1 ? 'person' : 'people'}</span>${[...picked].map(([id, p]) =>
+      `<span class="cr-as-chip">${face({ name: p.name, discordId: id, avatarUrl: p.avatar_url, size: 's' })}${esc(cleanName(p.name))}<button type="button" data-drop="${esc(id)}" aria-label="Remove ${esc(cleanName(p.name))}">×</button></span>`).join('')}` : '';
+    loadFaces(box);
+    go.disabled = !picked.size;
+    go.textContent = picked.size ? `Assign to ${picked.size} ${picked.size === 1 ? 'person' : 'people'}` : 'Assign';
+  }
+  let timer = null;
+  q.oninput = () => {
+    clearTimeout(timer);
+    const term = q.value.trim();
+    if (term.length < 2) { res.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const { data, error } = await sb.rpc('course_assign_people', { cid: c.id, q: term });
+      if (q.value.trim() !== term) return;
+      if (error) { res.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
+      res.innerHTML = (data || []).length ? data.map((m) => `<button type="button" class="dp-pick${picked.has(m.discord_id) ? ' on' : ''}" data-id="${esc(m.discord_id)}" data-name="${esc(m.name)}" data-av="${esc(m.avatar_url || '')}"${m.assigned ? ' disabled title="Already assigned"' : ''}>
+          ${face({ name: m.name, discordId: m.discord_id, avatarUrl: m.avatar_url, size: 's' })}<span>${esc(cleanName(m.name))}${m.assigned ? ' · assigned' : ''}</span></button>`).join('')
+        : '<p class="muted small">Nobody found.</p>';
+      loadFaces(res);
+    }, 250);
+  };
+  f.onclick = async (e) => {
+    const p = e.target.closest('.dp-pick');
+    if (p && !p.disabled) { picked.set(p.dataset.id, { name: p.dataset.name, avatar_url: p.dataset.av }); p.classList.add('on'); drawPicked(); return; }
+    const d = e.target.closest('[data-drop]');
+    if (d) { picked.delete(d.dataset.drop); res.querySelector(`.dp-pick[data-id="${CSS.escape(d.dataset.drop)}"]`)?.classList.remove('on'); drawPicked(); return; }
+    const r = e.target.closest('[data-rank]');
+    if (r) {
+      r.disabled = true;
+      const { data, error } = await sb.rpc('course_assign_people', { cid: c.id, rank_id: r.dataset.rank });
+      r.disabled = false;
+      if (error) { err.hidden = false; err.textContent = error.message; return; }
+      const fresh = (data || []).filter((m) => !m.assigned);
+      fresh.forEach((m) => picked.set(m.discord_id, { name: m.name, avatar_url: m.avatar_url }));
+      r.classList.add('on');
+      r.textContent = `${r.textContent.replace(/ · .*$/, '')} · ${fresh.length ? `+${fresh.length}` : 'nobody new'}`;
+      drawPicked();
+    }
+  };
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!picked.size) return;
+    const day = f.querySelector('#cr-as-due').value, note = f.querySelector('#cr-as-note').value.trim();
+    go.disabled = true; err.hidden = true;
+    const { data: n, error } = await sb.rpc('course_assign', { cid: c.id, ids: [...picked.keys()], due_at: day ? new Date(`${day}T23:59:00`).toISOString() : null, note: note || null });
+    if (error) { go.disabled = false; err.hidden = false; err.textContent = error.message; return; }
+    f.innerHTML = `<h2 class="cr-step-h">Assigned</h2><p>${esc(c.title)} is now assigned to ${n} ${n === 1 ? 'person' : 'people'}. They’ll get a DM from the bot.</p><div class="f-actions"><button type="button" class="refresh" data-x>Done</button></div>`;
+    f.querySelector('[data-x]').focus();
+    if (after) after();
+  };
+  q.focus();
+}
+
 // ---------- practical evaluations ----------
 function crEvalResult(it, ev) {
   return `<div class="cr-score"><span class="cr-pill ${ev.passed ? 'done' : 'due'}">${ev.passed ? 'Passed' : 'Not passed yet'}</span><span class="muted">Assessed by ${esc(cleanName(ev.assessor || ''))}${ev.submitted_at ? ' · ' + esc(crDate(ev.submitted_at)) : ''}</span></div>
@@ -1039,7 +1156,8 @@ function crItemClick(it, ds) {
 // ---------- My courses (sidebar "My stuff"): its own page, every course I'm on across my departments ----------
 // Owner (0.25.0): status, open date, due date and a Continue button for each; due soon first; filter by department.
 const crMyDepts = () => DEPARTMENTS.filter((d) => crMember(d.name));
-function crMyCoursesHref() { return crMyDepts().length ? '#courses' : null; }
+// Shown for anyone in a department, or with an assigned course outside one (my_todo's courses_list, Bravo's desk.js).
+function crMyCoursesHref() { return crMyDepts().length || Object.values(window.deskTodo || {}).some((t) => (t.courses_list || []).length) ? '#courses' : null; }
 PAGES.push({ id: 'courses', aud: 'everyone', title: 'My courses', icon: 'graduation-cap', layout: 'mycourses' });
 
 // Where I am on a course: Passed, Waiting for marking, Not passed, In progress, Not started, or locked.
@@ -1057,29 +1175,42 @@ function crMyStatus(c, v) {
 }
 
 LIVE.mycourses = async (body) => {
-  const ds = crMyDepts();
+  crMine = true;
+  const [, sub, step] = location.hash.slice(1).split('/');
+  if (/^[0-9a-f-]{36}$/.test(sub || '')) {   // #courses/<cid>[/<step>]: open the course here (DM and To do links)
+    body.innerHTML = '<div class="card"><p class="muted small">Loading the course…</p></div>';
+    const { data: v } = await sb.rpc('course_view', { cid: sub });
+    return crCourse(body, (v && v.department) || '', sub, step || '');
+  }
   body.innerHTML = '<div class="card"><p class="muted small">Loading your courses…</p></div>';
-  const lists = await Promise.all(ds.map(async (d) => {
+  const [lists, assigned] = await Promise.all([Promise.all(crMyDepts().map(async (d) => {
     await crLoadRanks(d.name);
     const list = ((await sb.rpc('course_list', { dept: d.name })).data || []).filter((c) => c.mine);
-    // The detail (tries, marking) only for open courses I haven't finished.
-    await Promise.all(list.map(async (c) => { c._d = d; if (!c.lock && !c.complete) c._v = (await sb.rpc('course_view', { cid: c.id })).data; }));
+    list.forEach((c) => { c._d = d; });
     return list;
-  }));
-  const all = lists.flat().map((c) => Object.assign(c, { _s: crMyStatus(c, c._v) }));
+  })), sb.rpc('course_my_assigned').then((r) => r.data || [], () => [])]);
+  const all = lists.flat();
+  // Assigned courses in departments I'm not in (the rest already came with their department's list).
+  assigned.filter((a) => !all.some((c) => c.id === a.id)).forEach((a) => all.push(Object.assign(a, { _d: crDept(a.department) })));
+  // The detail (tries, marking) only for open courses I haven't finished.
+  await Promise.all(all.map(async (c) => { if (!c.lock && !c.complete) c._v = (await sb.rpc('course_view', { cid: c.id })).data; }));
+  all.forEach((c) => { c._s = crMyStatus(c, c._v); });
+  const ds = [...new Map(all.map((c) => [c._d.name, c._d])).values()];
   if (!all.length) { body.innerHTML = '<div class="card ma-empty"><strong>You have no courses yet.</strong><span>When your department gives you a course, it shows here.</span></div>'; return; }
   const now = Date.now(), week = 7 * 864e5;
   const dueSoon = (c) => !c.complete && !c.lock && c.due_at && new Date(c.due_at) - now < week;
   const rank = { progress: 2, marking: 3, failed: 2, new: 2, locked: 5, passed: 6 };
-  const order = (c) => (dueSoon(c) ? 0 : rank[c._s.key] ?? 4);
+  const asgOpen = (c) => !!c.assigned && !c.complete;
+  const order = (c) => (asgOpen(c) ? -1 : dueSoon(c) ? 0 : rank[c._s.key] ?? 4);
   all.sort((a, b) => order(a) - order(b) || (a.due_at ? +new Date(a.due_at) : Infinity) - (b.due_at ? +new Date(b.due_at) : Infinity) || a.title.localeCompare(b.title));
   let dept = 'all';
   function draw() {
     const rows = all.filter((c) => dept === 'all' || c._d.name === dept);
     const groups = [
-      ['Due soon', rows.filter(dueSoon)],
-      ['To do', rows.filter((c) => !dueSoon(c) && ['progress', 'new', 'failed', 'marking'].includes(c._s.key))],
-      ['Not open yet', rows.filter((c) => c._s.key === 'locked')],
+      ['Assigned to you', rows.filter(asgOpen)],
+      ['Due soon', rows.filter((c) => !asgOpen(c) && dueSoon(c))],
+      ['To do', rows.filter((c) => !asgOpen(c) && !dueSoon(c) && ['progress', 'new', 'failed', 'marking'].includes(c._s.key))],
+      ['Not open yet', rows.filter((c) => !asgOpen(c) && c._s.key === 'locked')],
       ['Finished', rows.filter((c) => c._s.key === 'passed')],
     ].filter(([, r]) => r.length);
     body.innerHTML = `
@@ -1090,12 +1221,13 @@ LIVE.mycourses = async (body) => {
   function row(c) {
     const d = c._d, s = c._s, pct = c.counts && c.counts.total ? Math.round((c.counts.done / c.counts.total) * 100) : 0;
     const due = c.due_at && !c.complete ? new Date(c.due_at) : null, late = due && due < now;
-    const href = `#directors/${d.id}/courses/${c.id}`;
+    const href = `#courses/${c.id}`;
     return `<div class="mc-row" style="--c:${esc(c.color || '#2ED3C6')};--dept:${d.color}">
       <span class="mc-bar" aria-hidden="true"></span>
       <div class="mc-main">
-        <div class="mc-top"><a class="mc-title" href="${href}">${esc(c.title)}</a><span class="cr-pill ${s.cls}">${esc(s.label)}</span></div>
+        <div class="mc-top"><a class="mc-title" href="${href}">${esc(c.title)}</a><span class="cr-pill ${s.cls}">${esc(s.label)}</span>${c.assigned ? `<span class="cr-pill asg">Assigned by ${esc(cleanName(c.assigned.by || 'your department'))}</span>` : ''}</div>
         <div class="mc-meta"><span class="app-dtag" style="--c:${d.color}">${esc(d.name)}</span>${esc(c.kind || '')}${c.opens_at && !c.lock ? ` · opened ${esc(crDate(c.opens_at))}` : ''}${due ? ` · <span class="${late ? 'danger-text' : ''}">${late ? 'Overdue, was due' : 'Due'} ${esc(crDate(c.due_at))}</span>` : ''}</div>
+        ${c.assigned?.note && !c.complete ? `<div class="mc-note">“${esc(c.assigned.note)}”</div>` : ''}
         ${c.lock ? '' : `<div class="mc-prog"><span class="cr-progress"><i style="width:${pct}%"></i></span><span class="muted small">${c.counts?.done || 0} of ${c.counts?.total || 0} ${(c.counts?.total || 0) === 1 ? 'step' : 'steps'}</span></div>`}
       </div>
       <div class="mc-act">${c.lock ? '<span class="muted small">Locked</span>' : `<a class="${s.key === 'passed' ? 'ghost' : 'refresh'} mc-go" href="${href}">${s.key === 'passed' ? 'Review' : s.key === 'new' ? 'Start' : 'Continue'}</a>`}</div>
