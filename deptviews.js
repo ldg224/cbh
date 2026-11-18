@@ -134,14 +134,26 @@ function dvWirePosts(sec, dept, posts, canPost, redraw) {
 
 // ---------- Overview (dept.js drawOverview) ----------
 // attention: the leaders' "Needs your attention" card (HTML from dept.js, or ''). wire(root): dept.js's [data-go] buttons.
+// Still outlines in the Overview's own shape (hello line, two columns of cards) while it loads (0.32.4).
+window.dvOvSkel = () => {
+  const card = (...ws) => `<section class="card dv-card">${sk('34%', 14)}<span style="display:block;height:16px"></span>${lines(...ws)}</section>`;
+  return `<div class="dv-hello">${sk('260px', 26)}<span style="display:block;height:8px"></span>${sk('200px', 13)}</div>
+    <div class="dv-ov"><div class="dv-col">${card('80%', '62%', '70%')}${card('90%', '55%')}</div><div class="dv-col">${card('60%', '45%')}${card('50%')}</div></div>`;
+};
+// dept.js starts the Overview's requests as soon as a department opens; dvOverview uses them if they're fresh.
+const dvOvPending = {};
+const dvOvFetch = (dept) => Promise.all([
+  sb.rpc('my_department_overview', { p_department: dept }),
+  sb.rpc('course_list', { dept }).then((r) => r, () => ({ data: null })),
+  dvLoadRanks(dept),
+]);
+window.dvPrefetch = (dept) => { dvOvPending[dept] = { at: Date.now(), p: dvOvFetch(dept) }; };
 window.dvOverview = async (pane, dept, attention, wire) => {
   const d = dvDeptOf(dept) || { id: '', color: '#3a82d0' };
-  pane.innerHTML = `<div class="dv-ov"><p class="muted small">Loading…</p></div>`;
-  const [ovQ, coursesQ] = await Promise.all([
-    sb.rpc('my_department_overview', { p_department: dept }),
-    sb.rpc('course_list', { dept }).then((r) => r, () => ({ data: null })),
-    dvLoadRanks(dept),
-  ]);
+  const pre = dvOvPending[dept];
+  delete dvOvPending[dept];
+  pane.innerHTML = `${attention}${window.dvOvSkel()}`;
+  const [ovQ, coursesQ] = await (pre && Date.now() - pre.at < 15000 ? pre.p : dvOvFetch(dept));
   if (!pane.isConnected) return;
   if (ovQ.error || !ovQ.data) {
     pane.innerHTML = `${attention}<div class="card"><p class="${ovQ.error ? 'error' : 'muted small'}">${esc(ovQ.error ? ovQ.error.message : 'Nothing to show yet.')}</p></div>`;

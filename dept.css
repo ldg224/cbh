@@ -14,7 +14,8 @@
 .dp-pill { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
   background: rgba(255, 255, 255, .2); border: 1px solid rgba(255, 255, 255, .38); white-space: nowrap; }
 /* Wraps by its own width (4 across, 2 across on phones or narrow panes), never wider than the banner. */
-.dp-loading .dp-name { opacity: .9; }
+/* Tab outlines while a department loads: same height as the real tabs, so nothing jumps. */
+.dp-tabs-sk .dp-tsk { display: inline-flex; align-items: center; padding: 10px 13px 9px; border-bottom: 3px solid transparent; min-height: 20px; }
 
 /* Tabs */
 .dp-tabwrap { position: relative; margin: 18px 0 16px; min-width: 0; }

@@ -63,8 +63,19 @@ async function renderDept(body, tool) {
   let linkedSub = location.hash.split('/').slice(3).join('/');   // e.g. one application: #directors/<dept>/applications/<id>
   $('page-title').hidden = true;
   body.style.setProperty('--dept-tab', dep.color);
-  body.innerHTML = `<div class="dp-banner dp-loading" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}"><div class="dp-b-row"><span class="dp-sq"></span><div><h1 class="dp-name">${esc(dept)}</h1></div></div></div>
-    <div class="card"><p class="muted small">Loading…</p></div>`;
+  // The banner is known before anything loads, so it draws once in its final form; the tabs and the Overview show
+  // still outlines of their own shape while the data arrives (no "Loading…" flash, 0.32.4).
+  const bannerHtml = `<section class="dp-banner" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}">
+      <span class="dp-big" aria-hidden="true"></span>
+      <div class="dp-b-row"><span class="dp-sq" aria-hidden="true"></span>
+        <div><h1 class="dp-name">${esc(dept)}</h1>
+          <span class="dp-pill">${exec ? 'Executive View' : director ? 'You direct this department' : esc((window.myRanks || []).filter((r) => r.department === dept).sort((a, b) => b.rank_order - a.rank_order)[0]?.rank_label || 'Team view')}</span></div></div>
+    </section>`;
+  // Overview's own data starts now, alongside the department's, instead of after it.
+  if ((seeDept || member) && (!linked || linked === 'overview') && (dpTab[dept] || 'overview') === 'overview' && window.dvPrefetch) window.dvPrefetch(dept);
+  body.innerHTML = `${bannerHtml}
+    <div class="dp-tabwrap" aria-hidden="true"><div class="dp-tabs dp-tabs-sk">${['70px', '58px', '54px', '64px'].map((w) => `<span class="dp-tsk">${sk(w, 12)}</span>`).join('')}</div></div>
+    <div aria-busy="true" aria-label="Loading ${esc(dept)}">${window.dvOvSkel ? window.dvOvSkel() : `<div class="card">${lines('40%', '70%', '55%')}</div>`}</div>`;
 
   const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ, disQ, todoQ] = await Promise.all([
     lead ? sb.rpc('dept_roster', { department: dept }) : none,
@@ -161,12 +172,7 @@ async function renderDept(body, tool) {
   let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || dpTab[dept] || TABS[0].id;
   if (!TABS.some((t) => t.id === tab)) tab = TABS[0].id;
   body.innerHTML = `
-    <section class="dp-banner" style="--dept:${dep.color};--icon:${iconUrl(dep.icon)}">
-      <span class="dp-big" aria-hidden="true"></span>
-      <div class="dp-b-row"><span class="dp-sq" aria-hidden="true"></span>
-        <div><h1 class="dp-name">${esc(dept)}</h1>
-          <span class="dp-pill">${exec ? 'Executive View' : director ? 'You direct this department' : esc((window.myRanks || []).filter((r) => r.department === dept).sort((a, b) => b.rank_order - a.rank_order)[0]?.rank_label || 'Team view')}</span></div></div>
-    </section>
+    ${bannerHtml}
     <div class="dp-tabwrap"><button type="button" class="dp-tabarrow l" data-tabscroll="-1" aria-label="Scroll the tabs left" hidden><span aria-hidden="true"></span></button>
     <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `${t.first && TABS.some((x) => !(x.ext && x.ext.tool)) ? '<span class="dp-tsep" aria-hidden="true"></span>' : ''}<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}"${t.ext && t.ext.tool ? ' class="dp-tooltab"' : ''}>${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
     <button type="button" class="dp-tabarrow r" data-tabscroll="1" aria-label="Scroll the tabs right" hidden><span aria-hidden="true"></span></button></div>
