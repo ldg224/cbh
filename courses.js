@@ -201,7 +201,8 @@ async function crCourse(el, dept, cid, stepId) {
         return `<tr><td><strong>${esc(cleanName(r.name || r.discord_id))}</strong></td><td>${esc(r.rank || '–')}</td>
           <td><span class="cr-mini"><i style="width:${pct}%"></i></span>${r.counts.done} / ${r.counts.total}${r.complete ? ' <span class="cr-pill done">Done</span>' : ''}</td>
           ${quizzes.map((q) => { const t = (r.quizzes || []).filter((x) => x.item_id === q.id); const best = t.filter((x) => x.status === 'marked').sort((x, y) => (y.score || 0) - (x.score || 0))[0];
-            return `<td>${t.some((x) => x.status === 'marking') ? '<span class="cr-pill due">To mark</span>' : best ? `${best.score} / ${best.max_score}${best.passed ? '' : ' <span class="cr-pill late">Not passed</span>'}` : '–'}${c.can_assess || c.can_edit ? ` <button type="button" class="linkish cr-try" data-try="${esc(q.id)}:${esc(r.discord_id)}" title="Give another try">+1 try</button>` : ''}</td>`; }).join('')}
+            const ended = t.filter((x) => x.status === 'ended'), locked = t.filter((x) => x.lock && x.lock !== 'off');
+            return `<td>${t.some((x) => x.status === 'marking') ? '<span class="cr-pill due">To mark</span>' : best ? `${best.score} / ${best.max_score}${best.passed ? '' : ' <span class="cr-pill late">Not passed</span>'}` : '–'}${ended.length ? ` <span class="cr-pill late" title="${esc(ended.map((x) => x.ended_reason).join('; '))}">${ended.length} ended</span>` : ''}${locked.length && (c.can_assess || c.can_edit) ? ` <button type="button" class="linkish cr-try" data-log="${locked[locked.length - 1].id}">Exit log</button>` : ''}${c.can_assess || c.can_edit ? ` <button type="button" class="linkish cr-try" data-try="${esc(q.id)}:${esc(r.discord_id)}" title="Give another try">+1 try</button>` : ''}</td>`; }).join('')}
           ${evals.map((e) => { const ev = (r.evaluations || []).find((x) => x.item_id === e.id && x.status === 'submitted');
             return `<td>${ev ? `<span class="cr-pill ${ev.passed ? 'done' : 'due'}">${ev.passed ? 'Passed' : 'Not yet'}</span>` : '–'}${c.can_assess ? ` <button type="button" class="linkish" data-eval="${esc(e.id)}:${esc(r.discord_id)}">${ev ? 'View' : 'Evaluate'}</button>` : ''}</td>`; }).join('')}
         </tr>`;
@@ -213,6 +214,8 @@ async function crCourse(el, dept, cid, stepId) {
     const t = e.target.closest('[data-ctab]');
     if (t) { tab = t.dataset.ctab; el.querySelectorAll('[data-ctab]').forEach((x) => x.setAttribute('aria-selected', String(x === t))); return tab === 'progress' ? drawProgress() : drawContents(); }
     if (e.target.closest('#cr-edit')) return crEditor(el, dept, cid);
+    const lg = e.target.closest('[data-log]');
+    if (lg) return crAttemptLog(+lg.dataset.log);
     const tr = e.target.closest('[data-try]');
     if (tr) { const [iid, who] = tr.dataset.try.split(':'); const { error: er } = await sb.rpc('course_grant_try', { cid, iid, who }); tr.textContent = er ? er.message : 'Given'; return; }
     const ev = e.target.closest('[data-eval]');
@@ -465,12 +468,33 @@ async function crPdf(box, url, onLast) {
 }
 
 // ---------- quizzes and exams ----------
+// Can this browser put a page into full screen? (No on iPhone Safari and Discord's iPhone browser.)
+const crCanFullscreen = () => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled) && !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function crEndedHtml(why) {
+  return `<div class="cr-ended" role="alert"><strong>Your exam has ended.</strong><span>${esc(String(why || 'You left the exam screen').replace(/\.?$/, '.'))} This used one try.</span>
+    <span class="muted small">If you think this was a mistake, ask your department: an assessor can give you another try.</span></div>`;
+}
 async function crQuiz(el, body, dept, c, it) {
   const tries = (c.attempts || []).filter((a) => a.item_id === it.id);
   const last = tries[tries.length - 1];
-  const intro = (extra = '') => `<div class="cr-quiz-intro">
-      <p>${it.exam ? 'Exam' : 'Quiz'} · ${it.question_count || 0} questions · pass mark ${it.pass_pct ?? 80}% · ${it.tries ?? 3} ${(it.tries ?? 3) === 1 ? 'try' : 'tries'}${it.time_limit_min ? ` · ${it.time_limit_min} minutes` : ''}</p>
-      ${extra}${c.mine && !c.lock ? '<button type="button" class="refresh" id="cr-start">Start</button>' : ''}</div>`;
+  const locked = it.lock === 'phones' || it.lock === 'fullscreen';
+  const fsOk = crCanFullscreen();
+  const blocked = it.lock === 'fullscreen' && !fsOk;
+  const facts = `${it.exam ? 'Exam' : 'Quiz'} · ${it.question_count || 0} questions · pass mark ${it.pass_pct ?? 80}% · ${it.tries ?? 3} ${(it.tries ?? 3) === 1 ? 'try' : 'tries'}${it.time_limit_min ? ` · ${it.time_limit_min} minutes` : ''}`;
+  const startBtn = (label) => (c.mine && !c.lock && !blocked ? `<button type="button" class="refresh cr-start-btn" id="cr-start">${label}</button>` : '');
+  const intro = (extra = '', label = locked ? 'Start exam' : 'Start') => locked ? `<div class="cr-lockrules">
+      <p class="cr-lockfacts">${facts}</p>
+      <h3>Before you start</h3>
+      <ul>
+        ${fsOk ? '<li>The exam opens in <strong>full screen</strong>. Stay in full screen until you send your answers.</li>'
+          : '<li>Your browser can’t go full screen, so <strong>stay on this page</strong> until you send your answers. Don’t switch apps or tabs.</li>'}
+        <li>If you leave (${fsOk ? 'exit full screen, ' : ''}switch tab or app, or reload), you get <strong>one warning</strong> and 30 seconds to come back.</li>
+        <li>Leaving <strong>a second time</strong>, or being away for <strong>30 seconds</strong>, ends your exam. It uses a try and isn’t marked.</li>
+        <li>Turn on Do Not Disturb so notifications don’t pull you out.</li>
+      </ul>
+      ${blocked ? '<p class="cr-lockblock">This exam has to be taken on a computer, in full screen. Open this page on a computer to start.</p>' : ''}
+      ${extra}${startBtn(label)}</div>`
+    : `<div class="cr-quiz-intro"><p>${facts}</p>${extra}${startBtn(label)}</div>`;
   if (last && last.status === 'marking') {
     body.innerHTML = `<div class="cr-held"><strong>Submitted.</strong><span>Results usually within ${esc(it.results_in || 'a few days')}. You’ll get a DM from CareBeyond Helper when it’s marked.</span></div>`;
     return;
@@ -478,21 +502,27 @@ async function crQuiz(el, body, dept, c, it) {
   if (last && last.status === 'marked') {
     const { data: r } = await sb.rpc('quiz_result', { attempt_id: last.id });
     body.innerHTML = crResultHtml(r) + (r && !r.passed ? intro() : '');
+  } else if (last && last.status === 'ended') {
+    body.innerHTML = crEndedHtml(last.ended_reason) + intro('', 'Start again');
   } else if (last && last.status === 'in_progress') {
-    body.innerHTML = intro('<p class="muted small">You have a try in progress. Your answers were saved.</p>').replace('>Start<', '>Carry on<');
+    body.innerHTML = intro(`<p class="muted small">You have ${locked ? 'an exam' : 'a try'} in progress. Your answers were saved.${locked ? ' Coming back counts as leaving the exam once.' : ''}</p>`, 'Carry on');
   } else body.innerHTML = intro();
   const sb2 = body.querySelector('#cr-start');
   if (!sb2) return;
   sb2.onclick = async () => {
     sb2.disabled = true;
+    const box = body.closest('.cr-step') || body;
+    // Full screen has to be asked for straight from the tap, before anything else waits.
+    if (locked && fsOk) { try { await (box.requestFullscreen || box.webkitRequestFullscreen).call(box); } catch { /* the guard treats it as not in full screen */ } }
     const { data: q, error } = await sb.rpc('quiz_start', { cid: c.id, iid: it.id });
-    if (error) { sb2.disabled = false; return body.insertAdjacentHTML('beforeend', `<p class="error">${esc(error.message)}</p>`); }
-    crQuizRun(body, q, async () => { const { data: v } = await sb.rpc('course_view', { cid: c.id }); if (v) { Object.assign(c, v); } });
+    if (error) { crLockExit(); sb2.disabled = false; return body.insertAdjacentHTML('beforeend', `<p class="error">${esc(error.message)}</p>`); }
+    crQuizRun(body, q, async () => { const { data: v } = await sb.rpc('course_view', { cid: c.id }); if (v) { Object.assign(c, v); } }, box);
   };
 }
 function crResultHtml(r) {
   if (!r) return '';
   if (r.status === 'marking') return `<div class="cr-held"><strong>Submitted.</strong><span>Results usually within ${esc(r.results_in || 'a few days')}.</span></div>`;
+  if (r.status === 'ended') return crEndedHtml(r.ended_reason);
   return `<div class="cr-score"><b>${r.score} / ${r.max_score}</b><span class="cr-pill ${r.passed ? 'done' : 'late'}">${r.passed ? 'Passed' : 'Not passed'}</span><span class="muted">Pass mark ${r.pass_pct}%</span></div>
     ${r.review ? `<div class="cr-review">${r.review.map((q, i) => {
       const opts = (q.options || []), key = new Set((q.key || []).map(String)), ans = Array.isArray(q.answer) ? q.answer.map(String) : q.answer != null ? [String(q.answer)] : [];
@@ -501,7 +531,8 @@ function crResultHtml(r) {
           : `<p class="muted small">Your answer: ${esc(q.answer || '–')}${(q.accepted || []).length ? ` · Accepted: ${esc(q.accepted.join(', '))}` : ''}</p>`}</div>`;
     }).join('')}</div>` : ''}`;
 }
-function crQuizRun(body, q, after) {
+function crQuizRun(body, q, after, lockBox) {
+  if (q.ended) { crLockExit(); body.innerHTML = crEndedHtml(q.ended_reason); after(); return; }
   const answers = Object.assign({}, q.answers || {});
   const qs = q.questions || [];
   let saveT;
@@ -522,6 +553,7 @@ function crQuizRun(body, q, after) {
     <p class="error" id="cr-qerr" hidden></p>
     <div class="cr-step-foot"><span class="muted small">Answers save as you go.</span><span class="sp"></span><button type="submit" class="refresh">Send answers</button></div></form>`;
   const form = body.querySelector('#cr-quiz');
+  const guard = q.lock && q.lock !== 'off' ? crExamGuard(lockBox || body, q, (r) => { clearTimeout(saveT); clearInterval(timer); body.innerHTML = crEndedHtml(r.ended_reason); after(); }) : null;
   form.addEventListener('input', (e) => {
     const fs = e.target.closest('[data-q]'); if (!fs) return;
     const id = fs.dataset.q, ty = fs.dataset.type;
@@ -530,7 +562,7 @@ function crQuizRun(body, q, after) {
     else answers[id] = e.target.value;
     save();
   });
-  let timer;
+  var timer;
   if (ends) {
     const tick = () => { const s = Math.max(0, Math.round((ends - Date.now()) / 1000)); const t = body.querySelector('#cr-timer'); if (!t) return clearInterval(timer);
       t.textContent = `Time left: ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; if (s === 0) { clearInterval(timer); form.requestSubmit(); } };
@@ -539,12 +571,116 @@ function crQuizRun(body, q, after) {
   form.onsubmit = async (e) => {
     e.preventDefault(); clearTimeout(saveT); clearInterval(timer);
     const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+    if (guard) guard.stop();
     const { data: r, error } = await sb.rpc('quiz_submit', { attempt_id: q.attempt_id, answers });
     if (error) { btn.disabled = false; const p = form.querySelector('#cr-qerr'); p.textContent = error.message; p.hidden = false; return; }
+    crLockExit();
     body.innerHTML = crResultHtml(r);
     after();
   };
 }
+
+// Leave full screen quietly (after sending answers, or when the exam ends).
+function crLockExit() {
+  try { if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch { /* fine */ }
+}
+// The exam guard (0055): watches for leaving (full screen, tab or app, window, the page) and reports each exit and
+// return to the server, which decides when the try ends. The page shows one big warning with a 30-second countdown.
+function crExamGuard(box, q, onEnded) {
+  const fsMode = crCanFullscreen() && q.lock !== 'off';
+  let out = false, done = false, tick = null, overlay = null;
+  const inFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  async function report(kind, detail) {
+    const { data, error } = await sb.rpc('quiz_lock_event', { attempt_id: q.attempt_id, kind, detail: detail || null });
+    if (error || !data) return null;
+    if (data.ended) { end(data); return data; }
+    return data;
+  }
+  function end(data) {
+    if (done) return;
+    done = true; stopListening(); hideWarning(); crLockExit(); onEnded(data || {});
+  }
+  async function exit(detail) {
+    if (done || out) return;
+    out = true;
+    const r = await report('exit', detail);
+    if (done) return;
+    showWarning(r && r.seconds_left != null ? r.seconds_left : 30);
+  }
+  async function back() {
+    if (done) return;
+    if (fsMode && !inFull()) { try { await (box.requestFullscreen || box.webkitRequestFullscreen).call(box); } catch { return; } }
+    out = false; hideWarning();
+    await report('return');
+  }
+  function showWarning(secs) {
+    hideWarning();
+    overlay = document.createElement('div');
+    overlay.className = 'cr-lockwarn';
+    overlay.setAttribute('role', 'alertdialog'); overlay.setAttribute('aria-modal', 'true'); overlay.setAttribute('aria-labelledby', 'cr-lw-h');
+    overlay.innerHTML = `<div class="cr-lw-box"><span class="cr-lw-n" id="cr-lw-n">${secs}</span>
+      <h2 id="cr-lw-h">You left the exam</h2>
+      <p>Return ${fsMode ? 'to full screen ' : ''}within <strong><span id="cr-lw-s">${secs}</span> seconds</strong> or your exam ends.</p>
+      <p class="cr-lw-only">This is your only warning. Leaving again ends your exam.</p>
+      <button type="button" class="cr-lw-btn" id="cr-lw-back">${fsMode ? 'Return to full screen' : 'I’m back'}</button></div>`;
+    (inFull() ? document.fullscreenElement || document.webkitFullscreenElement : document.body).append(overlay);
+    overlay.querySelector('#cr-lw-back').onclick = back;
+    overlay.querySelector('#cr-lw-back').focus();
+    let left = secs;
+    tick = setInterval(async () => {
+      left -= 1;
+      const n = overlay && overlay.querySelector('#cr-lw-n'), s2 = overlay && overlay.querySelector('#cr-lw-s');
+      if (n) n.textContent = Math.max(0, left); if (s2) s2.textContent = Math.max(0, left);
+      if (left <= 0) { clearInterval(tick); const r = await report('return', 'timer ran out'); if (r && !r.ended) end({ ended_reason: 'Out of the exam screen for more than 30 seconds' }); }
+    }, 1000);
+  }
+  function hideWarning() { clearInterval(tick); if (overlay) overlay.remove(); overlay = null; }
+  // What counts as leaving.
+  const onFs = () => { if (fsMode && !inFull()) exit('Left full screen'); else if (fsMode && inFull() && out) back(); };
+  const onVis = () => { if (document.hidden) exit('Switched tab or app'); };
+  let blurT;
+  const onBlur = () => { clearTimeout(blurT); blurT = setTimeout(() => { if (!document.hasFocus() && !document.hidden) exit('Left the exam window'); }, 400); };
+  const onHash = () => { if (!box.isConnected) exit('Left the exam page'); };
+  const onHide = () => { exit('Closed or reloaded the page'); };
+  document.addEventListener('fullscreenchange', onFs); document.addEventListener('webkitfullscreenchange', onFs);
+  document.addEventListener('visibilitychange', onVis);
+  window.addEventListener('blur', onBlur);
+  window.addEventListener('hashchange', onHash);
+  window.addEventListener('pagehide', onHide);
+  function stopListening() {
+    document.removeEventListener('fullscreenchange', onFs); document.removeEventListener('webkitfullscreenchange', onFs);
+    document.removeEventListener('visibilitychange', onVis);
+    window.removeEventListener('blur', onBlur); window.removeEventListener('hashchange', onHash); window.removeEventListener('pagehide', onHide);
+    clearTimeout(blurT);
+  }
+  box.classList.add('cr-locked');
+  report('start', fsMode ? (inFull() ? 'Full screen' : 'Full screen refused') : 'Stay on this page');
+  // Came back to a try that was already out (reload): the server counted it, so show the warning straight away.
+  if (q.resumed && q.out_since) { out = true; showWarning(q.seconds_left != null ? q.seconds_left : 30); }
+  else if (fsMode && !inFull()) exit('Not in full screen');
+  return { stop() { done = true; stopListening(); hideWarning(); box.classList.remove('cr-locked'); } };
+}
+
+// Assessors: one try's exit log.
+async function crAttemptLog(aid) {
+  const { data: d, error } = await sb.rpc('course_attempt_log', { attempt_id: aid });
+  document.querySelector('.app-pv')?.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'app-pv';
+  const label = { start: 'Started', exit: 'Left the exam', return: 'Came back', resume: 'Opened again', ended: 'Ended', timeout: 'Away 30 seconds' };
+  wrap.innerHTML = `<div class="app-pv-box" role="dialog" aria-modal="true" aria-label="Exit log"><button type="button" class="app-pv-x">Close</button>
+    <div class="card cr-step"><h2 class="cr-step-h">Exit log</h2>
+    ${error || !d ? `<p class="error">${esc(error ? error.message : 'Not available.')}</p>` : `
+      <p class="muted small">${d.lock === 'fullscreen' ? 'Computer only (full screen)' : 'Allow phones (stay on this page)'} · left ${d.exits} ${d.exits === 1 ? 'time' : 'times'}${d.status === 'ended' ? ` · <strong class="danger-text">Ended: ${esc(d.ended_reason || '')}</strong>` : ''}</p>
+      <ol class="cr-log">${(d.events || []).map((e) => `<li><span class="cr-log-t">${esc(new Date(e.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }))}</span><strong>${esc(label[e.kind] || e.kind)}</strong>${e.detail ? ` <span class="muted">· ${esc(e.detail)}</span>` : ''}</li>`).join('')}</ol>
+      ${d.status === 'ended' ? `<h3 class="cr-qsec">Answers given (not marked)</h3>${(d.questions || []).filter((x) => x.type !== 'section').map((x, i) => { const a = (d.answers || {})[x.id]; const shown = Array.isArray(a) ? a.map((id) => (x.options || []).find((o) => o.id === id)?.text || id).join(', ') : (x.options || []).find((o) => o.id === a)?.text || a; return `<div class="cr-rq"><strong>${i + 1}. ${esc(x.text)}</strong><p class="cr-ans">${esc(shown || '–')}</p></div>`; }).join('')}` : ''}`}
+    </div></div>`;
+  document.body.append(wrap);
+  const close = () => wrap.remove();
+  wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('.app-pv-x')) close(); });
+  wrap.querySelector('.app-pv-x').focus();
+}
+
 
 // ---------- practical evaluations ----------
 function crEvalResult(it, ev) {
@@ -834,6 +970,7 @@ function crItemEditor(it) {
   if (it.kind === 'quiz') {
     x += `<div class="ce-qset">
       <label class="app-switch"><input type="checkbox" data-f="exam"${it.exam ? ' checked' : ''}> Formal exam</label>
+      <label class="f"><span>Exam lock</span><select data-f="lock"><option value="off"${(it.lock || 'off') === 'off' ? ' selected' : ''}>Off</option><option value="phones"${it.lock === 'phones' ? ' selected' : ''}>On: allow phones (stay on this page)</option><option value="fullscreen"${it.lock === 'fullscreen' ? ' selected' : ''}>On: computer only (full screen)</option></select></label>
       <label class="f"><span>Pass mark %</span><input type="number" min="0" max="100" data-f="pass_pct" value="${it.pass_pct ?? 80}"></label>
       <label class="f"><span>Tries</span><input type="number" min="1" max="20" data-f="tries" value="${it.tries ?? 3}"></label>
       <label class="f"><span>Wait between tries (hours)</span><input type="number" min="0" max="720" data-f="wait_hours" value="${it.wait_hours ?? 0}"></label>
@@ -841,6 +978,7 @@ function crItemEditor(it) {
       <label class="f"><span>Show answers</span><select data-f="reveal"><option value="now"${it.reveal === 'now' ? ' selected' : ''}>Straight after (auto-marked)</option><option value="after"${(it.reveal || 'after') === 'after' ? ' selected' : ''}>Once marked</option><option value="never"${it.reveal === 'never' ? ' selected' : ''}>Never</option></select></label>
       <label class="f"><span>“Results usually within”</span><input data-f="results_in" maxlength="40" value="${esc(it.results_in || '3 days')}"></label></div>
       <p class="app-hint">If any answer needs a person to mark it, the whole result is held until it’s marked. Marking happens under Courses › Marking.</p>
+      <p class="app-hint">Exam lock: leaving the exam (full screen, another tab or app, or reloading) gives one 30-second warning; a second time, or 30 seconds away, ends the try. Phones can’t go full screen, so “allow phones” uses stay-on-this-page there.</p>
       <div class="ce-qs">${(it.questions || []).map((q, qi) => crQEditor(q, qi)).join('')}</div>
       <div class="addmenu">${CR_QTYPES.map(([t, l]) => `<button type="button" class="ghost small-btn" data-qadd="${t}">+ ${l}</button>`).join('')}<button type="button" class="ghost small-btn" data-qadd="section">+ Section</button></div>`;
   }
@@ -865,7 +1003,8 @@ function crItemInput(it, t) {
   const num = (v) => (v === '' ? null : +v);
   switch (f) {
     case 'title': case 'body': case 'url': case 'results_in': case 'reveal': it[f] = t.value; break;
-    case 'exam': it.exam = t.checked; break;
+    case 'exam': it.exam = t.checked; if (it.exam && (!it.lock || it.lock === 'off')) it.lock = 'phones'; break;
+    case 'lock': it.lock = t.value; break;
     case 'pass_pct': case 'tries': case 'wait_hours': case 'time_limit_min': it[f] = num(t.value); break;
     case 'pass_level': it.pass_level = +t.value; break;
     case 'comp': it.competencies[+t.dataset.k].text = t.value; break;
@@ -897,27 +1036,71 @@ function crItemClick(it, ds) {
   return false;
 }
 
-// ---------- My courses (sidebar "My stuff") ----------
-// One department: its Courses tab. Several: #courses lists my courses from each of them.
+// ---------- My courses (sidebar "My stuff"): its own page, every course I'm on across my departments ----------
+// Owner (0.25.0): status, open date, due date and a Continue button for each; due soon first; filter by department.
 const crMyDepts = () => DEPARTMENTS.filter((d) => crMember(d.name));
-function crMyCoursesHref() {
-  const ds = crMyDepts();
-  return ds.length === 1 ? `#directors/${ds[0].id}/courses` : ds.length > 1 ? '#courses' : null;
-}
+function crMyCoursesHref() { return crMyDepts().length ? '#courses' : null; }
 PAGES.push({ id: 'courses', aud: 'everyone', title: 'My courses', icon: 'graduation-cap', layout: 'mycourses' });
+
+// Where I am on a course: Passed, Waiting for marking, Not passed, In progress, Not started, or locked.
+function crMyStatus(c, v) {
+  if (c.complete) return { key: 'passed', label: 'Passed', cls: 'done' };
+  if (c.lock === 'date') return { key: 'locked', label: `Opens ${crDate(c.opens_at)}`, cls: 'soon' };
+  if (c.lock === 'prereq') return { key: 'locked', label: `Finish ${c.prereq || 'another course'} first`, cls: 'soon' };
+  const at = (v && v.attempts) || [];
+  if (at.some((a) => a.status === 'marking')) return { key: 'marking', label: 'Waiting for marking', cls: 'due' };
+  const latest = {};
+  at.forEach((a) => { latest[a.item_id] = a; });
+  if (Object.values(latest).some((a) => a.status === 'ended' || (a.status === 'marked' && !a.passed))) return { key: 'failed', label: 'Not passed', cls: 'late' };
+  if ((c.counts && c.counts.done) || at.length || ((v && v.done) || []).length) return { key: 'progress', label: 'In progress', cls: 'open' };
+  return { key: 'new', label: 'Not started', cls: 'soon' };
+}
+
 LIVE.mycourses = async (body) => {
   const ds = crMyDepts();
-  if (ds.length === 1) { location.replace(`#directors/${ds[0].id}/courses`); return; }
   body.innerHTML = '<div class="card"><p class="muted small">Loading your courses…</p></div>';
-  const lists = await Promise.all(ds.map(async (d) => { await crLoadRanks(d.name); return { d, list: ((await sb.rpc('course_list', { dept: d.name })).data || []).filter((c) => c.mine) }; }));
-  const any = lists.some((x) => x.list.length);
-  body.innerHTML = any ? lists.filter((x) => x.list.length).map(({ d, list }) => `<section class="cr-sec"><h2 class="ma-day">${esc(d.name)}</h2><div class="cr-grid">${list.map((c) => {
-      const pct = c.counts && c.counts.total ? Math.round((c.counts.done / c.counts.total) * 100) : 0;
-      return `<a class="cr-block${c.lock ? ' locked' : ''}" href="#directors/${d.id}/courses/${esc(c.id)}" style="--c:${esc(c.color || '#2ED3C6')};--dept:${d.color}">
-        <span class="cr-top"><span class="cr-kind">${esc(c.kind || 'Course')}</span></span>
-        <span class="cr-body"><span class="cr-pills">${crAudience(c, d.name)}${c.complete ? '<span class="cr-pill done">Completed</span>' : c.lock === 'date' ? `<span class="cr-pill soon">Opens ${esc(crDate(c.opens_at))}</span>` : c.lock === 'prereq' ? `<span class="cr-pill soon">Finish ${esc(c.prereq || 'another course')} first</span>` : '<span class="cr-pill open">Open</span>'}</span>
-          <strong class="cr-title">${esc(c.title)}</strong>${c.lock ? '' : `<span class="cr-progress"><i style="width:${pct}%"></i></span>`}
-          <span class="cr-foot"><span>${c.counts?.done || 0} of ${c.counts?.total || 0} steps</span><span>${c.lock ? 'Locked' : 'Open ›'}</span></span></span></a>`;
-    }).join('')}</div></section>`).join('')
-    : '<div class="card ma-empty"><strong>You have no courses yet.</strong><span>Your department will add them here.</span></div>';
+  const lists = await Promise.all(ds.map(async (d) => {
+    await crLoadRanks(d.name);
+    const list = ((await sb.rpc('course_list', { dept: d.name })).data || []).filter((c) => c.mine);
+    // The detail (tries, marking) only for open courses I haven't finished.
+    await Promise.all(list.map(async (c) => { c._d = d; if (!c.lock && !c.complete) c._v = (await sb.rpc('course_view', { cid: c.id })).data; }));
+    return list;
+  }));
+  const all = lists.flat().map((c) => Object.assign(c, { _s: crMyStatus(c, c._v) }));
+  if (!all.length) { body.innerHTML = '<div class="card ma-empty"><strong>You have no courses yet.</strong><span>When your department gives you a course, it shows here.</span></div>'; return; }
+  const now = Date.now(), week = 7 * 864e5;
+  const dueSoon = (c) => !c.complete && !c.lock && c.due_at && new Date(c.due_at) - now < week;
+  const rank = { progress: 2, marking: 3, failed: 2, new: 2, locked: 5, passed: 6 };
+  const order = (c) => (dueSoon(c) ? 0 : rank[c._s.key] ?? 4);
+  all.sort((a, b) => order(a) - order(b) || (a.due_at ? +new Date(a.due_at) : Infinity) - (b.due_at ? +new Date(b.due_at) : Infinity) || a.title.localeCompare(b.title));
+  let dept = 'all';
+  function draw() {
+    const rows = all.filter((c) => dept === 'all' || c._d.name === dept);
+    const groups = [
+      ['Due soon', rows.filter(dueSoon)],
+      ['To do', rows.filter((c) => !dueSoon(c) && ['progress', 'new', 'failed', 'marking'].includes(c._s.key))],
+      ['Not open yet', rows.filter((c) => c._s.key === 'locked')],
+      ['Finished', rows.filter((c) => c._s.key === 'passed')],
+    ].filter(([, r]) => r.length);
+    body.innerHTML = `
+      ${ds.length > 1 ? `<div class="ma-chips mc-chips" role="group" aria-label="Department">${['all', ...ds.map((d) => d.name)].map((n) =>
+        `<button type="button" class="chip${dept === n ? ' on' : ''}" data-mcd="${esc(n)}" aria-pressed="${dept === n}">${n === 'all' ? 'All departments' : esc(n)}<span class="count">${(n === 'all' ? all : all.filter((c) => c._d.name === n)).length}</span></button>`).join('')}</div>` : ''}
+      ${groups.map(([label, r]) => `<section class="cr-sec"><h2 class="ma-day">${label} <span class="count">${r.length}</span></h2><div class="card mc-list">${r.map(row).join('')}</div></section>`).join('')}`;
+  }
+  function row(c) {
+    const d = c._d, s = c._s, pct = c.counts && c.counts.total ? Math.round((c.counts.done / c.counts.total) * 100) : 0;
+    const due = c.due_at && !c.complete ? new Date(c.due_at) : null, late = due && due < now;
+    const href = `#directors/${d.id}/courses/${c.id}`;
+    return `<div class="mc-row" style="--c:${esc(c.color || '#2ED3C6')};--dept:${d.color}">
+      <span class="mc-bar" aria-hidden="true"></span>
+      <div class="mc-main">
+        <div class="mc-top"><a class="mc-title" href="${href}">${esc(c.title)}</a><span class="cr-pill ${s.cls}">${esc(s.label)}</span></div>
+        <div class="mc-meta"><span class="app-dtag" style="--c:${d.color}">${esc(d.name)}</span>${esc(c.kind || '')}${c.opens_at && !c.lock ? ` · opened ${esc(crDate(c.opens_at))}` : ''}${due ? ` · <span class="${late ? 'danger-text' : ''}">${late ? 'Overdue, was due' : 'Due'} ${esc(crDate(c.due_at))}</span>` : ''}</div>
+        ${c.lock ? '' : `<div class="mc-prog"><span class="cr-progress"><i style="width:${pct}%"></i></span><span class="muted small">${c.counts?.done || 0} of ${c.counts?.total || 0} ${(c.counts?.total || 0) === 1 ? 'step' : 'steps'}</span></div>`}
+      </div>
+      <div class="mc-act">${c.lock ? '<span class="muted small">Locked</span>' : `<a class="${s.key === 'passed' ? 'ghost' : 'refresh'} mc-go" href="${href}">${s.key === 'passed' ? 'Review' : s.key === 'new' ? 'Start' : 'Continue'}</a>`}</div>
+    </div>`;
+  }
+  body.onclick = (e) => { const b = e.target.closest('[data-mcd]'); if (b) { dept = b.dataset.mcd; draw(); } };
+  draw();
 };

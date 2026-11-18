@@ -241,3 +241,53 @@ body.vw-lock { overflow: hidden; }
   .vw-zoom .vw-btn { flex: 1; }
   .vw-note { flex-basis: 100%; }
 }
+
+/* ===================== Exam lock (0.25.0) ===================== */
+.cr-lockrules { display: grid; gap: 10px; justify-items: start; padding: 16px 18px; border: 2px solid #0B1E4A; border-radius: 14px; background: #fff; }
+.cr-lockrules h3 { margin: 4px 0 0; font-size: 16px; font-weight: 800; color: var(--text); text-transform: none; letter-spacing: 0; }
+.cr-lockrules ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14.5px; }
+.cr-lockfacts { margin: 0; font-weight: 600; }
+.cr-lockblock { margin: 0; padding: 10px 12px; border-radius: 10px; background: #ffe9e6; border: 1px solid #f5b8b0; color: #8a1c1c; font-weight: 600; }
+.cr-start-btn { padding: 12px 22px; font-size: 15px; }
+.cr-ended { display: grid; gap: 4px; padding: 16px; border-radius: 12px; background: #ffe9e6; border: 1px solid #f5b8b0; color: #5a1010; margin-bottom: 12px; }
+.cr-ended strong { font-size: 17px; color: #8a1c1c; }
+
+/* the exam itself in full screen */
+.cr-step:fullscreen, .cr-step:-webkit-full-screen { overflow: auto; background: #fff; padding: 24px max(16px, 6vw); border-radius: 0; }
+.cr-step:fullscreen::backdrop { background: #fff; }
+.cr-step.cr-locked .cr-step-foot #cr-next { display: none; }
+
+/* the warning: covers everything, can't be missed */
+.cr-lockwarn { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(11, 30, 74, .92); }
+.cr-lw-box { width: min(520px, 100%); display: grid; gap: 12px; justify-items: center; text-align: center; padding: 28px 24px; border-radius: 18px; background: #fff; border: 4px solid #C42B2B; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+.cr-lw-box h2 { margin: 0; font-size: 26px; font-weight: 800; color: #8a1c1c; text-transform: none; letter-spacing: -.01em; }
+.cr-lw-box p { margin: 0; font-size: 16px; color: #0B1E4A; }
+.cr-lw-only { font-weight: 700; }
+.cr-lw-n { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; font-size: 36px; font-weight: 800; color: #fff; background: #C42B2B; font-variant-numeric: tabular-nums; }
+.cr-lw-btn { font: inherit; font-size: 17px; font-weight: 800; padding: 14px 26px; border: 0; border-radius: 12px; background: #0B1E4A; color: #fff; cursor: pointer; width: 100%; max-width: 340px; }
+.cr-lw-btn:focus-visible { outline: 4px solid #2ED3C6; outline-offset: 3px; }
+
+/* assessors: the exit log */
+.cr-log { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+.cr-log-t { display: inline-block; min-width: 100px; margin-right: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ===================== My courses page (0.25.0) ===================== */
+.mc-chips { margin-bottom: 14px; flex-wrap: wrap; }
+.mc-list { padding: 0; overflow: hidden; }
+.mc-row { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 16px 14px 0; border-top: 1px solid var(--line); }
+.mc-row:first-child { border-top: 0; }
+.mc-bar { align-self: stretch; background: linear-gradient(180deg, var(--c), var(--dept)); border-radius: 0 4px 4px 0; }
+.mc-main { min-width: 0; display: grid; gap: 6px; }
+.mc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mc-title { font-size: 16px; font-weight: 800; color: var(--text); text-decoration: none; }
+.mc-title:hover { color: var(--blue-deep); text-decoration: underline; }
+.mc-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.mc-prog { display: grid; grid-template-columns: minmax(0, 260px) auto; gap: 10px; align-items: center; }
+.mc-go { display: inline-block; text-decoration: none; padding: 9px 16px; white-space: nowrap; }
+@media (max-width: 560px) {
+  .mc-row { grid-template-columns: 5px minmax(0, 1fr); padding-right: 12px; }
+  .mc-act { grid-column: 2; }
+  .mc-go { width: 100%; text-align: center; }
+  .mc-prog { grid-template-columns: minmax(0, 1fr) auto; }
+}
