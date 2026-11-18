@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.32.5 (2026-11-19)
+
+**Added:**
+- Anonymous page view counts, so the owners can see which pages are used and when. Only counts are kept (hour, page, phone or desktop, staff or not): no names, no IPs, no exact times.
+
+**Fixed:**
+- Logging in with a code from the bot now uses the same account as "Sign in with Discord", instead of making a second one.
+- A check-in helper function can no longer be called by people who aren't signed in.
+
+Database change: yes (0071 page views, 0072 check-in function access). Function: login-code.
+
 ## 0.32.4 (2026-11-19)
 
 **Changed:**
