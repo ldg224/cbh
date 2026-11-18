@@ -1392,7 +1392,7 @@ async function renderSessions(body) {
       <div class="ss-live-main">
         <div><div class="ss-timer" data-tick="ss-live">${clock((Date.now() - since) / 1000)}</div>
           <div class="muted ss-sub">Since ${since.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · <span class="ss-place">${esc(sessPlace(live))}</span>${live.note ? ' · ' + esc(live.note) : ''}</div></div>
-        <div class="ss-code"><span class="ss-code-l">Join code</span><strong>${esc(code)}</strong><button class="ghost small-btn" id="ss-copy">Copy</button></div>
+        <div class="ss-code"><span class="ss-code-l">Join code</span><strong>${esc(code)}</strong><button class="ghost small-btn" id="ss-copy">Copy</button>${joinGameBtn(code)}</div>
       </div>
       <div class="ss-crew"><span class="ss-crew-l">On shift <strong>${onNow.length}</strong></span>
         <span class="ss-faces">${onNow.slice(0, 12).map((o) => { const p = people[o.discord_id] || {}; const dc = (DEPARTMENTS.find((x) => x.name === o.department) || {}).color || '#3a82d0';
@@ -1401,7 +1401,7 @@ async function renderSessions(body) {
       <div class="ss-actions"><button class="ghost danger" id="ss-end">End session</button></div>
     </section>`;
   })() : `<section class="card ss-idle"><div><strong class="ss-idle-t">No session running</strong>
-      <span class="muted">${upcoming[0] ? 'Next: ' + esc(whenAhead(upcoming[0].scheduled_for)) : 'Nothing scheduled'} · Join code <strong>${esc(code)}</strong></span></div>
+      <span class="muted">${upcoming[0] ? 'Next: ' + esc(whenAhead(upcoming[0].scheduled_for)) : 'Nothing scheduled'} · Join code <strong>${esc(code)}</strong></span>${joinGameBtn(code, 'small')}</div>
       <div class="ss-actions"><button class="ghost" id="ss-new-sched">Schedule</button><button class="refresh" id="ss-new-live">Start a session now</button></div></section>`;
 
   body.innerHTML = `<div class="pg-sess">
@@ -1576,12 +1576,23 @@ function sessionForm(slot, mode, opts, ctx) {
 // Under the Welcome card: the Maple Hospital custom server and its join code (pinned; the owner will say if it
 // changes). Live / next-session status comes once the sessions back end is ready.
 let joinCode = '4920-4087';   // fallback; the live value comes from settings or the session
+// "Join game" (owner, 18 Nov 2026): a Roblox link that loads straight into the CBH server in Maple Hospital, built from
+// the CURRENT join code. launchData is the JSON {"serverCode": code}; on phones the Roblox app picks the link up.
+const ROBLOX_PLACE = 8704997000;
+function robloxJoinUrl(code) {
+  return code ? `https://www.roblox.com/games/start?launchData=${encodeURIComponent(JSON.stringify({ serverCode: String(code) }))}&placeId=${ROBLOX_PLACE}` : '';
+}
+function joinGameBtn(code, cls = '') {
+  const u = robloxJoinUrl(code);
+  return u ? `<a class="join-game${cls ? ' ' + cls : ''}" href="${esc(u)}" target="_blank" rel="noopener" aria-label="Join game: open Maple Hospital in Roblox">Join game</a>` : '';
+}
 let currentSession = null;   // what the home banner shows; the Sessions tile repeats it
 function buildSessionBanner(sess) {
   currentSession = sess;
   const live = sess && sess.live, next = sess && sess.next;
   joinCode = (live && live.join_code) || (sess && sess.code) || joinCode;
   $('join-code').textContent = joinCode;
+  $('join-game').href = robloxJoinUrl(joinCode);
   const banner = $('session'), label = $('session-label'), status = $('session-status');
   banner.classList.toggle('is-live', !!live);
   if (live) {

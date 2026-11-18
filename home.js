@@ -432,7 +432,7 @@ function drawLive() {
       ${canSee('sessions') ? `<a class="h-live-link" href="${canSee('director') ? '#directors/sessions' : '#admin/sessions'}">Session details</a>` : ''}</div>
     <div class="h-live-grid">
       <div class="h-panel"><span class="h-plabel">JOIN CODE</span><strong class="h-big">${esc(live.join_code || s.code || joinCode)}</strong>
-        <button class="h-white" id="h-copy">Copy code</button></div>
+        <div class="h-row"><button class="h-white" id="h-copy">Copy code</button>${joinGameBtn(live.join_code || s.code || joinCode, 'on-dark')}</div></div>
       ${canSee('staff') ? `<div class="h-panel"><span class="h-plabel">${me ? 'YOUR SHIFT · ' + esc(me.department).toUpperCase() : 'YOUR SHIFT'}</span>
         ${me ? `<strong class="h-big" data-tick="live-clock">${clock(shiftSecs(me))}</strong>
           <div class="h-row"><button class="h-glassbtn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button><button class="h-teal" id="h-end">End shift</button></div>`
@@ -487,7 +487,7 @@ function drawIdle(el, h, s) {
       : '';
   el.innerHTML = `<section class="h-idle" aria-label="Session and shift">
       <div class="h-idle-part"><span class="h-plabel-d"><span class="h-idle-dot${s.next ? ' next' : ''}"></span>SESSION</span>
-        <div class="h-row"><span class="h-idle-sess">${sessText}</span><span class="h-idle-code">Join code <strong>${esc(code)}</strong></span>
+        <div class="h-row"><span class="h-idle-sess">${sessText}</span><span class="h-idle-code">Join code <strong>${esc(code)}</strong></span>${joinGameBtn(code, 'small')}
         ${sessHref ? `<a class="ghost small-btn h-idle-link" href="${sessHref}">${s.next ? 'Sessions' : 'Start a session'}</a>` : ''}</div></div>
       ${shiftPart}
     </section>`;

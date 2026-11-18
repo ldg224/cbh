@@ -158,7 +158,8 @@
     const head = live ? 'Session live' : next ? 'Next session' : 'Maple Hospital';
     const meta = live ? (live.host_name ? 'Hosted by ' + cleanName(live.host_name) : '') : next ? whenAhead(next.scheduled_for) : '';
     return `<div class="ds-session${live ? ' live' : ''}"><div class="ds-srow"><span class="ds-live">${head}</span>${meta ? `<span class="ds-smeta" style="margin-left:auto">${esc(meta)}</span>` : ''}</div>
-      ${code ? `<div class="ds-srow"><span class="ds-smeta">Join code</span><span class="ds-code">${esc(code)}</span><button class="ds-mini" type="button" data-desk="copy">Copy</button></div>` : ''}</div>`;
+      ${code ? `<div class="ds-srow"><span class="ds-smeta">Join code</span><span class="ds-code">${esc(code)}</span><button class="ds-mini" type="button" data-desk="copy">Copy</button></div>
+        ${typeof joinGameBtn === 'function' ? joinGameBtn(code, 'ds-join') : ''}` : ''}</div>`;
   }
   function meCard() {
     const me = data?.me, name = me ? cleanName(me.display_name) : $('name').textContent;
