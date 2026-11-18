@@ -199,6 +199,16 @@
         "id": "2862",
         "commonName": "lock",
         "use": "Roles: role the bot can't change"
+      },
+      "stethoscope": {
+        "id": "9519",
+        "commonName": "stethoscope",
+        "use": "Medical department"
+      },
+      "scalpel": {
+        "id": "9500",
+        "commonName": "scalpel",
+        "use": "Surgical department"
       }
     }
   }
