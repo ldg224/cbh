@@ -10,7 +10,9 @@
 const DP_STATUS = { pending: 'Pending', done: 'Done', failed: 'Failed' };
 const DP_ST_CLASS = { pending: 'sub-pending', done: 'sub-accepted', failed: 'sub-denied' };
 const DP_INACTIVE_DAYS = 14;
-const dpTab = {};          // last tab per department, for this visit
+// A tab to reopen on the page's OWN next redraw (after saving a meeting, adding someone...), used once. A link with no
+// tab (#directors/<dept>, the Overview link) always opens Overview (0.33.1: it used to reopen the last tab you'd seen).
+const dpTab = {};
 // Extra tabs other pages add to every department page (e.g. Applications, applications.js):
 //   window.DEPT_TABS.push({ id, label, show(dept) -> boolean, render(el, dept), count?(dept) -> Promise<number> })
 // They appear after History (before Ranks & permissions). Deep link: #directors/<dept id>/<tab id>.
@@ -73,7 +75,7 @@ async function renderDept(body, tool) {
           <span class="dp-pill">${exec ? 'Executive View' : director ? 'You direct this department' : esc((window.myRanks || []).filter((r) => r.department === dept).sort((a, b) => b.rank_order - a.rank_order)[0]?.rank_label || 'Team view')}</span></div></div>
     </section>`;
   // Overview's own data starts now, alongside the department's, instead of after it.
-  if ((seeDept || member) && (!linked || linked === 'overview') && (dpTab[dept] || 'overview') === 'overview' && window.dvPrefetch) window.dvPrefetch(dept);
+  if ((seeDept || member) && (!linked || linked === 'overview') && !dpTab[dept] && window.dvPrefetch) window.dvPrefetch(dept);
   body.innerHTML = `${bannerHtml}
     <div class="dp-tabwrap" aria-hidden="true"><div class="dp-tabs dp-tabs-sk">${['70px', '58px', '54px', '64px'].map((w) => `<span class="dp-tsk">${sk(w, 12)}</span>`).join('')}</div></div>
     <div aria-busy="true" aria-label="Loading ${esc(dept)}">${window.dvOvSkel ? window.dvOvSkel() : `<div class="card">${lines('40%', '70%', '55%')}</div>`}</div>`;
@@ -202,8 +204,9 @@ async function renderDept(body, tool) {
   const secOf = {};   // the open toggle on Events and Manage
   if (linked) [linked, linkedSub] = resolve(linked, linkedSub);
   if (!TABS.length) { body.innerHTML = `${bannerHtml}<div class="card"><p class="muted small">${outsider ? `You’re not in ${esc(dept)}.` : `You don’t have anything to see in ${esc(dept)} yet.`}</p></div>`; return; }
-  if (!linked && ALIAS[dpTab[dept]]) secOf[ALIAS[dpTab[dept]][0]] = ALIAS[dpTab[dept]][1];   // e.g. back to Meetings after saving one
-  let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || (dpTab[dept] && resolve(dpTab[dept])[0]) || TABS[0].id;
+  const reopen = dpTab[dept]; delete dpTab[dept];
+  if (reopen && ALIAS[reopen]) secOf[ALIAS[reopen][0]] = ALIAS[reopen][1];   // e.g. back to Meetings after saving one
+  let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || (reopen && resolve(reopen)[0]) || TABS[0].id;
   if (!TABS.some((t) => t.id === tab)) tab = TABS[0].id;
   body.innerHTML = `
     ${bannerHtml}
@@ -228,7 +231,7 @@ async function renderDept(body, tool) {
     let [id, sub] = resolve(id0, sub0 ?? (id0 === linked ? linkedSub : ''));
     if (id0 === linked) linkedSub = '';
     if (!TABS.some((t) => t.id === id)) id = TABS[0].id;
-    tab = dpTab[dept] = id;
+    tab = id;
     if (SECS[id]) {
       const has = (k) => SECS[id].some(([x]) => x === k);
       sub = has(sub) ? sub : has(secOf[id]) ? secOf[id] : SECS[id][0][0];

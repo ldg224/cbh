@@ -20,7 +20,11 @@ const dvRankColour = (dept, label) => { const r = (dvRanks[dept] || []).find((x)
 const dvBadge = (dept, label) => (label ? `<span class="rbadge dv-rank" style="--c:${dvRankColour(dept, label)}"><span class="rl">${esc(label)}</span></span>` : '');
 const dvMins = (m) => { m = Math.round(Number(m || 0)); return m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}` : `${m}m`; };
 const dvHello = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
-const dvFirst = () => cleanName(($('name')?.textContent || '').trim()).split(/\s+/)[0] || '';
+// The name in the Overview greeting: the first name, or title + name when the name starts with one ("Dr. Turtle", not
+// "Dr."; 0.33.1).
+const DV_TITLE = /^(dr|doctor|prof|professor|nurse|sister|mr|mrs|ms|mx|miss|sir|dame|capt|captain|chief|sgt|lt)\.?$/i;
+const dvFirst = () => { const w = cleanName(($('name')?.textContent || '').trim()).split(/\s+/).filter(Boolean);
+  return w.length > 1 && DV_TITLE.test(w[0]) ? w[0] + ' ' + w[1] : w[0] || ''; };
 const dvDeptOf = (name) => DEPARTMENTS.find((d) => d.name === name);
 
 // ---------- events ----------
