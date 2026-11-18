@@ -25,6 +25,12 @@
     }, 1500);
   }
   window.addEventListener('hashchange', () => track());
+  // Department tabs, Courses and Applications change the address with history.replaceState, which fires no hashchange.
+  ['replaceState', 'pushState'].forEach((k) => {
+    const orig = history[k];
+    if (typeof orig !== 'function') return;
+    history[k] = function () { const out = orig.apply(this, arguments); try { track(); } catch { /* never break the page */ } return out; };
+  });
   window.addEventListener('load', () => track());   // the first page, once the login check has run
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { last = ''; track(); } });  // coming back counts again
 })();
