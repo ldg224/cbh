@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.36.0 (2026-11-19)
+
+**Changed:**
+- **Ranks & Permissions is now a Rank Editor:** pick a rank on the left and switch its permissions on the right, grouped and described in plain words. Each rank's office key and weekly target sit at the top; the department target and office guests have their own entry. On phones, tap a rank to open it.
+- Clearer permission names, such as See the whole department, Post department news, Change ranks (from X up to Y), Run meetings and Take attendance.
+
+Database change: no.
+
 ## 0.35.0 (2026-11-19)
 
 **Added:**
