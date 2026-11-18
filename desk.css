@@ -17,13 +17,14 @@ body.desk .page-head .back { display: none; }
 body.desk .desk-side, body.desk .desk-top { display: flex; }
 /* the window: two columns. Column 1 is the department's INNER MENU (#win-sub): 0 wide outside a department and
    228px inside one, so opening a department slides it in and the PAGE moves over; leaving reverses it (0.32.1,
-   owner). Column 2 holds everything else, starting at the window's left padding and filling up to 1180px. */
+   owner). Column 2 holds everything else, starting at the window's left padding and filling the window (0.32.3). */
 body.desk main { --pad: clamp(20px, 2.6vw, 36px); max-width: none; margin: 0 16px 0 0; padding: 0 0 40px; background: #fff; border-radius: 16px; overflow: hidden;
   box-shadow: 0 0 0 1px var(--win-line), 0 8px 28px rgba(11, 30, 74, .10); min-height: calc(100vh - var(--desk-top) - 16px); box-sizing: border-box;
   display: grid; grid-template-columns: 0px minmax(0, 1fr); align-content: start; transition: grid-template-columns .2s ease-out; }
 body.desk.in-dept main { grid-template-columns: 228px minmax(0, 1fr); }
 body.desk main::before { content: ""; grid-column: 2; grid-row: 1; height: 26px; }
-body.desk main > :not(.win-sub) { grid-column: 2; margin-left: var(--pad); margin-right: var(--pad); max-width: 1180px; width: auto; justify-self: stretch; box-sizing: border-box; }
+/* the PAGE uses the whole usable width and sits centred (owner, 0.32.3); the cap only matters on very large monitors */
+body.desk main > :not(.win-sub) { grid-column: 2; margin-left: var(--pad); margin-right: var(--pad); width: calc(100% - 2 * var(--pad)); max-width: 1680px; justify-self: center; box-sizing: border-box; }
 body.desk .foot { max-width: none; padding: 14px 16px 18px; margin: 0; }
 body.desk.in-dept .page-head:has(#page-title[hidden]) { display: none; }
 
