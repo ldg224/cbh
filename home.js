@@ -435,7 +435,7 @@ function drawLive() {
         <div class="h-row"><button class="h-white" id="h-copy">Copy code</button>${joinGameBtn(live.join_code || s.code || joinCode, 'on-dark')}</div></div>
       ${canSee('staff') ? `<div class="h-panel"><span class="h-plabel">${me ? 'YOUR SHIFT · ' + esc(me.department).toUpperCase() : 'YOUR SHIFT'}</span>
         ${me ? `<strong class="h-big" data-tick="live-clock">${clock(shiftSecs(me))}</strong>
-          <div class="h-row"><button class="h-glassbtn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button><button class="h-teal" id="h-end">End shift</button></div>`
+          <div class="h-row"><button class="h-glassbtn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button>${window.chartLogBtn ? window.chartLogBtn('home') : ''}<button class="h-teal" id="h-end">End shift</button></div>`
         : myDepartments.length ? `<strong class="h-big muted-w">Off shift</strong><div class="h-row">${homeDeptPicker()}<button class="h-teal" id="h-start">Start shift</button></div>`
         : '<span class="h-small">You need a department role to start a shift.</span>'}</div>` : ''}
       ${on.total != null ? `<div class="h-panel"><span class="h-plabel">ON SHIFT NOW</span>
@@ -480,7 +480,7 @@ function drawIdle(el, h, s) {
   const shiftPart = !staff ? '' : me
     ? `<div class="h-idle-part"><span class="h-plabel-d">YOUR SHIFT \u00b7 ${esc(me.department).toUpperCase()}</span>
         <div class="h-row"><strong class="h-idle-clock" data-tick="live-clock">${clock(shiftSecs(me))}</strong>
-        <button class="ghost small-btn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button><button class="refresh small-btn" id="h-end">End shift</button></div></div>`
+        <button class="ghost small-btn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button>${window.chartLogBtn ? window.chartLogBtn('home') : ''}<button class="refresh small-btn" id="h-end">End shift</button></div></div>`
     : myDepartments.length
       ? `<div class="h-idle-part"><span class="h-plabel-d">YOUR SHIFT</span><div class="h-row"><span class="h-idle-off">Off shift</span>
           ${homeDeptPicker()}<button class="refresh small-btn" id="h-start">Start shift</button></div></div>`
