@@ -83,6 +83,13 @@ returns text language sql stable security definer set search_path = '' as $$
   select coalesce((select m.display_name from public.members m where m.discord_id = who), who)
 $$;
 
+-- A staff member's rank in a department, e.g. "Year 3" (for the patient's DMs).
+create or replace function public.checkin_rank_label(who text, dept text)
+returns text language sql stable security definer set search_path = '' as $$
+  select r.rank_label from public.members m join public.roles r on r.id = any (m.role_ids)
+  where m.discord_id = who and r.department = dept and r.kind = 'rank' order by r.rank_order desc nulls last limit 1
+$$;
+
 -- Waiting order: ESI ascending (unset = 3, or 2 when pain >= 8), then longest wait.
 create or replace function public.checkin_waiting()
 returns table (id bigint, pos int) language sql stable security definer set search_path = '' as $$
@@ -93,6 +100,7 @@ $$;
 create or replace function public.checkin_json(kid bigint)
 returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object('id', k.id, 'case_id', k.case_id, 'state', k.state, 'first_name', left(split_part(c.patient_name, ' ', 1), 12),
+    'board_name', left(split_part(c.patient_name, ' ', 1), 12) || coalesce(' ' || upper(left(nullif(split_part(c.patient_name, ' ', 2), ''), 1)) || '.', ''),
     'name', c.patient_name, 'age', c.age, 'roblox_name', k.roblox_name, 'pain', k.pain, 'source', k.source,
     'position', (select w.pos from public.checkin_waiting() w where w.id = k.id),
     'waited_seconds', extract(epoch from coalesce(k.claimed_at, k.ended_at, now()) - k.created_at)::int,
@@ -116,7 +124,9 @@ returns jsonb language sql stable security definer set search_path = '' as $$
     'disposition_label', case c.disposition when 'discharged' then 'Discharged home' when 'admitted' then 'Admitted' when 'or' then 'Sent to surgery'
                            when 'transferred' then 'Transferred' when 'deceased' then 'Deceased' when 'ama' then 'Left against advice'
                            when 'lwbs' then 'Left before being seen' end,
-    'follow_up', c.follow_up, 'ended_at', coalesce(k.ended_at, c.closed_at))
+    'follow_up', c.follow_up, 'ended_at', coalesce(k.ended_at, c.closed_at),
+    'department', c.department, 'rank', public.checkin_rank_label(k.claimed_by, c.department),
+    'minutes', round(extract(epoch from coalesce(k.ended_at, c.closed_at, now()) - k.created_at) / 60)::int)
   from public.chart_checkins k join public.chart_cases c on c.id = k.case_id where k.id = kid
 $$;
 
@@ -141,7 +151,10 @@ begin
     values (new.id, new.discord_id, 'queued', jsonb_build_object('position', (select w.pos from public.checkin_waiting() w where w.id = new.id))) on conflict do nothing;
   elsif new.state is distinct from old.state then
     if new.state = 'claimed' then
-      insert into public.checkin_notices (checkin_id, discord_id, kind, detail) values (new.id, new.discord_id, 'claimed', jsonb_build_object('staff_name', new.claimed_by_name, 'position', 'c' || extract(epoch from new.claimed_at)::bigint)) on conflict do nothing;
+      insert into public.checkin_notices (checkin_id, discord_id, kind, detail) values (new.id, new.discord_id, 'claimed', jsonb_build_object('staff_name', new.claimed_by_name,
+        'department', (select x.department from public.checkin_staff_shift(new.claimed_by) x),
+        'rank', public.checkin_rank_label(new.claimed_by, (select x.department from public.checkin_staff_shift(new.claimed_by) x)),
+        'position', 'c' || extract(epoch from new.claimed_at)::bigint)) on conflict do nothing;
     elsif new.state = 'in_room' then
       insert into public.checkin_notices (checkin_id, discord_id, kind, detail) values (new.id, new.discord_id, 'in_room', jsonb_build_object('room', new.room)) on conflict do nothing;
     elsif new.state = 'discharged' then
@@ -559,7 +572,7 @@ do $g$
 declare f text;
 begin
   foreach f in array array['chart_actor(text)', 'checkin_live_session()', 'checkin_staff_shift(text)', 'checkin_name(text)', 'checkin_waiting()',
-                           'checkin_json(bigint)', 'checkin_notify_top()', 'checkin_summary_json(bigint)', 'checkin_apply_details(bigint, text, text, text, text)', 'checkin_after_change()', 'checkin_case_sync()', 'chart_add_core(bigint, text, jsonb, text)',
+                           'checkin_json(bigint)', 'checkin_notify_top()', 'checkin_summary_json(bigint)', 'checkin_apply_details(bigint, text, text, text, text)', 'checkin_rank_label(text, text)', 'checkin_after_change()', 'checkin_case_sync()', 'chart_add_core(bigint, text, jsonb, text)',
                            'chart_case_json(bigint)'] loop
     execute format('revoke execute on function public.%s from public, anon, authenticated', f);
   end loop;
