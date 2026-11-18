@@ -319,7 +319,7 @@ async function renderCases(body) {
     const ids = st.rows.filter((c) => c.status === 'pending').map((c) => c.id);
     if (!ids.length) return;
     maWatch = setInterval(async () => {
-      if (!body.isConnected || location.hash !== '#admin/cases') { clearInterval(maWatch); return; }
+      if (!body.isConnected || !location.hash.startsWith(adminHref('cases'))) { clearInterval(maWatch); return; }
       const { data } = await sb.from('mod_cases').select('*').in('id', ids);
       let changed = false;
       for (const c of data || []) {

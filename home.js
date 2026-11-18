@@ -197,8 +197,8 @@ function drawNeeds() {
       else notes.push({ ico: 'graduation-cap', c: '#e8890c', t: `Finish ${cr.title}`, s: d.name + (due ? ' · due ' + due : '') + by, b: 'Open', href: '#courses/' + encodeURIComponent(cr.id) });
     }
   }
-  if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: '#admin/cases' });
-  const tk = canSee('admin') ? '#admin/tickets' : canSee('leads') ? '#tickets' : '';
+  if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: adminHref('cases') });
+  const tk = canSee('admin') ? adminHref('tickets') : canSee('leads') ? '#tickets' : '';
   if (n0(h.tickets_open) && tk) out.push({ ico: 'inbox', c: '#3a82d0', t: `${plural(n0(h.tickets_open), 'ticket')} open`,
     s: h.tickets_latest && h.tickets_latest.name ? `Latest from ${cleanName(h.tickets_latest.name)}${h.tickets_latest.team ? ' · ' + h.tickets_latest.team : ''}` : 'Waiting for a reply', b: 'Reply', href: tk });
   const sec = $('h-need-sec');
@@ -509,7 +509,7 @@ function tickHome() {
 function drawSuggestions(tools) {
   const h = HC || {}, has = (k) => tools.find((t) => t.key === k), out = [];
   const s = h.session || currentSession || {};
-  if (n0(h.failed_mine)) out.push({ cls: 'bad', text: `${plural(n0(h.failed_mine), 'action')} didn’t go through: see why`, href: '#admin/cases' });
+  if (n0(h.failed_mine)) out.push({ cls: 'bad', text: `${plural(n0(h.failed_mine), 'action')} didn’t go through: see why`, href: adminHref('cases') });
   if (h.my_shift) out.push({ cls: 'teal', text: `End shift · ${hrs(shiftSecs(h.my_shift))} so far`, run: async () => { if (confirm('End your shift?')) { const { error } = await sb.rpc('shift_end'); if (error) alert(error.message); renderHome(); } } });
   const appsTool = has('admin/applications') || has('review');
   if (n0(h.apps_waiting) && appsTool) out.push({ cls: 'warm', text: `Review ${plural(n0(h.apps_waiting), 'application')}`, href: appsTool.href });
@@ -533,9 +533,9 @@ let pendingRecord = null, pendingCase = null;
 // hashchange run then showed the empty Records page.)
 function openRecord(id) {
   pendingRecord = id;
-  if (location.hash === '#admin/records') route(); else location.hash = '#admin/records';
+  if (location.hash.startsWith(adminHref('records'))) route(); else location.hash = adminHref('records');
 }
-function startCase(action, person) { pendingCase = { action, person }; if (location.hash === '#admin/cases') route(); else location.hash = '#admin/cases'; }
+function startCase(action, person) { pendingCase = { action, person }; if (location.hash.startsWith(adminHref('cases'))) route(); else location.hash = adminHref('cases'); }
 function searchActions() {
   const a = [], h = HC || {};
   if (canSee('staff') && myDepartments.length) {
@@ -547,8 +547,8 @@ function searchActions() {
     const href = canSee('director') ? '#directors/sessions' : '#admin/sessions';
     a.push({ title: 'Start a session now', words: 'session start host maple', href }, { title: 'Schedule a session', sub: 'for Maple Hospital', words: 'session schedule plan', href });
   }
-  if (canSee('admin')) a.push({ title: 'New mod action', words: 'warn timeout kick ban unban punish', href: '#admin/cases' });
-  if (canSee('exec')) a.push({ title: 'Change the join code', sub: 'Bot settings', words: 'join code maple settings', href: '#exec/settings' });
+  if (canSee('admin')) a.push({ title: 'New mod action', words: 'warn timeout kick ban unban punish', href: adminHref('cases') });
+  if (canSee('exec')) a.push({ title: 'Change the join code', sub: 'Bot settings', words: 'join code maple settings', href: adminHref('settings') });
   a.push({ title: 'Contact a team', words: 'help support ticket', href: '#contact' });
   return a;
 }

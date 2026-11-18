@@ -262,3 +262,6 @@ button.dp-quiet:hover { filter: brightness(.96); text-decoration: underline; }
 .dp-oadd { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 10px; }
 .dp-oadd-btn { border: 0; background: var(--teal); color: var(--text); font-weight: 700; }
 @media (max-width: 560px) { .dp-oadd { grid-template-columns: minmax(0, 1fr); } }
+/* Hospital tools on the Administration page (admin-tools.js, 0.29.0): a divider before the tool tabs */
+.dp-tsep { flex: none; width: 1px; align-self: stretch; margin: 8px 6px; background: var(--line); }
+.dp-toolpane > .card:first-child, .dp-toolpane > :first-child { margin-top: 0; }

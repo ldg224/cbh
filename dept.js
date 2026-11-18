@@ -14,6 +14,7 @@ const dpTab = {};          // last tab per department, for this visit
 //   window.DEPT_TABS.push({ id, label, show(dept) -> boolean, render(el, dept), count?(dept) -> Promise<number> })
 // They appear after History (before Ranks & permissions). Deep link: #directors/<dept id>/<tab id>.
 window.DEPT_TABS = window.DEPT_TABS || [];
+const dpShows = (x, dept) => { try { return !!x.show(dept); } catch { return false; } };
 // Extra cells on each Members row from other pages (e.g. course progress, courses.js):
 //   window.DEPT_MEMBER_EXTRAS.push({ id, label, load: async (dept) => Map(discord_id -> { html, sort, title }) })
 // `html` is drawn as a small chip before the rank (it must be safe HTML built by that page); `sort` (a number,
@@ -145,8 +146,10 @@ async function renderDept(body, tool) {
     ...((seeDept || can('courses.manage') || can('courses.assess')) && !window.DEPT_TABS.some((x) => x.id === 'courses') ? [{ id: 'courses', label: 'Courses', soon: true }] : []),
     ...(seeDept || manageMt || attMt ? [{ id: 'meetings', label: 'Meetings', n: upcoming.length || null }] : []),
     ...(seeHist ? [{ id: 'history', label: 'History', n: hist.length || null }] : []),
-    ...window.DEPT_TABS.filter((x) => { try { return x.show(dept); } catch { return false; } }).map((x) => ({ id: x.id, label: x.label, ext: x })),
+    ...window.DEPT_TABS.filter((x) => !x.tool && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x })),
     ...(director ? [{ id: 'ranks', label: 'Ranks & permissions' }] : []),
+    // Hospital tools (Administration only, by permission; admin-tools.js), after a divider.
+    ...window.DEPT_TABS.filter((x) => x.tool && dpShows(x, dept)).map((x, i) => ({ id: x.id, label: x.label, ext: x, first: i === 0 })),
   ];
   if (!TABS.length) { body.innerHTML = `<div class="card"><p class="muted small">You don’t have anything to see in ${esc(dept)} yet.</p></div>`; return; }
   let tab = (linked && TABS.some((t) => t.id === linked) ? linked : null) || dpTab[dept] || TABS[0].id;
@@ -164,7 +167,7 @@ async function renderDept(body, tool) {
         <div class="dp-stat"><b>${nextMeet ? (nextMeet.status === 'live' ? 'Now' : esc(dpDayShort(nextMeet.scheduled_for))) : 'None'}</b><span>${nextMeet && nextMeet.status === 'live' ? 'Meeting on' : 'Next meeting'}</span></div>
       </div>` : ''}
     </section>
-    <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}">${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
+    <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `${t.first && TABS.some((x) => !(x.ext && x.ext.tool)) ? '<span class="dp-tsep" aria-hidden="true"></span>' : ''}<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}"${t.ext && t.ext.tool ? ' class="dp-tooltab"' : ''}>${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
     <p class="error" id="dp-err" hidden></p>
     <div id="dp-pane" role="tabpanel"></div>`;
   const pane = body.querySelector('#dp-pane'), tabsEl = body.querySelector('.dp-tabs');

@@ -50,7 +50,10 @@ async function fetchMine() {
     fetchSession(),
     // Rank permissions per department (migration 0027): {"Nursing": ["dept.view", ...]}. Directors and execs have all.
     sb.rpc('my_perms').then((r) => r.data || {}, () => ({})),
+    // Hospital permissions (0050): the Administration tool tabs show by permission (admin-tools.js).
+    sb.rpc('my_hperms').then((r) => { window.myHperms = r.data || []; }, () => { window.myHperms = []; }),
   ]);
+  window.myRanks = roles.filter((r) => r.kind === 'rank');
   return { me, roles, departments, access: acc, session: sess, perms };
 }
 
@@ -451,13 +454,8 @@ async function loadDepartments() {
   } catch { /* keep the built-in list */ }
 }
 const PAGES = [
-  { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [
-    { id: 'reports',  title: 'Activity',      icon: 'bar-chart', layout: 'reports' },
-    { id: 'strikes',  title: 'Strikes',       icon: 'error',     layout: 'list', building: true },
-    { id: 'announce', title: 'Announcements', icon: 'megaphone', layout: 'form', building: true },
-    { id: 'settings', title: 'Bot settings',  icon: 'settings',  layout: 'settings' },
-    { id: 'roles',    title: 'Roles',         icon: 'star',      layout: 'roles' },   // role editor (roles.js, R1)
-  ] },
+  // The Executive and Admin hub tools are tabs on the Administration page since 0.29.0 (admin-tools.js); old links redirect.
+  { id: 'exec', aud: 'exec', title: 'Executive hub', icon: 'crown', wide: true, tools: [] },
   // Directors hub: sessions, plus one page per department for its Director (execs see all four).
   { id: 'directors', aud: 'director', title: 'Directors hub', icon: 'org-chart', wide: true, tools: [
     { id: 'sessions', title: 'Sessions', icon: 'calendar', layout: 'sessions', wide: true },   // pinned on top
@@ -465,10 +463,6 @@ const PAGES = [
   ] },
   { id: 'admin', aud: 'admin', title: 'Admin hub', icon: 'shield', wide: true, tools: [
     { id: 'sessions',     title: 'Sessions',     icon: 'calendar', layout: 'sessions' },
-    { id: 'cases',        title: 'Mod actions',  icon: 'law',     layout: 'cases' },
-    { id: 'logs',         title: 'Discord logs', icon: 'history', layout: 'logs' },
-    { id: 'records',      title: 'Records',      icon: 'user-folder', layout: 'records' },
-    { id: 'tickets',      title: 'Tickets',      icon: 'inbox',   layout: 'tickets' },
     { id: 'applications', title: 'Applications', icon: 'resume',  layout: 'review', aud: 'reviewer' },
   ] },
   { id: 'shifts',   aud: 'staff',    title: 'Shifts',         icon: 'clock',   layout: 'shifts' },
@@ -512,6 +506,8 @@ function setDirectorAccess(directs, roles, exec, runSessions) {
   // (the page then shows only those tabs; dept.js). activity.view / members.edit alone need dept.view to show anything.
   const PAGE_PERMS = ['dept.view', 'history.view', 'meetings.manage', 'meetings.attendance', 'courses.manage', 'courses.assess', 'applications.review', 'applications.settings'];
   for (const d of DEPARTMENTS) access['dir:' + d.name] = myDirects.includes(d.name) || (myPerms[d.name] || []).some((x) => PAGE_PERMS.includes(x));
+  // The Administration page also opens for anyone who may use one of its tool tabs (admin-tools.js, 0.29.0).
+  if (typeof anyAdminTool === 'function' && anyAdminTool()) access['dir:Administration'] = true;
   access.director = exec || DEPARTMENTS.some((d) => access['dir:' + d.name]);
   access.sessions = runSessions ?? (access.director || access.admin);
   // Sessions sit in both hubs; show them once, in the Directors hub, to people who can see it.
@@ -654,6 +650,7 @@ function findRoute() {
   // #review/<id>, older Discord posts) open that application in its department's Applications tab.
   const legacy = location.hash.match(/^#(?:admin\/applications|review)\/(\d+)/);
   if (legacy && typeof appLegacyLink === 'function') { appLegacyLink(+legacy[1]); return null; }
+  if (typeof redirectHubLink === 'function' && redirectHubLink()) return null;   // #admin/... and #exec/... moved (0.29.0)
   const [a, b] = location.hash.slice(1).split('/');
   if (a === 'f') {   // a folder opened as its own page (home.js)
     const folder = FOLDERS.find((f) => f.id === b);
@@ -780,7 +777,7 @@ async function loadFailNotices() {
   // 0.15.x: one calm line ("2 of your actions didn't go through") that expands, instead of a stack of red bars.
   // Mod actions shows these in its own list, so the line hides there.
   const box = $('fail-notes');
-  if (!myDiscordId || !access.admin || location.hash === '#admin/cases') { box.hidden = true; return; }
+  if (!myDiscordId || !access.admin || location.hash.startsWith(adminHref('cases'))) { box.hidden = true; return; }
   const { data, error } = await sb.from('mod_cases').select('id, action, target_name, error')
     .eq('status', 'failed').eq('moderator_discord_id', myDiscordId).is('dismissed_at', null).order('id', { ascending: false }).limit(10);
   if (error) return;   // e.g. before the database has dismissed_at: show nothing rather than an error
@@ -793,7 +790,7 @@ async function loadFailNotices() {
   box.innerHTML = `<div class="fail-note" role="status">
       <span class="fn-ico" aria-hidden="true"></span>
       <button type="button" class="fn-sum" aria-expanded="${open}" aria-controls="fn-list">${data.length === 1 ? '1 of your actions' : data.length + ' of your actions'} didn\u2019t go through</button>
-      <a class="fn-go" href="#admin/cases">Open Mod actions</a>
+      <a class="fn-go" href="${adminHref('cases')}">Open Mod actions</a>
       <button type="button" class="fn-x" aria-label="Dismiss all">&times;</button></div>
     <ul class="fn-list" id="fn-list" ${open ? '' : 'hidden'}>${data.map((c) => `<li><strong>${esc(ACTION_LABEL[c.action] || c.action)} on ${esc(cleanName(c.target_name || ''))}:</strong> ${esc(c.error || 'it didn\u2019t go through.')}</li>`).join('')}</ul>`;
   box.querySelector('.fn-sum').onclick = (e) => {

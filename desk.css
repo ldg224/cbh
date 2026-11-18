@@ -175,3 +175,7 @@ body.desk .h-sec { margin-top: 26px; }
 .ds-switch input:checked + .ds-sw::after { transform: translateX(14px); }
 .ds-switch input:focus-visible + .ds-sw { outline: 2px solid var(--blue); outline-offset: 2px; }
 @media (max-width: 560px) { .hd-opts { padding-left: 0; } }
+/* A thin divider before the Administration tool links (0.29.0) */
+.ds-subsep { display: block; height: 1px; margin: 6px 10px 6px 14px; background: var(--line); }
+/* Phone tabs: as many as there are (CBH Chart adds a middle one while on shift) */
+@media (max-width: 860px) { .desk-tabs { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); } }

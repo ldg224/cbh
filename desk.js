@@ -79,27 +79,17 @@
       can('dept.view') && { href: base + '/members', label: 'Members', icon: 'people', tab: 'members', ...cnt('members') },
       (can('dept.view') || can('courses.manage') || can('courses.assess')) && !ext.some((x) => x.id === 'courses') && { href: base + '/courses', label: 'Courses', icon: 'graduation-cap', tab: 'courses', tag: 'Soon' },
       (can('dept.view') || can('meetings.manage') || can('meetings.attendance')) && { href: base + '/meetings', label: 'Meetings', icon: 'calendar', tab: 'meetings', ...cnt('meetings') },
-      ...ext.map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.id === 'applications' ? 'resume' : x.id === 'courses' ? 'graduation-cap' : 'clipboard', tab: x.id, ...cnt(x.id) })),
+      ...ext.filter((x) => !x.tool).map((x) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.icon || (x.id === 'applications' ? 'resume' : x.id === 'courses' ? 'graduation-cap' : 'clipboard'), tab: x.id, ...cnt(x.id) })),
       can('history.view') && { href: base + '/history', label: 'History', icon: 'history', tab: 'history', ...cnt('history') },
       director && { href: base + '/ranks', label: 'Ranks & permissions', icon: 'star', tab: 'ranks' },
+      // Hospital tools (Administration, by permission; admin-tools.js 0.29.0), after a divider.
+      ...ext.filter((x) => x.tool).map((x, i) => ({ href: `${base}/${x.id}`, label: x.label, icon: x.icon || 'clipboard', tab: x.id, sep: i === 0 })),
     ].filter(Boolean);
   }
   function rankIn(d) {
     if (myDirects.includes(d.name) && !access.exec) return 'Director';
     const r = (data?.roles || []).filter((x) => x.kind === 'rank' && x.department === d.name).sort((a, b) => b.rank_order - a.rank_order)[0];
     return r ? r.rank_label : access.exec ? 'Executive' : '';
-  }
-  function hospitalTools() {
-    const out = [];
-    for (const p of PAGES.filter((x) => (x.id === 'admin' || x.id === 'exec') && x.tools)) {
-      for (const t of p.tools) {
-        // The page itself must be open to them (non-admins can't open #admin/...), and Applications live in each
-        // department's page since v2, so the old hub link would only send people Home or duplicate a department link.
-        if (t.building || t.layout === 'sessions' || t.layout === 'review' || !canSee(p.aud) || !canSee(toolAud(p, t))) continue;
-        out.push({ href: `#${p.id}/${t.id}`, label: t.title, icon: t.icon });
-      }
-    }
-    return out;
   }
 
   // ---------- drawing ----------
@@ -120,11 +110,10 @@
     const b = !isOpen && badge;   // opened: the counts move onto the pages inside
     return `<button class="ds-dept${isOpen ? ' open' : ''}" type="button" data-fold="${key}" aria-expanded="${isOpen}" aria-label="${esc(name)}${badge ? `, ${badge.n} ${badge.sev === 'orange' ? 'notes' : 'waiting'}` : ''}" style="--c:${color};${icon(ic)}">
         <span class="ds-tile"></span><span class="ds-dname"><b>${esc(name)}</b>${small ? `<small>${esc(small)}</small>` : ''}</span>${b ? `<span class="ds-n${b.sev === 'orange' ? ' orange' : ''}">${b.n}</span>` : ''}${chev}</button>
-      ${isOpen ? `<div class="ds-sub" style="--c:${color}">${items.map((it) => link(it, color)).join('')}</div>` : ''}`;
+      ${isOpen ? `<div class="ds-sub" style="--c:${color}">${items.map((it) => (it.sep ? '<span class="ds-subsep" aria-hidden="true"></span>' : '') + link(it, color)).join('')}</div>` : ''}`;
   }
   function drawSide() {
     const depts = DEPARTMENTS.filter((d) => canSee('dir:' + d.name) && deptPages(d).length);
-    const hosp = hospitalTools();
     // Redrawing on every page change used to reset the nav to the top (user, 18 Nov 2026): keep its scroll position.
     const before = side.querySelector('.ds-nav'), keepTop = before ? before.scrollTop : 0;
     side.innerHTML = `
@@ -132,11 +121,11 @@
       <button class="ds-search" type="button" data-desk="search"><span class="ds-i" style="${icon('search')};width:16px;height:16px;background:currentColor;-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat"></span>Search or do anything<kbd>/</kbd></button>
       <nav class="ds-nav" aria-label="Pages">
         ${link({ href: '#', label: 'Home', icon: 'home' })}
+        ${window.chartNav ? window.chartNav(link) : ''}
         <div class="ds-cat">My stuff</div>
         ${myStuff().map((it) => link(it)).join('')}
         ${depts.length ? `<div class="ds-cat">Departments</div>` : ''}
         ${depts.map((d) => folder(d.id, d.name, rankIn(d), d.icon, d.color, deptPages(d), folderBadge(d))).join('')}
-        ${hosp.length ? `<div class="ds-cat">Hospital</div>${folder('hospital', 'Hospital tools', access.exec ? 'Executive' : 'Administration', 'shield', '#22579f', hosp)}` : ''}
         <div class="ds-cat">Help</div>
         ${link({ href: '#rules', label: 'Rules & info', icon: 'book' })}${link({ href: '#commands', label: 'Commands', icon: 'console' })}
       </nav>
@@ -175,6 +164,7 @@
       <button class="ds-out" type="button" data-desk="logout" aria-label="Log out" title="Log out"><span style="${icon('logout')}"></span></button></div>
       <div class="ds-prefs" hidden><label class="ds-switch"><input type="checkbox" data-desk="quiet"${quietNotes ? ' checked' : ''}><span class="ds-sw" aria-hidden="true"></span>
         <span>Show quiet-member notes<small>Pings when people in your departments haven\u2019t been active</small></span></label></div>
+      ${shift && window.chartLogBtn ? window.chartLogBtn('ds') : ''}
       ${canShift ? `<button class="ds-clock${shift ? ' end' : ''}" type="button" data-desk="clock">${shift ? (Date.now() < endArmed ? 'Tap again to clock out' : 'Clock out') : 'Clock in' + (myDepartments.length === 1 ? ' to ' + esc(myDepartments[0]) : '')}</button>` : ''}</div>`;
   }
   function drawTabs() {
@@ -185,7 +175,8 @@
       canSee('staff') && myDepartments.length ? { href: '#shifts', label: 'Shift', icon: 'clock' } : { href: '#contact', label: 'Contact', icon: 'chat' },
     ];
     const cur = (it) => (it.dept ? hash().startsWith(it.href) : it.href === '#' ? hash() === '#' : hash() === it.href);
-    tabs.innerHTML = items.map((it) => { const b = it.dept ? folderBadge(it.dept) : null;
+    if (shift && window.chartTab) items.splice(Math.floor(items.length / 2), 0, { raw: window.chartTab() });   // CBH Chart (Delta)
+    tabs.innerHTML = items.map((it) => { if (it.raw) return it.raw; const b = it.dept ? folderBadge(it.dept) : null;
       return `<a href="${it.href}"${cur(it) ? ' aria-current="page"' : ''}><span class="dt-i" style="${icon(it.icon)}"></span>${esc(it.label)}${b ? `<span class="ds-n${b.sev === 'orange' ? ' orange' : ''}">${b.n}</span>` : ''}</a>`; }).join('')
       + `<button type="button" data-desk="drawer"><span class="dt-i" style="${icon('menu')}"></span>Menu</button>`;
   }
@@ -280,5 +271,6 @@
     if (!$('home').hidden && typeof drawNeeds === 'function' && $('h-need-sec')) drawNeeds();
   };
   window.deskRefresh = drawAll;   // after the session banner or access changes
+  window.deskShift = () => shift;   // the current shift (or null), for chart.js
   window.deskOff = () => { data = null; shift = null; document.body.classList.remove('desk', 'desk-open'); };
 })();
