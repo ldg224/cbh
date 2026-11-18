@@ -153,6 +153,7 @@
       <button class="dt-search" type="button" data-desk="search" aria-label="Search"><span class="dt-si" style="${icon('search')}" aria-hidden="true"></span><span class="dt-st">Search or do anything</span><kbd>/</kbd></button>
       ${live || (s && s.next) ? `<div class="dt-live${live ? ' on' : ''}"><span class="dt-ld" aria-hidden="true"></span><span class="dt-lt">${live ? 'Session live' : esc('Next session ' + whenAhead(s.next.scheduled_for))}${code ? ` · <b>${esc(code)}</b>` : ''}</span>${live && code && typeof joinGameBtn === 'function' ? joinGameBtn(code, 'dt-join') : ''}</div>` : ''}
       ${canShift ? `<button class="dt-clock${shift ? ' end' : ''}" type="button" data-desk="clock"><span class="dt-cd" aria-hidden="true"></span>${shift ? (Date.now() < endArmed ? 'Tap again to end' : 'End shift') : 'Start shift'}</button>` : ''}
+      ${window.execReal ? `<button class="dt-exec${window.execViewOn() ? ' on' : ''}" type="button" role="switch" data-desk="exec" aria-checked="${window.execViewOn()}" title="${window.execViewOn() ? 'Executive view is on: you see everything. Turn it off to see the site as your own ranks.' : 'Executive view is off: you see the site as your own ranks. Turn it on to see everything.'}"><span class="dt-exsw" aria-hidden="true"></span><span class="dt-exl">Exec</span></button>` : ''}
       <button class="dt-you" type="button" data-desk="you" aria-label="You: ${esc(name)}" aria-expanded="${wasOpen}" aria-haspopup="true"><span class="ds-av ${state}">${photo ? `<img src="${esc(photo)}" alt="">` : `<span class="ds-ini">${esc(ini)}</span>`}</span></button>
       <div class="dt-menu" role="menu"${wasOpen ? '' : ' hidden'}>
         <div class="dt-who"><b>${esc(name)}</b><span>${esc(youSub)}</span></div>
@@ -233,6 +234,7 @@
       if (a === 'logout') return $('logout').click();
       if (a === 'quiet') { act.disabled = true; await window.deskSetQuietNotes(act.checked); setYou(true); return; }
       if (a === 'clock') return clock(act);
+      if (a === 'exec') { act.disabled = true; await window.execViewSet?.(!window.execViewOn()); top.querySelector('[data-desk="exec"]')?.focus(); return; }
       if (a === 'break') {
         act.disabled = true;
         const { error } = await sb.rpc('shift_break');
@@ -257,7 +259,24 @@
   // ---------- hooks for app.js ----------
   async function loadTodo() {
     const { data: t } = await sb.rpc('my_todo');
-    window.deskTodo = t || {};
+    window.deskTodo = window.execViewOff?.() ? asSelfTodo(t || {}) : (t || {});
+  }
+  // my_todo() answers as an owner; with the exec view off, keep only what the person's own ranks would get there.
+  function asSelfTodo(t) {
+    const out = {}, n = (v) => Number(v || 0);
+    for (const [dept, x0] of Object.entries(t)) {
+      if (!canSee('dir:' + dept)) continue;
+      const can = (p) => hasPerm(p, dept), x = { ...x0 };
+      if (!can('applications.review')) Object.assign(x, { apps: 0, apps_oldest: null });
+      if (!can('meetings.attendance') && !can('meetings.manage')) Object.assign(x, { attendance: 0, attendance_list: [] });
+      if (!can('activity.view')) Object.assign(x, { inactive: 0, inactive_note: 0, inactive_alert: 0, inactive_list: [] });
+      if (!can('history.view') && !can('members.edit')) x.failed = 0;
+      x.red = n(x.apps) + n(x.attendance) + n(x.failed) + n(x.inactive_alert) + n(x.courses);
+      x.orange = n(x.inactive_note) + n(x.courses_note);
+      x.total = n(x.apps) + n(x.attendance) + n(x.inactive) + n(x.failed) + n(x.courses) + n(x.courses_note);
+      out[dept] = x;
+    }
+    return out;
   }
   let quietNotes = true;   // user_prefs.quiet_notes (0049): show quiet-member notes
   async function loadPrefs() { const { data: p } = await sb.rpc('get_my_prefs'); quietNotes = !(p && p.quiet_notes === false); }

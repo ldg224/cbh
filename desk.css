@@ -55,6 +55,20 @@ body.desk.in-dept .page-head:has(#page-title[hidden]) { display: none; }
 .dt-cd { width: 8px; height: 8px; border-radius: 50%; background: var(--text); }
 .dt-clock.end { background: #fde3e4; color: #9b1c1f; } .dt-clock.end .dt-cd { background: #e5484d; }
 .dt-clock:disabled { opacity: .6; cursor: default; }
+/* Exec view switch (0.35.0): owners only. On = navy (the Executive colour) with a teal knob; off = plain white. */
+.dt-exec { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 8px; border-radius: 10px; border: 1px solid #c9d6e6;
+  background: #fff; color: var(--muted); font: inherit; font-size: 13px; font-weight: 800; letter-spacing: .02em; cursor: pointer; flex: none; white-space: nowrap; }
+.dt-exec:hover { border-color: var(--blue); color: var(--text); }
+.dt-exec:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.dt-exec:disabled { opacity: .6; cursor: default; }
+.dt-exsw { position: relative; width: 30px; height: 18px; border-radius: 999px; background: #c9d6e6; flex: none; transition: background .15s ease; }
+.dt-exsw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 2px rgba(11, 30, 74, .25); transition: transform .15s ease; }
+.dt-exec.on { background: linear-gradient(135deg, #0B1E4A, #22579F); border-color: #0B1E4A; color: #fff; }
+.dt-exec.on:hover { color: #fff; }
+.dt-exec.on .dt-exsw { background: var(--teal); }
+.dt-exec.on .dt-exsw::after { transform: translateX(12px); }
+@media (prefers-reduced-motion: reduce) { .dt-exsw, .dt-exsw::after { transition: none; } }
 .dt-you { width: 40px; height: 40px; border-radius: 50%; border: 0; background: none; padding: 0; cursor: pointer; flex: none; display: grid; place-items: center; }
 .dt-you:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .dt-you .ds-av { width: 36px; height: 36px; box-shadow: 0 0 0 2px var(--teal-ink); }
@@ -131,6 +145,7 @@ body.desk.in-dept .ws-in { transform: none; }
   .dt-search .dt-st, .dt-search kbd, .dt-live { display: none; }
   .dt-search + .dt-clock { margin-left: 0; }
   .dt-clock { height: 40px; padding: 0 12px; font-size: 12.5px; }
+  .dt-exec { height: 40px; padding: 0 9px 0 7px; gap: 6px; font-size: 12px; }
   .dt-menu { right: 8px; left: 8px; width: auto; }
   .desk-side { top: 0; z-index: 60; width: min(310px, 86vw); transform: translateX(-102%); transition: transform .22s ease; box-shadow: 10px 0 30px rgba(11, 30, 74, .2);
     padding-top: env(safe-area-inset-top, 0px); }

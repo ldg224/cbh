@@ -188,7 +188,11 @@ window.dvOverview = async (pane, dept, attention, wire) => {
   const team = ov.team || [], meRow = team.find((t) => t.me), onNow = ov.on_now || [];
   const mine = (coursesQ.data || []).filter((c) => c.mine), done = mine.filter((c) => c.complete).length;
   const nextCourse = mine.find((c) => !c.complete && !c.lock);
-  const leader = !!(me.can_manage || me.leader), canPost = !!me.can_post;
+  // my_department_overview answers as an owner; with the exec view off, only what the person's own ranks give (0.35.0).
+  const self = window.execViewOff?.();
+  const leader = !!(me.can_manage || me.leader) && (!self || dvLeader(dept));
+  const canPost = !!me.can_post && (!self || hasPerm('posts.manage', dept));
+  if (self && !myDirects.includes(dept)) me.can_manage = false;
   const base = `#directors/${d.id}`;
   const myName = cleanName(me.name || ($('name')?.textContent || ''));
 

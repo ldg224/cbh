@@ -32,6 +32,54 @@ let checking = false;
 
 const ROLE_FIELDS = 'id, name, color, position, kind, department, rank_label, rank_order, badge_color';
 
+// ---------- Exec view (0.35.0, owner) ----------
+// Owners (Hospital Director, COO) get a toggle in the top bar (desk.js). ON: the full executive view. OFF: the site is
+// drawn as if they were a normal member with their own ranks (only their departments, only those ranks' tabs, no
+// exec-only pages). It is a VIEW filter only: the database still lets them act as an exec. Done here, once: when the
+// toggle is off, my_access / my_perms / my_hperms are rebuilt from their own roles before setAccess(), so every page
+// that reads access, myDirects, myPerms or myHperms follows. Pages that show leader data straight from an RPC check
+// window.execViewOff() too. Remembered per browser; default ON.
+const EXEC_VIEW_KEY = 'cbh.execView';
+let execViewPref = (() => { try { return localStorage.getItem(EXEC_VIEW_KEY) !== 'off'; } catch { return true; } })();
+window.execReal = false;   // really an owner, whatever the toggle says
+window.execViewOn = () => execViewPref;
+window.execViewOff = () => window.execReal && !execViewPref;
+const PERMS_ALL = ['dept.view', 'activity.view', 'members.edit', 'history.view', 'meetings.manage', 'meetings.attendance',
+  'applications.review', 'applications.settings', 'courses.manage', 'courses.assess'];   // what my_perms() gives a Director
+// my_access(), my_perms() and my_hperms() as they would be without the owner role (the same rules as the database:
+// is_admin, can_run_sessions, directs, has_perm), from the person's own roles. Owners may read both permission tables.
+async function asSelf(roles, acc) {
+  const ids = roles.map((r) => r.id);
+  const [rp, kp] = await Promise.all([
+    sb.from('role_permissions').select('role_id, perm').in('role_id', ids),
+    sb.from('rank_permissions').select('role_id, perm').in('role_id', ids),
+  ]);
+  if (rp.error || kp.error) throw rp.error || kp.error;
+  const hperms = [...new Set((rp.data || []).map((x) => x.perm))];
+  const ranks = roles.filter((r) => r.kind === 'rank' && r.department);
+  const directs = [...new Set(ranks.filter((r) => r.rank_label === 'Director').map((r) => r.department))];
+  const perms = {};
+  for (const d of directs) perms[d] = PERMS_ALL.slice();
+  for (const x of kp.data || []) {
+    const r = ranks.find((y) => y.id === x.role_id);
+    if (!r || directs.includes(r.department) || !PERMS_ALL.includes(x.perm)) continue;
+    (perms[r.department] ||= []).includes(x.perm) || perms[r.department].push(x.perm);
+  }
+  const teams = [...new Set(roles.filter((r) => (r.kind === 'department' || r.kind === 'rank') && r.department).map((r) => r.department))];
+  return {
+    acc: { ...acc, exec: false, admin: hperms.some((h) => ['hosp.mod', 'hosp.records', 'hosp.logs', 'hosp.incidents'].includes(h)),
+      team: teams.length > 0, teams, shift_teams: teams, directs, run_sessions: hperms.includes('hosp.sessions') || directs.length > 0 },
+    perms, hperms,
+  };
+}
+// Turn the exec view on or off and redraw where you are (or go Home if this page isn't yours in the new view).
+window.execViewSet = async (on) => {
+  execViewPref = !!on;
+  try { localStorage.setItem(EXEC_VIEW_KEY, on ? 'on' : 'off'); } catch { /* remembered for this visit only */ }
+  draw(await fetchMine());
+  if (location.hash && location.hash !== '#' && !findRoute()) location.hash = '';
+};
+
 // Your own member row (the database only returns yours), your roles (highest first) and the department roles
 // (for department colours, in case someone has a rank but not the hidden division role).
 async function fetchMine() {
@@ -54,6 +102,11 @@ async function fetchMine() {
     sb.rpc('my_hperms').then((r) => { window.myHperms = r.data || []; }, () => { window.myHperms = []; }),
   ]);
   window.myRanks = roles.filter((r) => r.kind === 'rank');
+  window.execReal = !!(acc && acc.exec);
+  if (window.execViewOff()) {   // an owner viewing the site as their own ranks (0.35.0)
+    try { const v = await asSelf(roles, acc); window.myHperms = v.hperms; return { me, roles, departments, access: v.acc, session: sess, perms: v.perms }; }
+    catch { /* can't work it out: show the full view rather than a broken one */ }
+  }
   return { me, roles, departments, access: acc, session: sess, perms };
 }
 
