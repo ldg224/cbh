@@ -3,6 +3,22 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.26.0 (2026-11-18)
+
+**Added:**
+- **Assign a course:** people who can edit or assess courses can assign a course to anyone (by name, or everyone with a rank), with an optional due date and note. The person gets a DM, it shows first in **My courses** under **Assigned to you**, and on **Home** and the badges while it's due. The course's Progress tab shows who's assigned and done, with **Unassign**.
+- **Office access** on each department's Ranks & permissions tab (Directors and executives): choose which ranks always have the office key and add extra people, with an end date if you like. CareBeyond Helper keeps the key roles in step.
+- **🟢 On Shift** and **☕ On Break** roles for every department, set automatically from Clock in, Break and Clock out on the website.
+
+**Changed:**
+- Departments now come from ranks alone (the hidden department roles are going), and meetings ping the department's ranks.
+- On the Roles page, office keys and status roles say they're managed automatically.
+
+**Bot:**
+- DMs when a course is assigned to you; keeps office keys and the On Shift / On Break roles in step; meetings ping ranks.
+
+Database change: yes, migrations 0056 (course assignments), 0057 (assigned courses in To do) and 0058 (status roles and office keys).
+
 ## 0.25.0 (2026-11-18)
 
 **Added:**
