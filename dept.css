@@ -278,3 +278,66 @@ button.dp-quiet:hover { filter: brightness(.96); text-decoration: underline; }
 .dp-toggles .count { font-size: 11.5px; font-weight: 700; opacity: .6; }
 .dp-secbody:empty { display: none; }
 #dp-pane { min-width: 0; }   /* #page-body is a grid: without this, a wide toggle row stretched the page on phones */
+
+/* ---------- Rank Editor (0.36.0, Manage > Ranks & Permissions) ----------
+   Ranks down the left, the chosen rank's switches on the right. Phones (and narrow windows): the list, then one
+   rank's page with a back link. */
+.rk { display: grid; grid-template-columns: 236px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); }
+.rk-list { background: #f6f9fd; border-right: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.rk-grp { font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); padding: 10px 8px 4px; }
+.rk-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px;
+  background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.rk-row:hover { background: #fff; }
+.rk-row[aria-selected="true"] { background: #fff; box-shadow: 0 1px 3px rgba(11, 30, 74, .1); }
+.rk-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.rk-row i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.rk-deptrow i { border-radius: 3px; }
+.rk-row b { display: block; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-row small { display: block; color: var(--muted); font-size: 12px; }
+.rk-row em { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--muted); background: var(--raised); padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.rk-pane { padding: 20px 22px 24px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.rk-back { display: none; align-self: flex-start; border: 0; background: none; padding: 0; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--blue); cursor: pointer; }
+.rk-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rk-top h3 { margin: 0; font-size: 19px; font-weight: 800; }
+.rk-top .muted { font-size: 13px; }
+.rk-quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 10px; }
+.rk-box { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; transition: border-color .3s, background .3s; }
+.rk-box b { display: block; font-size: 14px; } .rk-box span { color: var(--muted); font-size: 12.5px; }
+.rk-box.saved { border-color: var(--teal); background: #f0fbf9; }
+.rk-num { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.rk-num input { width: 88px; height: 36px; border: 1px solid var(--line); border-radius: 9px; padding: 0 10px; font: inherit; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); background: #fff; }
+.rk-num em { font-style: normal; font-size: 12.5px; color: var(--muted); }
+.rk-grp-sec { display: flex; flex-direction: column; }
+.rk-grp-sec h4 { margin: 0 0 4px; font-size: 11.5px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--teal-ink, #0d7d74); }
+.rk-perm { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid #edf1f7; }
+.rk-grp-sec .rk-perm:last-child { border-bottom: 0; }
+.rk-perm b { display: block; font-size: 14px; font-weight: 700; }
+.rk-perm > div > span { display: block; color: var(--muted); font-size: 13px; }
+.rk-win { display: flex !important; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 7px; font-size: 12.5px; }
+.rk-win select { height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 600; color: var(--text); background: #fff; }
+.rk-sw { position: relative; width: 40px; height: 24px; border-radius: 999px; background: #c9d6e6; flex: none; border: 0; padding: 0; cursor: pointer; transition: background .15s ease; }
+.rk-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(11, 30, 74, .25); transition: transform .15s ease; }
+.rk-sw[aria-checked="true"] { background: var(--teal); }
+.rk-sw[aria-checked="true"]::after { transform: translateX(16px); }
+.rk-sw:disabled { opacity: .6; cursor: default; }
+.rk-sw:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .rk-sw, .rk-sw::after, .rk-box { transition: none; } }
+.rk-locked { margin: 0; background: #f6f9fd; border: 1px dashed var(--line); border-radius: 12px; padding: 12px 14px; color: var(--muted); font-size: 13.5px; }
+.rk-lead { margin: 0 0 8px; }
+.rk-note { margin: 0 0 8px; font-size: 13px; background: var(--raised); border-radius: 9px; padding: 8px 11px; color: var(--muted); }
+.rk-guests, .rk-found { display: flex; flex-direction: column; }
+.rk-guest { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #edf1f7; }
+.rk-gt { flex: 1; min-width: 0; } .rk-gt b { display: block; font-size: 13.5px; } .rk-gt small { color: var(--muted); font-size: 12px; }
+.rk-add { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 10px; margin-top: 10px; }
+@media (max-width: 1000px) {
+  .rk { grid-template-columns: 1fr; border: 0; border-radius: 0; background: none; overflow: visible; }
+  .rk-list { border: 1px solid var(--line); border-radius: 12px; padding: 4px; background: var(--panel); }
+  .rk-row { padding: 12px; border-radius: 9px; grid-template-columns: 10px minmax(0, 1fr) auto 10px; }
+  .rk-row::after { content: "›"; color: var(--muted); font-size: 18px; line-height: 1; }
+  .rk-row[aria-selected="true"] { box-shadow: none; background: none; }
+  .rk-pane { display: none; padding: 0; }
+  .rk.open .rk-list { display: none; }
+  .rk.open .rk-pane { display: flex; }
+  .rk-back { display: inline-block; }
+  .rk-add { grid-template-columns: 1fr; }
+}

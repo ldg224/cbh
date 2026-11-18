@@ -806,61 +806,188 @@ async function renderDept(body, tool) {
     }
   }
 
-  // ---------- Ranks & permissions (Director and execs; 0027/0029) ----------
-  // Ranks down the side, permissions across. "Change members" also has a change window: the lowest and highest rank
-  // that rank may manage. Each tick saves straight away (set_rank_perm / set_rank_window).
-  const PERMS = [
-    ['dept.view', 'See this page', 'Overview, and the full member list on Roster'],
-    ['activity.view', 'See activity', 'Hours and inactivity'],
-    ['members.edit', 'Edit members', 'Ranks, add, remove'],
-    ['history.view', 'See history', 'Changes and reasons, in Manage'],
-    ['meetings.manage', 'Run meetings', 'Schedule, move and cancel meetings in Events'],
-    ['meetings.attendance', 'Attendance', 'Meeting attendance and notes'],
-    ['posts.manage', 'Post updates', 'Post as From the Director'],
-    ['applications.review', 'Review applications', 'Review and decide'],
-    ['applications.settings', 'Edit applications', 'Forms, settings, stages'],
-    ['courses.manage', 'Edit courses', 'Create and edit courses'],
-    ['courses.assess', 'Assess courses', 'Practical evaluations'],
+  // ---------- Ranks & Permissions: the Rank Editor (0.36.0; owner picked direction A, 19 Nov 2026) ----------
+  // Like Discord's role settings: the ranks down the left, the chosen rank's permissions on the right as switches in
+  // five groups, each with one plain line saying what it unlocks. The rank's own office key and weekly target sit at
+  // its top; "Department" holds the department's target and the office guests. Phones: the list, then one rank's page.
+  // Save model: every change saves on its own, no Save buttons. Switches and pickers save as you change them (a
+  // failed save flips back and shows the database's message); a target saves when you leave the box or press Enter.
+  // Same writes as before: set_rank_perm, set_rank_window, office_key_set_ranks / _add / _remove, dept_set_target.
+  // Director and executives only (Manage shows this part to them alone); the database checks every write.
+  const PGROUPS = [
+    ['Department', [['dept.view', 'See the whole department', 'The Overview and the full member list on Roster.'],
+      ['activity.view', 'See activity', 'Hours, shifts and who has gone quiet.'],
+      ['posts.manage', 'Post department news', 'Write and pin posts on the Overview.']]],
+    ['People', [['members.edit', 'Change ranks', 'Promote, move, add and remove people.'],
+      ['history.view', 'See rank history', 'Every change, who made it and why.']]],
+    ['Meetings', [['meetings.manage', 'Run meetings', 'Schedule, move, start and cancel meetings.'],
+      ['meetings.attendance', 'Take attendance', 'Mark who came and keep the notes.']]],
+    ['Applications', [['applications.review', 'Review applications', 'Read applications and accept or decline them.'],
+      ['applications.settings', 'Edit application forms', 'Questions, stages and who reviews.']]],
+    ['Courses', [['courses.manage', 'Edit courses', 'Create courses and change their lessons.'],
+      ['courses.assess', 'Assess courses', 'Run the practical evaluations.']]],
   ];
+  const PKEYS = PGROUPS.flatMap(([, ps]) => ps.map(([k]) => k));
+  const rk = { sel: null, open: false, extra: null };   // chosen rank id ('dept' = Department), phone drill-in, loaded extras
+  async function loadRankExtras() {
+    const [kq, mq, tq] = await Promise.all([
+      sb.from('office_keys').select('department, role_id, ranks, active').eq('department', dept).maybeSingle().then((r) => r, () => ({ data: null })),
+      sb.rpc('office_key_list', { department: dept }).then((r) => r, () => ({ data: [] })),
+      sb.rpc('dept_targets', { p_department: dept }).then((r) => r, () => ({ data: null })),
+    ]);
+    rk.extra = { key: kq.data || null, guests: mq.data || [], targets: tq.data || null };
+  }
+  const rkPeople = (n) => `${n} ${n === 1 ? 'person' : 'people'}`;
+  const rkMins = (m) => (m == null || m === '' ? null : Number(m) >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}` : `${m}m`);
+  const rkSw = (on, attrs) => `<button type="button" class="rk-sw" role="switch" aria-checked="${!!on}" ${attrs}></button>`;
   function drawRanks() {
-    const rows = ranks.filter((r) => r.rank_label !== 'Director');
+    const all = ranks.slice().sort((a, b) => b.rank_order - a.rank_order);
     const held = {};
     (permQ.data || []).forEach((x) => { if (rankById[x.role_id]) held[x.role_id + '|' + x.perm] = x; });
-    const low = rows.slice().sort((a, b) => a.rank_order - b.rank_order);
-    const winSel = (r, which, val) => `<select data-win="${which}" data-role="${esc(r.id)}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} ${esc(r.rank_label)} can change">${low.filter((x) => x.rank_order < r.rank_order).map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
-    pane.innerHTML = `${toggles().replace('<div class="dp-secbody"></div>', '')}<div class="card dp-perms-card">
-      <div class="dp-head"><h2>Who Can Do What</h2><span class="muted small-meta">The Director and executives can always do everything.</span></div>
-      <p class="error" id="dp-perm-err" hidden></p>
-      <div class="dp-pgrid" role="table" aria-label="Rank permissions">
-        <div class="dp-prow dp-phead" role="row"><span role="columnheader">${Word}</span>${PERMS.map(([k, l, h]) => `<span role="columnheader" title="${esc(h)}">${esc(l)}</span>`).join('')}</div>
-        ${rows.map((r) => `<div class="dp-prow" role="row" style="--c:${r.badge_color ? hex(r.badge_color) : '#9aa9c4'}">
-          <span role="rowheader" class="dp-prank"><span class="rbadge"><span class="rl">${esc(r.rank_label)}</span></span></span>
-          ${PERMS.map(([k, l]) => { const on = !!held[r.id + '|' + k]; const w = held[r.id + '|members.edit'];
-            return `<span role="cell" class="dp-pcell${k === 'members.edit' && on && w ? ' has-win' : ''}" data-label="${esc(l)}">
-              <label class="dp-tick"><input type="checkbox" data-role="${esc(r.id)}" data-perm="${k}"${on ? ' checked' : ''} aria-label="${esc(r.rank_label)}: ${esc(l)}"><span aria-hidden="true"></span></label>
-              ${k === 'members.edit' && on && w ? `<span class="dp-win" title="Up to the rank below ${esc(r.rank_label)}">${winSel(r, 'lo', w.window_lo)}<em>to</em>${winSel(r, 'hi', w.window_hi)}</span>` : ''}</span>`; }).join('')}
-        </div>`).join('')}
-      </div></div>`;
-    const err = pane.querySelector('#dp-perm-err');
-    const reload = async () => { const { data } = await sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi'); permQ.data = data || []; drawRanks(); };
-    pane.querySelectorAll('[data-perm]').forEach((cb) => cb.onchange = async () => {
-      cb.disabled = true; err.hidden = true;
-      const { error } = await sb.rpc('set_rank_perm', { role_id: cb.dataset.role, perm: cb.dataset.perm, allow: cb.checked });
-      if (error) { cb.checked = !cb.checked; cb.disabled = false; err.textContent = error.message; err.hidden = false; return; }
-      await reload();
-      pane.querySelector(`[data-role="${CSS.escape(cb.dataset.role)}"][data-perm="${cb.dataset.perm}"]`)?.focus();
+    const isDir = (r) => r.rank_label === 'Director';
+    if (!rk.sel || (rk.sel !== 'dept' && !rankById[rk.sel])) rk.sel = (all.find((r) => !isDir(r)) || all[0] || { id: 'dept' }).id;
+    const ex = rk.extra, key = ex && ex.key;
+    const officeOn = new Set((key && key.ranks) || []);
+    const tgt = (ex && ex.targets) || {}, byRank = Object.fromEntries((tgt.ranks || []).map((t) => [t.rank_role_id, t.minutes]));
+    const nPeople = (r) => people.filter((p) => p.rank_role_id === r.id).length;
+    const nPerms = (r) => (isDir(r) ? PKEYS.length : PKEYS.filter((k) => held[r.id + '|' + k]).length);
+    const colour = (r) => (r.badge_color ? hex(r.badge_color) : '#9aa9c4');
+    const head = `${toggles().replace('<div class="dp-secbody"></div>', '')}`;
+    const list = `<div class="rk-list" role="listbox" aria-label="${Word}s">
+        <div class="rk-grp">${esc(dept)}</div>
+        <button type="button" class="rk-row rk-deptrow" role="option" data-rk="dept" aria-selected="${rk.sel === 'dept'}" style="--c:${dep.color}"><i aria-hidden="true"></i>
+          <span><b>Department</b><small>Target${key ? ' and office guests' : ''}</small></span>${key && ex.guests.length ? `<em>${ex.guests.length}</em>` : ''}</button>
+        <div class="rk-grp">${Word}s</div>
+        ${all.map((r) => `<button type="button" class="rk-row" role="option" data-rk="${esc(r.id)}" aria-selected="${rk.sel === r.id}" style="--c:${colour(r)}"><i aria-hidden="true"></i>
+          <span><b>${esc(r.rank_label)}</b><small>${rkPeople(nPeople(r))}</small></span><em>${isDir(r) ? 'All' : `${nPerms(r)} of ${PKEYS.length}`}</em></button>`).join('')}
+      </div>`;
+    let body = '';
+    if (!ex) body = `<div class="rk-pane-in">${lines('40%', '70%', '55%')}</div>`;
+    else if (rk.sel === 'dept') {
+      body = `<div class="rk-top"><h3>Department</h3><span class="muted">Settings for everyone in ${esc(dept)}</span></div>
+        <div class="rk-box"><div><b>Weekly target</b><span>Shown on everyone's Overview and Shifts. A ${word}'s own target replaces it.</span></div>
+          <span class="rk-num"><input type="number" min="0" max="10080" step="15" inputmode="numeric" id="rk-t-dept" data-tgt="" value="${tgt.department ?? ''}" placeholder="None" aria-label="${esc(dept)} weekly target in minutes"><em>min</em></span></div>
+        ${key ? `<section class="rk-grp-sec"><h4>Office Guests</h4>
+          <p class="muted small rk-lead">People let into the ${esc(dept)} Office by name, as well as the ${word}s with the key. CareBeyond Helper gives and takes the key.</p>
+          ${key.active ? '' : `<p class="rk-note">Switched on when the new Discord roles go live. You can set it up now.</p>`}
+          <div class="rk-guests">${ex.guests.length ? ex.guests.map((x) => { const nm = cleanName(x.display_name || 'Someone who left');
+            return `<div class="rk-guest">${face({ name: nm, discordId: x.discord_id, avatarUrl: x.avatar_url, size: 's' })}
+              <span class="rk-gt"><b>${esc(nm)}</b><small>${x.until ? 'Until ' + esc(new Date(x.until).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })) : 'No end date'}${x.added_by_name ? ' · added by ' + esc(cleanName(x.added_by_name)) : ''}</small></span>
+              <button type="button" class="ghost small-btn" data-rkgone="${esc(x.discord_id)}">Remove</button></div>`; }).join('') : '<p class="muted small">Nobody else yet.</p>'}</div>
+          <div class="rk-add"><label class="f"><span>Let someone in</span><input type="search" id="rk-q" placeholder="Search by name" autocomplete="off"></label>
+            <label class="f"><span>Until <em>(optional)</em></span><input type="date" id="rk-until" min="${new Date(Date.now() + 864e5).toISOString().slice(0, 10)}"></label></div>
+          <div class="rk-found" id="rk-found"></div></section>` : ''}`;
+    } else {
+      const r = rankById[rk.sel], c = colour(r);
+      const lower = all.filter((x) => x.rank_order < r.rank_order).sort((a, b) => a.rank_order - b.rank_order);
+      const w = held[r.id + '|members.edit'];
+      const pick = (which, val) => `<select data-rkwin="${which}" aria-label="${which === 'lo' ? 'Lowest' : 'Highest'} ${word} a ${esc(r.rank_label)} can change">${lower.map((x) => `<option value="${x.rank_order}"${x.rank_order === val ? ' selected' : ''}>${esc(x.rank_label)}</option>`).join('')}</select>`;
+      const quick = `<div class="rk-quick">
+          ${key ? `<div class="rk-box"><div><b>Office key</b><span>Opens the ${esc(dept)} Office in Discord.</span></div>${rkSw(officeOn.has(r.id), `data-rkoffice aria-label="${esc(r.rank_label)} has the office key"`)}</div>` : ''}
+          ${isDir(r) ? '' : `<div class="rk-box"><div><b>Weekly target</b><span>${tgt.department == null ? 'No department target yet.' : `Replaces the department's ${esc(rkMins(tgt.department))}. Empty uses it.`}</span></div>
+            <span class="rk-num"><input type="number" min="0" max="10080" step="15" inputmode="numeric" id="rk-t-${esc(r.id)}" data-tgt="${esc(r.id)}" value="${byRank[r.id] ?? ''}" placeholder="None" aria-label="${esc(r.rank_label)} weekly target in minutes"><em>min</em></span></div>`}
+        </div>`;
+      body = `<div class="rk-top"><span class="rbadge" style="--c:${c}"><span class="rl">${esc(r.rank_label)}</span></span><span class="muted">${rkPeople(nPeople(r))}${isDir(r) ? '' : ` · ${nPerms(r)} of ${PKEYS.length} permissions`}</span></div>
+        ${quick}
+        ${isDir(r) ? `<p class="rk-locked">The Director and executives can always do everything in ${esc(dept)}. There's nothing to set here.</p>`
+          : PGROUPS.map(([g, ps]) => `<section class="rk-grp-sec"><h4>${g}</h4>${ps.map(([k, l, d]) => { const on = !!held[r.id + '|' + k];
+            return `<div class="rk-perm"><div><b id="rkl-${k.replace('.', '-')}">${l}</b><span>${d}</span>
+              ${k === 'members.edit' && on && w && lower.length ? `<span class="rk-win">Can change people from ${pick('lo', w.window_lo)} up to ${pick('hi', w.window_hi)}</span>` : ''}</div>
+              ${rkSw(on, `data-rkperm="${k}" aria-labelledby="rkl-${k.replace('.', '-')}"`)}</div>`; }).join('')}</section>`).join('')}`;
+    }
+    pane.innerHTML = `${head}<p class="error" id="rk-err" hidden></p>
+      <div class="rk${rk.open ? ' open' : ''}">${list}<div class="rk-pane"><button type="button" class="rk-back" data-rkback>‹ All ${word}s</button>${body}</div></div>`;
+    loadFaces(pane);
+    if (!ex) { loadRankExtras().then(() => { if (pane.isConnected && tab === 'manage') drawRanks(); }); return; }
+    wireRanks();
+  }
+  function wireRanks() {
+    const box = pane.querySelector('.rk'), err = pane.querySelector('#rk-err');
+    const fail = (m) => { err.textContent = m || ''; err.hidden = !m; };
+    const reloadPerms = async () => { const { data } = await sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi'); permQ.data = data || []; };
+    const keep = (sel) => { drawRanks(); if (sel) pane.querySelector(sel)?.focus(); };
+    box.onclick = async (e) => {
+      const row = e.target.closest('[data-rk]');
+      if (row) { rk.sel = row.dataset.rk; rk.open = true; drawRanks(); pane.querySelector('.rk-back')?.focus({ preventScroll: true }); return; }
+      if (e.target.closest('[data-rkback]')) { rk.open = false; drawRanks(); pane.querySelector(`[data-rk="${CSS.escape(rk.sel)}"]`)?.focus(); return; }
+      const sw = e.target.closest('[data-rkperm]');
+      if (sw) {
+        const on = sw.getAttribute('aria-checked') !== 'true';
+        sw.setAttribute('aria-checked', on); sw.disabled = true; fail('');
+        const { error } = await sb.rpc('set_rank_perm', { role_id: rk.sel, perm: sw.dataset.rkperm, allow: on });
+        if (error) { sw.setAttribute('aria-checked', !on); sw.disabled = false; return fail(error.message); }
+        await reloadPerms(); return keep(`[data-rkperm="${sw.dataset.rkperm}"]`);
+      }
+      const of = e.target.closest('[data-rkoffice]');
+      if (of) {
+        const on = of.getAttribute('aria-checked') !== 'true', cur = new Set(rk.extra.key.ranks || []);
+        if (on) cur.add(rk.sel); else cur.delete(rk.sel);
+        of.setAttribute('aria-checked', on); of.disabled = true; fail('');
+        const { error } = await sb.rpc('office_key_set_ranks', { department: dept, ranks: [...cur] });
+        if (error) { of.setAttribute('aria-checked', !on); of.disabled = false; return fail(error.message); }
+        rk.extra.key.ranks = [...cur]; return keep('[data-rkoffice]');
+      }
+      const gone = e.target.closest('[data-rkgone]');
+      if (gone) {
+        gone.disabled = true; fail('');
+        const { error } = await sb.rpc('office_key_remove', { department: dept, discord_id: gone.dataset.rkgone });
+        if (error) { gone.disabled = false; return fail(error.message); }
+        await loadRankExtras(); return keep('#rk-q');
+      }
+      const add = e.target.closest('[data-rkadd]');
+      if (add) {
+        const until = pane.querySelector('#rk-until').value;
+        add.disabled = true; fail('');
+        const { error } = await sb.rpc('office_key_add', { department: dept, discord_id: add.dataset.rkadd, until: until ? new Date(until + 'T23:59:00').toISOString() : null });
+        if (error) { add.disabled = false; return fail(error.message); }
+        await loadRankExtras(); return keep('#rk-q');
+      }
+    };
+    box.querySelectorAll('[data-rkwin]').forEach((sel) => sel.onchange = async () => {
+      const lo = +box.querySelector('[data-rkwin="lo"]').value, hi = +box.querySelector('[data-rkwin="hi"]').value;
+      fail('');
+      if (lo > hi) return fail(`The lowest ${word} must be at or below the highest.`);
+      box.querySelectorAll('[data-rkwin]').forEach((x) => { x.disabled = true; });
+      const { error } = await sb.rpc('set_rank_window', { role_id: rk.sel, lo, hi });
+      if (error) { fail(error.message); await reloadPerms(); return keep(); }
+      await reloadPerms(); keep(`[data-rkwin="${sel.dataset.rkwin}"]`);
     });
-    pane.querySelectorAll('[data-win]').forEach((sel) => sel.onchange = async () => {
-      const row = sel.closest('.dp-pcell');
-      const lo = +row.querySelector('[data-win="lo"]').value, hi = +row.querySelector('[data-win="hi"]').value;
-      err.hidden = true;
-      if (lo > hi) { err.textContent = 'The lowest rank must be at or below the highest.'; err.hidden = false; return; }
-      const { error } = await sb.rpc('set_rank_window', { role_id: sel.dataset.role, lo, hi });
-      if (error) { err.textContent = error.message; err.hidden = false; return; }
-      await reload();
+    // Targets save when you leave the box or press Enter (the same dept_set_target as before; empty clears it).
+    box.querySelectorAll('[data-tgt]').forEach((inp) => {
+      const was = inp.value;
+      const save = async () => {
+        if (inp.value === was || inp.dataset.busy) return;
+        const v = inp.value === '' ? null : Number(inp.value);
+        if (v != null && (!Number.isFinite(v) || v < 0 || v > 10080)) return fail('A target is a number of minutes from 0 to 10080 (one week).');
+        inp.dataset.busy = '1'; fail('');
+        const { error } = await sb.rpc('dept_set_target', { p_department: dept, p_minutes: v, p_rank_role_id: inp.dataset.tgt || null });
+        delete inp.dataset.busy;
+        if (error) return fail(error.message);
+        await loadRankExtras();
+        const id = inp.id; drawRanks();
+        const again = pane.querySelector('#' + CSS.escape(id));
+        if (again) { again.closest('.rk-box')?.classList.add('saved'); setTimeout(() => again.closest('.rk-box')?.classList.remove('saved'), 1600); }
+      };
+      inp.onblur = save;
+      inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } };
     });
-    window.deptOfficeCard?.(pane, dept, ranks);   // Office access (offices.js, R2)
-    if (director) window.dvTargetsCard?.(pane, dept, ranks);   // weekly minutes target (deptviews.js, 0.32.0)
+    const q = box.querySelector('#rk-q'), found = box.querySelector('#rk-found');
+    if (q) {
+      let t = null;
+      const ids = rk.extra.guests.map((x) => x.discord_id);
+      q.oninput = () => { clearTimeout(t); t = setTimeout(async () => {
+        const term = q.value.trim();
+        if (term.length < 2) { found.innerHTML = ''; return; }
+        const { data, error } = await sb.rpc('member_search', { q: term });
+        if (q.value.trim() !== term) return;
+        if (error) { found.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
+        const list = (data || []).filter((m) => !ids.includes(m.discord_id)).slice(0, 6);
+        found.innerHTML = list.length ? list.map((m) => `<div class="rk-guest">${face({ name: m.display_name, discordId: m.discord_id, avatarUrl: m.avatar_url, size: 's' })}
+          <span class="rk-gt"><b>${esc(cleanName(m.display_name))}</b></span><button type="button" class="refresh small-btn" data-rkadd="${esc(m.discord_id)}">Let in</button></div>`).join('')
+          : '<p class="muted small">Nobody found.</p>';
+        loadFaces(found);
+      }, 250); };
+    }
   }
 
   // ---------- History ----------
