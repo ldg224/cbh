@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.35.0 (2026-11-19)
+
+**Added:**
+- Owners get an **Exec** switch in the top bar: turn it off to see the site as your own ranks (your departments, tabs, counts and tools), and back on for the full view. It only changes what you see, and it's remembered on each browser.
+
+Database change: no.
+
 ## 0.34.0 (2026-11-19)
 
 **Changed:**
