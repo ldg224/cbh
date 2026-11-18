@@ -8,6 +8,7 @@
 // gets a Supabase session for that Discord account and calls supabase.auth.setSession(session).
 // Called without a signed-in user, so verify_jwt is off; the secret and short expiry protect it instead.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { sessionFor } from "./session.ts";
 
 const ALLOWED_ORIGINS = ["https://ldg224.github.io", "http://127.0.0.1:8765", "http://localhost:8765"];
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I/L
@@ -130,34 +131,9 @@ async function poll(req: Request, body: Record<string, unknown>) {
   const { data: member } = await admin.from("members").select("display_name, avatar_url").eq("discord_id", discordId).maybeSingle();
   if (!member) return reply(req, { status: "not_member" });
 
-  const session = await sessionFor(discordId, member);
-  return reply(req, { status: "done", session });
-}
-
-// One Supabase user per Discord account for code logins, with the Discord ID in app_metadata (only the service
-// role can write that; my_discord_id() reads it). The address is never emailed: it only names the account.
-async function sessionFor(discordId: string, member: { display_name: string | null; avatar_url: string | null }) {
-  const email = `discord-${discordId}@login.carebeyond.invalid`;
-  const meta = { full_name: member.display_name, avatar_url: member.avatar_url };
-  const created = await admin.auth.admin.createUser({
-    email, email_confirm: true, app_metadata: { discord_id: discordId, login: "code" }, user_metadata: meta,
-  });
-  if (created.error && !/already|registered|exists/i.test(created.error.message)) throw created.error;
-
-  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: "magiclink", email });
-  if (linkErr) throw linkErr;
-  if (!created.data?.user) {
-    // existing account: keep its name and photo current
-    await admin.auth.admin.updateUserById(link.user.id, { app_metadata: { discord_id: discordId, login: "code" }, user_metadata: meta });
-  }
-  // A throwaway client: verifying signs it in, and the admin client must keep using the service role.
-  const once = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: verified, error: vErr } = await once.auth.verifyOtp({ type: "magiclink", token_hash: link.properties.hashed_token });
-  if (vErr || !verified.session) throw vErr ?? new Error("no session");
-  const s = verified.session;
-  return { access_token: s.access_token, refresh_token: s.refresh_token };
+  // session.ts: signs into the person's Discord-login account if they have one, else their code account (18 Nov 2026).
+  const { access_token, refresh_token } = await sessionFor(admin, discordId, member);
+  return reply(req, { status: "done", session: { access_token, refresh_token } });
 }
 
 Deno.serve(async (req) => {
