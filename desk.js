@@ -175,7 +175,7 @@
       canSee('staff') && myDepartments.length ? { href: '#shifts', label: 'Shift', icon: 'clock' } : { href: '#contact', label: 'Contact', icon: 'chat' },
     ];
     const cur = (it) => (it.dept ? hash().startsWith(it.href) : it.href === '#' ? hash() === '#' : hash() === it.href);
-    if (shift && window.chartTab) items.splice(Math.floor(items.length / 2), 0, { raw: window.chartTab() });   // CBH Chart (Delta)
+    if (shift && window.chartTab) items.splice(Math.ceil(items.length / 2), 0, { raw: window.chartTab() });   // CBH Chart (Delta)
     tabs.innerHTML = items.map((it) => { if (it.raw) return it.raw; const b = it.dept ? folderBadge(it.dept) : null;
       return `<a href="${it.href}"${cur(it) ? ' aria-current="page"' : ''}><span class="dt-i" style="${icon(it.icon)}"></span>${esc(it.label)}${b ? `<span class="ds-n${b.sev === 'orange' ? ' orange' : ''}">${b.n}</span>` : ''}</a>`; }).join('')
       + `<button type="button" data-desk="drawer"><span class="dt-i" style="${icon('menu')}"></span>Menu</button>`;
