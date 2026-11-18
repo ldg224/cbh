@@ -23,6 +23,7 @@ const RO_DEPT = [
   ['history.view', 'See history', 'Changes and reasons'],
   ['meetings.manage', 'Run meetings', 'Schedule and cancel'],
   ['meetings.attendance', 'Attendance', 'Attendance and notes'],
+  ['posts.manage', 'Post updates', 'Post as From the Director'],
   ['applications.review', 'Review applications', 'Review and decide'],
   ['applications.settings', 'Edit applications', 'Forms, settings, stages'],
   ['courses.manage', 'Edit courses', 'Create and edit courses'],

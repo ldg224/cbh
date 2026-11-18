@@ -472,6 +472,8 @@ const PAGES = [
   { id: 'review',   aud: 'reviewer-lead', title: 'Applications', icon: 'resume', layout: 'review' },   // review-team leads who aren't admins
   { id: 'contact',  aud: 'everyone', title: 'Contact a team', icon: 'chat',    layout: 'contact' },
   { id: 'apply',    aud: 'everyone', title: 'Apply',          icon: 'resume',  layout: 'apply' },
+  // Events everyone can see, and one event (#events/<id>; the bot's "Details" button). deptviews.js, 0.32.0.
+  { id: 'events',   aud: 'everyone', title: 'Events',         icon: 'calendar', layout: 'events' },
   { id: 'commands', aud: 'everyone', title: 'Commands',       icon: 'console', layout: 'commands' },
 ];
 // Who can see what. Derived from role kinds (cbh/roles.py): exec = leadership or Executive; admin = the
@@ -683,7 +685,7 @@ function route() {
   $('home').hidden = !!r || !homeReady;
   $('page').hidden = !r;
   $('page-title').hidden = false;
-  if (!r) { document.title = 'CareBeyond'; if (homeReady) renderHome(); return; }
+  if (!r) { document.title = 'CareBeyond'; if (homeReady) renderHome(); window.deskSub?.(); return; }
   const back = $('page').querySelector('.back');
   back.href = '#';
   back.lastChild.textContent = 'Home';
@@ -727,6 +729,7 @@ function route() {
   }
   document.title = (tool ? tool.title : page.title) + ' · CareBeyond';
   window.scrollTo(0, 0);
+  window.deskSub?.();   // the department's own menu in the window (desk.js, 0.32.0)
 }
 window.addEventListener('hashchange', route);
 

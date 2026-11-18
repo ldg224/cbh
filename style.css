@@ -708,10 +708,8 @@ h2.form-title { margin: 0 0 4px; font-size: 19px; font-weight: 800; letter-spaci
 .h-big.muted-w { opacity: .75; font-size: 22px; }
 .h-small { font-size: 13px; opacity: .9; }
 .h-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.h-white, .h-teal, .h-glassbtn { font: inherit; font-size: 13px; font-weight: 700; padding: 8px 13px; border-radius: 9px; cursor: pointer; justify-self: start; }
+.h-white { font: inherit; font-size: 13px; font-weight: 700; padding: 8px 13px; border-radius: 9px; cursor: pointer; justify-self: start; }
 .h-white { border: 0; background: #fff; color: var(--text); }
-.h-teal { border: 0; background: var(--teal); color: var(--text); }
-.h-glassbtn { border: 1px solid rgba(255, 255, 255, .5); background: transparent; color: #fff; }
 .h-sel { font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 9px; border: 0; }
 .h-faces { display: flex; }
 .h-faces img, .h-faces span { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #22579f; object-fit: cover; background: rgba(255, 255, 255, .25); margin-left: -8px; box-sizing: border-box; }
@@ -867,8 +865,6 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .h-idle-code { font-size: 13.5px; color: var(--muted); }
 .h-idle-code strong { color: var(--text); letter-spacing: .03em; }
 .h-idle-link { margin-left: auto; }
-.h-idle-clock { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--teal-ink); }
-.h-idle-off { font-weight: 700; font-size: 15px; color: var(--muted); }
 .h-sel-l { border: 1px solid var(--line); background: var(--panel); color: var(--text); }
 .h-idle .small-btn { padding: 7px 12px; }
 @media (max-width: 700px) { .h-idle-part + .h-idle-part { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 14px; } .h-idle-link { margin-left: 0; } }

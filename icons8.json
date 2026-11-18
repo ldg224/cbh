@@ -209,6 +209,11 @@
         "id": "9500",
         "commonName": "scalpel",
         "use": "Surgical department"
+      },
+      "siren": {
+        "id": "8773",
+        "commonName": "siren",
+        "use": "Drill events (0.32.0)"
       }
     }
   }

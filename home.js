@@ -423,7 +423,7 @@ function drawLive() {
   const h = HC || {};
   const s = h.session || currentSession || {};
   if (!s.live) { drawIdle(el, h, s); return; }
-  const live = s.live, me = h.my_shift, on = h.on_shift || {};
+  const live = s.live, on = h.on_shift || {};
   const since = live.started_at ? new Date(live.started_at) : null;
   const byDept = Object.entries(on.by_dept || {}).filter(([, v]) => v).map(([k, v]) => `${k === 'Community Engagement' ? 'CE' : k === 'Administration' ? 'Admin' : k} ${v}`).join(' · ');
   el.innerHTML = `<section class="h-live" aria-label="Session active">
@@ -433,65 +433,23 @@ function drawLive() {
     <div class="h-live-grid">
       <div class="h-panel"><span class="h-plabel">JOIN CODE</span><strong class="h-big">${esc(live.join_code || s.code || joinCode)}</strong>
         <div class="h-row"><button class="h-white" id="h-copy">Copy code</button>${joinGameBtn(live.join_code || s.code || joinCode, 'on-dark')}</div></div>
-      ${canSee('staff') ? `<div class="h-panel"><span class="h-plabel">${me ? 'YOUR SHIFT · ' + esc(me.department).toUpperCase() : 'YOUR SHIFT'}</span>
-        ${me ? `<strong class="h-big" data-tick="live-clock">${clock(shiftSecs(me))}</strong>
-          <div class="h-row"><button class="h-glassbtn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button>${window.chartLogBtn ? window.chartLogBtn('home') : ''}<button class="h-teal" id="h-end">End shift</button></div>`
-        : myDepartments.length ? `<strong class="h-big muted-w">Off shift</strong><div class="h-row">${homeDeptPicker()}<button class="h-teal" id="h-start">Start shift</button></div>`
-        : '<span class="h-small">You need a department role to start a shift.</span>'}</div>` : ''}
       ${on.total != null ? `<div class="h-panel"><span class="h-plabel">ON SHIFT NOW</span>
         <div class="h-row"><strong class="h-big">${n0(on.total)}</strong><span class="h-faces">${(on.people || []).slice(0, 4).map((p) => `<span class="h-face" title="${esc(p.name)}" style="${p.avatar_url ? `background-image:url('${esc(sized(p.avatar_url, 64))}')` : ''}">${p.avatar_url ? '' : esc((cleanName(p.name || '?')[0] || '?').toUpperCase())}</span>`).join('')}${n0(on.total) > 4 ? `<span>+${n0(on.total) - 4}</span>` : ''}</span></div>
         <span class="h-small">${esc(byDept || 'Nobody yet')}${n0(on.on_break) ? ` · ${n0(on.on_break)} on a break` : ''}</span></div>` : ''}
     </div></section>`;
   el.querySelector('#h-copy').onclick = async (e) => { try { await navigator.clipboard.writeText(live.join_code || s.code || joinCode); e.target.textContent = 'Copied'; } catch { /* on screen */ } };
-  wireHomeShift(el);
-}
-// Department picker + busy buttons for the home shift controls (Bravo, matches the 0.15.1 Shifts page).
-// One department: no picker, just "Start shift". Several: a chip per department, the first picked.
-function homeDeptPicker() {
-  if (myDepartments.length < 2) return '';
-  return `<div class="h-pick" role="radiogroup" aria-label="Department">${myDepartments.map((d, i) => `<button type="button" role="radio" aria-checked="${i === 0}" class="h-opt${i === 0 ? ' on' : ''}" data-dept="${esc(d)}" style="--dept:${(DEPARTMENTS.find((x) => x.name === d) || {}).color || '#3a82d0'}"><span class="h-sw" aria-hidden="true"></span>${esc(d)}</button>`).join('')}</div>`;
-}
-function wireHomeShift(el) {
-  el.querySelectorAll('.h-opt').forEach((b) => b.addEventListener('click', () => {
-    el.querySelectorAll('.h-opt').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
-  }));
-  const act = async (btn, fn, args, busy) => {
-    const all = el.querySelectorAll('#h-start, #h-break, #h-end');
-    all.forEach((b) => { b.disabled = true; });
-    const was = btn.textContent;
-    btn.textContent = busy;
-    const { error } = await sb.rpc(fn, args || {});
-    if (error) { all.forEach((b) => { b.disabled = false; }); btn.textContent = was; alert(error.message); return; }
-    renderHome();
-  };
-  const brk = el.querySelector('#h-break'), end = el.querySelector('#h-end'), start = el.querySelector('#h-start');
-  brk?.addEventListener('click', () => act(brk, 'shift_break', null, 'Saving…'));
-  end?.addEventListener('click', () => { if (confirm('End your shift?')) act(end, 'shift_end', null, 'Ending…'); });
-  start?.addEventListener('click', () => act(start, 'shift_start',
-    { department: el.querySelector('.h-opt.on')?.dataset.dept || myDepartments[0] }, 'Starting…'));
 }
 // No session running (0.14.6): a quiet light bar in the same place, so your shift and the session are always one
 // glance away. The bold Session active block above takes over while a session is live.
 function drawIdle(el, h, s) {
-  const me = h.my_shift, staff = canSee('staff');
   const code = s.code || joinCode;
   const sessText = s.next ? `Next session ${esc(whenAhead(s.next.scheduled_for))}${s.next.host_name ? ' with ' + esc(s.next.host_name) : ''}` : 'No session running';
   const sessHref = canSee('sessions') ? (canSee('director') ? '#directors/sessions' : '#admin/sessions') : '';
-  const shiftPart = !staff ? '' : me
-    ? `<div class="h-idle-part"><span class="h-plabel-d">YOUR SHIFT \u00b7 ${esc(me.department).toUpperCase()}</span>
-        <div class="h-row"><strong class="h-idle-clock" data-tick="live-clock">${clock(shiftSecs(me))}</strong>
-        <button class="ghost small-btn" id="h-break">${me.status === 'break' ? 'End break' : 'Take a break'}</button>${window.chartLogBtn ? window.chartLogBtn('home') : ''}<button class="refresh small-btn" id="h-end">End shift</button></div></div>`
-    : myDepartments.length
-      ? `<div class="h-idle-part"><span class="h-plabel-d">YOUR SHIFT</span><div class="h-row"><span class="h-idle-off">Off shift</span>
-          ${homeDeptPicker()}<button class="refresh small-btn" id="h-start">Start shift</button></div></div>`
-      : '';
   el.innerHTML = `<section class="h-idle" aria-label="Session and shift">
       <div class="h-idle-part"><span class="h-plabel-d"><span class="h-idle-dot${s.next ? ' next' : ''}"></span>SESSION</span>
         <div class="h-row"><span class="h-idle-sess">${sessText}</span><span class="h-idle-code">Join code <strong>${esc(code)}</strong></span>${joinGameBtn(code, 'small')}
         ${sessHref ? `<a class="ghost small-btn h-idle-link" href="${sessHref}">${s.next ? 'Sessions' : 'Start a session'}</a>` : ''}</div></div>
-      ${shiftPart}
     </section>`;
-  wireHomeShift(el);
 }
 function tickHome() {
   clearInterval(homeTimer);
@@ -510,14 +468,12 @@ function drawSuggestions(tools) {
   const h = HC || {}, has = (k) => tools.find((t) => t.key === k), out = [];
   const s = h.session || currentSession || {};
   if (n0(h.failed_mine)) out.push({ cls: 'bad', text: `${plural(n0(h.failed_mine), 'action')} didn’t go through: see why`, href: adminHref('cases') });
-  if (h.my_shift) out.push({ cls: 'teal', text: `End shift · ${hrs(shiftSecs(h.my_shift))} so far`, run: async () => { if (confirm('End your shift?')) { const { error } = await sb.rpc('shift_end'); if (error) alert(error.message); renderHome(); } } });
   const appsTool = has('admin/applications') || has('review');
   if (n0(h.apps_waiting) && appsTool) out.push({ cls: 'warm', text: `Review ${plural(n0(h.apps_waiting), 'application')}`, href: appsTool.href });
   const tk = has('admin/tickets') || has('tickets');
   if (n0(h.tickets_open) && tk) out.push({ text: h.tickets_latest && h.tickets_latest.name ? `Reply to ${cleanName(h.tickets_latest.name)}’s ticket` : `${plural(n0(h.tickets_open), 'open ticket')}`, href: tk.href });
   if (s.live) out.push({ text: `Copy join code ${s.live.join_code || s.code || joinCode}`, run: async (b) => { try { await navigator.clipboard.writeText(s.live.join_code || s.code || joinCode); b.textContent = 'Copied'; } catch { /* on screen */ } } });
   else if (canSee('sessions') && !s.next) out.push({ text: 'Schedule a session', href: canSee('director') ? '#directors/sessions' : '#admin/sessions' });
-  if (!h.my_shift && myDepartments.length && canSee('staff')) out.push({ text: `Start my shift in ${myDepartments[0]}`, run: async () => { const { error } = await sb.rpc('shift_start', { department: myDepartments[0] }); if (error) alert(error.message); renderHome(); } });
   const last = has('admin/records') && lastRecord();
   if (last) out.push({ text: `Open ${last.name}’s record`, run: () => openRecord(last.id) });
   const list = out.slice(0, 4);

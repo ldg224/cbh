@@ -51,6 +51,11 @@ async function renderDept(body, tool) {
   // open the page, but only sees the tabs their permissions allow (Charlie, 18 Nov 2026).
   const seeDept = can('dept.view'), seeHist = can('history.view');
   const attMt = manageMt || can('meetings.attendance');
+  // 0.32.0: everyone in the department opens its window (Overview, Roster, Events, Courses); the leader data below
+  // only loads for people with a leader permission here.
+  const member = inMyDept(dept) || director;
+  const lead = director || seeDept || seeHist || editM || manageMt || attMt || seeAct;
+  const none = Promise.resolve({ data: [] });
   const dep = DEPARTMENTS.find((d) => d.name === dept) || { name: dept, color: '#3a82d0', icon: 'clock' };
   const route = `#directors/${tool.id}`;
   const here = () => location.hash.split('/').slice(0, 2).join('/') === route;   // a tab may follow: #directors/<id>/<tab>
@@ -62,13 +67,13 @@ async function renderDept(body, tool) {
     <div class="card"><p class="muted small">Loading…</p></div>`;
 
   const [roster, ranksQ, changes, weekly, meetQ, lastMeet, chanQ, winQ, permQ, disQ, todoQ] = await Promise.all([
-    sb.rpc('dept_roster', { department: dept }),
+    lead ? sb.rpc('dept_roster', { department: dept }) : none,
     sb.from('roles').select('id, name, rank_label, rank_order, badge_color').eq('kind', 'rank').eq('department', dept).order('rank_order', { ascending: false }),
-    sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100),
-    sb.rpc('dept_weekly_hours', { department: dept }),
-    sb.from('meetings').select('*').eq('department', dept).order('scheduled_for', { ascending: false }).limit(60),
-    sb.rpc('dept_last_meeting', { department: dept }),
-    sb.from('discord_channels').select('id, name, kind, category, position').order('position'),
+    seeHist || seeDept ? sb.from('role_changes').select('*').eq('department', dept).order('created_at', { ascending: false }).limit(100) : none,
+    seeAct ? sb.rpc('dept_weekly_hours', { department: dept }) : none,
+    lead ? sb.from('meetings').select('*').eq('department', dept).order('scheduled_for', { ascending: false }).limit(60) : none,
+    lead ? sb.rpc('dept_last_meeting', { department: dept }) : none,
+    lead ? sb.from('discord_channels').select('id, name, kind, category, position').order('position') : none,
     director || !editM ? Promise.resolve({ data: null }) : sb.rpc('my_members_window', { department: dept }),
     director ? sb.from('rank_permissions').select('role_id, perm, window_lo, window_hi') : Promise.resolve({ data: [] }),
     // Cleared To do items (0049): quiet members dealt with / snoozed / on leave, and dismissed failed rank changes.
@@ -101,7 +106,6 @@ async function renderDept(body, tool) {
   const hist = changes.data || [];
   const pending = Object.fromEntries(hist.filter((c) => c.status === 'pending').map((c) => [c.target_discord_id, c]));
   const weeks = Object.fromEntries((weekly.data || []).map((w) => [w.discord_id, (w.weeks || []).map(Number)]));
-  const deptWeeks = [0, 1, 2, 3].map((i) => people.reduce((a, p) => a + ((weeks[p.discord_id] || [])[i] || 0), 0));
   // A Director can't change themselves or another Director (execs can); the database checks this too.
   const locked = (p) => !editM || (!exec && (p.discord_id === myDiscordId || p.rank_label === 'Director'))
     || (!director && p.rank_order != null && !inWin(p.rank_order));
@@ -113,7 +117,6 @@ async function renderDept(body, tool) {
     return stillQuiet && (!x.until || new Date(x.until) > new Date()) ? x : null; };
   const inactive = seeAct ? people.filter((p) => dpInactive(p) && !cleared(p)) : [];
   const todo = (todoQ && todoQ.data && todoQ.data[dept]) || null;
-  const weekTotal = people.reduce((a, p) => a + Number(p.week_hours || 0), 0);
 
   const rankBadge = (p) => {
     const r = rankById[p.rank_role_id];
@@ -140,13 +143,16 @@ async function renderDept(body, tool) {
       <span class="st ${DP_ST_CLASS[c.status] || ''}">${esc(DP_STATUS[c.status] || c.status)}</span></div>`;
 
   // ---------- banner + tabs ----------
+  const ext = (id) => window.DEPT_TABS.filter((x) => !x.tool && x.id === id && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x }));
   const TABS = [
-    ...(seeDept ? [{ id: 'overview', label: 'Overview' }, { id: 'members', label: 'Members', n: people.length }] : []),
+    ...(seeDept || member ? [{ id: 'overview', label: 'Overview' }] : []),
+    ...ext('roster'), ...ext('events'),
+    ...(seeDept ? [{ id: 'members', label: 'Members', n: people.length }] : []),
     // Courses: a placeholder until a page registers DEPT_TABS id 'courses' (Alpha's courses.js), which then replaces it.
     ...((seeDept || can('courses.manage') || can('courses.assess')) && !window.DEPT_TABS.some((x) => x.id === 'courses') ? [{ id: 'courses', label: 'Courses', soon: true }] : []),
     ...(seeDept || manageMt || attMt ? [{ id: 'meetings', label: 'Meetings', n: upcoming.length || null }] : []),
     ...(seeHist ? [{ id: 'history', label: 'History', n: hist.length || null }] : []),
-    ...window.DEPT_TABS.filter((x) => !x.tool && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x })),
+    ...window.DEPT_TABS.filter((x) => !x.tool && !['roster', 'events'].includes(x.id) && dpShows(x, dept)).map((x) => ({ id: x.id, label: x.label, ext: x })),
     ...(director ? [{ id: 'ranks', label: 'Ranks & permissions' }] : []),
     // Hospital tools (Administration only, by permission; admin-tools.js), after a divider.
     ...window.DEPT_TABS.filter((x) => x.tool && dpShows(x, dept)).map((x, i) => ({ id: x.id, label: x.label, ext: x, first: i === 0 })),
@@ -159,13 +165,7 @@ async function renderDept(body, tool) {
       <span class="dp-big" aria-hidden="true"></span>
       <div class="dp-b-row"><span class="dp-sq" aria-hidden="true"></span>
         <div><h1 class="dp-name">${esc(dept)}</h1>
-          <span class="dp-pill">${exec ? 'Executive view' : director ? 'You direct this department' : 'Team view'}</span></div></div>
-      ${seeDept ? `<div class="dp-stats">
-        <div class="dp-stat"><b>${people.length}</b><span>Members</span></div>
-        <div class="dp-stat"><b>${onNow.length}</b><span>On shift now</span></div>
-        ${seeAct ? `<div class="dp-stat"><b>${dpHours(weekTotal)}</b><span>Hours this week</span></div>` : `<div class="dp-stat"><b>${upcoming.length}</b><span>Meetings planned</span></div>`}
-        <div class="dp-stat"><b>${nextMeet ? (nextMeet.status === 'live' ? 'Now' : esc(dpDayShort(nextMeet.scheduled_for))) : 'None'}</b><span>${nextMeet && nextMeet.status === 'live' ? 'Meeting on' : 'Next meeting'}</span></div>
-      </div>` : ''}
+          <span class="dp-pill">${exec ? 'Executive view' : director ? 'You direct this department' : esc((window.myRanks || []).filter((r) => r.department === dept).sort((a, b) => b.rank_order - a.rank_order)[0]?.rank_label || 'Team view')}</span></div></div>
     </section>
     <div class="dp-tabwrap"><button type="button" class="dp-tabarrow l" data-tabscroll="-1" aria-label="Scroll the tabs left" hidden><span aria-hidden="true"></span></button>
     <div class="dp-tabs" role="tablist" aria-label="${esc(dept)}">${TABS.map((t) => `${t.first && TABS.some((x) => !(x.ext && x.ext.tool)) ? '<span class="dp-tsep" aria-hidden="true"></span>' : ''}<button type="button" role="tab" id="dpt-${t.id}" data-tab="${t.id}" aria-selected="${t.id === tab}" tabindex="${t.id === tab ? 0 : -1}"${t.ext && t.ext.tool ? ' class="dp-tooltab"' : ''}>${esc(t.label)}${t.n ? ` <span class="n">${t.n}</span>` : ''}${t.soon ? ' <span class="dp-soon">Soon</span>' : ''}</button>`).join('')}</div>
@@ -218,39 +218,13 @@ async function renderDept(body, tool) {
       ...hist.filter((c) => c.status === 'failed' && !dismissed['failed_change:' + c.id] && (!todo || Date.now() - new Date(c.created_at) < 7 * 864e5)).slice(0, 3).map((c) => ({ id: c.target_discord_id, name: nameOf(c.target_discord_id, c.target_name), why: 'Change failed: ' + (c.error || 'try again'), flag: ['bad', 'Failed'] })),
       ...inactive.slice(0, 6).map((p) => ({ id: p.discord_id, name: cleanName(p.display_name), why: dpLastActive(p) ? 'Not active since ' + new Date(dpLastActive(p)).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'No shifts or meetings yet', flag: ['warn', 'Inactive'], av: p.avatar_url })),
     ];
-    const max = Math.max(1, ...deptWeeks);
-    const weekLabel = (i) => {
-      if (i === 3) return 'This week';
-      const d = new Date(); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day - (3 - i) * 7);
-      return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
-    };
-    pane.innerHTML = `<div class="dp-ov">
-      <div class="dp-col">
-        ${seeAct || editM || attention.length ? `<section class="card dp-card"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
+    const attnHtml = seeAct || editM || attention.length ? `<section class="card dp-card dv-attn"><div class="dp-head"><h2>Needs your attention</h2>${inactive.length > 6 ? `<button class="linkish" data-go="members" data-filter="inactive">All ${inactive.length} inactive</button>` : ''}</div>
           ${attention.length ? `<div class="dp-list">${attention.map((a) => `<div class="dp-mini">${a.ico ? `<span class="hd-ico" style="--c:${dep.color};--icon:${iconUrl(a.ico)}" aria-hidden="true"></span>` : face({ name: a.name, discordId: a.id, avatarUrl: a.av || byId[a.id]?.avatar_url || '', size: 'm' })}
               <div class="dp-m"><strong>${esc(a.name)}</strong><span>${esc(a.why)}</span></div>${a.go ? `<button type="button" class="ghost small-btn" data-go="${a.go}">${a.btn}</button>` : `<span class="dp-flag ${a.flag[0]}">${a.flag[1]}</span>`}</div>`).join('')}</div>`
             : `<p class="muted small">${seeAct ? `Nothing needs you right now. Everyone has had a shift or come to a meeting in the last ${DP_INACTIVE_DAYS} days.` : 'Nothing needs you right now.'}</p>`}
-        </section>` : ''}
-        ${seeHist ? `<section class="card dp-card"><div class="dp-head"><h2>Recent changes</h2>${hist.length > 5 ? '<button class="linkish" data-go="history">See all</button>' : ''}</div>
-          ${hist.length ? `<div class="dp-list">${hist.slice(0, 5).map((c) => changeRow(c, false)).join('')}</div>` : `<p class="muted small">No changes yet.</p>`}
-        </section>` : ''}
-      </div>
-      <div class="dp-col">
-        <section class="card dp-card"><div class="dp-head"><h2>Next meeting</h2>${nextMeet || manageMt ? `<button class="linkish" data-go="meetings">${nextMeet ? 'Meetings' : 'Schedule one'}</button>` : ''}</div>
-          ${nextMeet ? meetLine(nextMeet) : `<p class="muted small">No meeting planned.</p>`}
-        </section>
-        <section class="card dp-card"><div class="dp-head"><h2>On shift now</h2></div>
-          ${onNow.length ? `<div class="dp-list">${onNow.map((p) => `<div class="dp-mini">${face({ name: p.display_name, discordId: p.discord_id, avatarUrl: p.avatar_url, size: 'm' })}
-              <div class="dp-m"><strong>${esc(cleanName(p.display_name))}</strong><span>${seeAct ? esc(dpH(p.week_hours)) + ' this week' : 'On shift'}</span></div>${rankBadge(p)}</div>`).join('')}</div>`
-            : `<p class="muted small">Nobody from ${esc(dept)} is on shift.</p>`}
-        </section>
-        ${seeAct ? `<section class="card dp-card"><div class="dp-head"><h2>Hours, last 4 weeks</h2></div>
-          <div class="dp-chart" role="img" aria-label="Department hours: ${deptWeeks.map((h, i) => weekLabel(i) + ' ' + dpHours(h)).join(', ')}">
-            ${deptWeeks.map((h, i) => `<div class="dp-bar${i === 3 ? ' now' : ''}"><span class="dp-bar-v">${dpHours(h)}</span><i style="height:${Math.max(3, Math.round((h / max) * 100))}%"></i><span class="dp-bar-l">${esc(weekLabel(i))}</span></div>`).join('')}
-          </div>
-        </section>` : ''}
-      </div></div>`;
-    pane.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; if (b.dataset.go === 'meetings' && !nextMeet && manageMt) meetState.open = 'new'; show(b.dataset.go); });
+        </section>` : '';
+    const wire = (root) => root.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { if (b.dataset.filter) memState.filter = b.dataset.filter; show(b.dataset.go); });
+    window.dvOverview(pane, dept, attnHtml, wire);
   }
 
   // ---------- Members ----------
@@ -755,6 +729,7 @@ async function renderDept(body, tool) {
     ['history.view', 'See history', 'Changes and reasons'],
     ['meetings.manage', 'Run meetings', 'Schedule and cancel'],
     ['meetings.attendance', 'Attendance', 'Attendance and notes'],
+  ['posts.manage', 'Post updates', 'Post as From the Director'],
     ['applications.review', 'Review applications', 'Review and decide'],
     ['applications.settings', 'Edit applications', 'Forms, settings, stages'],
     ['courses.manage', 'Edit courses', 'Create and edit courses'],
@@ -798,6 +773,7 @@ async function renderDept(body, tool) {
       await reload();
     });
     window.deptOfficeCard?.(pane, dept, ranks);   // Office access (offices.js, R2)
+    if (director) window.dvTargetsCard?.(pane, dept, ranks);   // weekly minutes target (deptviews.js, 0.32.0)
   }
 
   // ---------- History ----------
