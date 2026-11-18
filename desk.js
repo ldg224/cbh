@@ -122,6 +122,7 @@
       <nav class="ds-nav" aria-label="Pages">
         ${link({ href: '#', label: 'Home', icon: 'home' })}
         ${window.chartNav ? window.chartNav(link) : ''}
+        ${window.checkinNav ? window.checkinNav(link) : ''}
         <div class="ds-cat">My stuff</div>
         ${myStuff().map((it) => link(it)).join('')}
         ${depts.length ? `<div class="ds-cat">Departments</div>` : ''}
