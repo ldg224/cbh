@@ -190,12 +190,11 @@ function drawNeeds() {
     if (more > 0) notes.push({ ico: 'clock', c: '#e8890c', t: `${plural(more, 'more quiet member')}`, s: d.name, b: 'See all', href: base + '/members' });
     if (n0(t.failed)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(t.failed), 'rank change')} didn\u2019t go through`, s: d.name, b: 'See why', href: base + '/history' });
     // Assigned courses I haven't finished (0057): overdue ones need you; the rest are notes until they're due.
-    const crHref = (typeof crMyCoursesHref === 'function' && crMyCoursesHref()) || '#courses';
     for (const cr of (t.courses_list || [])) {
       const due = cr.due_at ? new Date(cr.due_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
       const by = cr.assigned_by_name ? ' · from ' + cleanName(cr.assigned_by_name) : '';
-      if (cr.overdue) out.push({ ico: 'graduation-cap', c, t: `Finish ${cr.title}`, s: d.name + (due ? ' · was due ' + due : '') + by, b: 'Open', href: crHref });
-      else notes.push({ ico: 'graduation-cap', c: '#e8890c', t: `Finish ${cr.title}`, s: d.name + (due ? ' · due ' + due : '') + by, b: 'Open', href: crHref });
+      if (cr.overdue) out.push({ ico: 'graduation-cap', c, t: `Finish ${cr.title}`, s: d.name + (due ? ' · was due ' + due : '') + by, b: 'Open', href: '#courses/' + encodeURIComponent(cr.id) });
+      else notes.push({ ico: 'graduation-cap', c: '#e8890c', t: `Finish ${cr.title}`, s: d.name + (due ? ' · due ' + due : '') + by, b: 'Open', href: '#courses/' + encodeURIComponent(cr.id) });
     }
   }
   if (n0(h.failed_mine)) out.push({ ico: 'error', c: '#c42b2b', t: `${plural(n0(h.failed_mine), 'mod action')} didn’t go through`, s: 'See why and try again', b: 'Open', href: '#admin/cases' });
