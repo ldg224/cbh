@@ -214,6 +214,11 @@
         "id": "8773",
         "commonName": "siren",
         "use": "Drill events (0.32.0)"
+      },
+      "help": {
+        "id": "2908",
+        "commonName": "help",
+        "use": "Support page (0.32.2)"
       }
     }
   }

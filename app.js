@@ -467,7 +467,8 @@ const PAGES = [
   ] },
   { id: 'shifts',   aud: 'staff',    title: 'Shifts',         icon: 'clock',   layout: 'shifts' },
   { id: 'roster',   aud: 'staff',    title: 'Staff & roster', icon: 'people',  layout: 'people' },
-  { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'doc', building: true },
+  { id: 'rules',    aud: 'everyone', title: 'Rules & info',   icon: 'book',    layout: 'rules' },
+  { id: 'support',  aud: 'everyone', title: 'Support',        icon: 'help',    layout: 'support' },
   { id: 'tickets',  aud: 'leads',    title: 'Team tickets',   icon: 'inbox',   layout: 'tickets' },   // leads who aren't admins
   { id: 'review',   aud: 'reviewer-lead', title: 'Applications', icon: 'resume', layout: 'review' },   // review-team leads who aren't admins
   { id: 'contact',  aud: 'everyone', title: 'Contact a team', icon: 'chat',    layout: 'contact' },
@@ -488,6 +489,7 @@ function setAccess(me, roles, acc) {
       // Applications: execs, Directors (has_perm always passes) and ranks granted applications.review (0027)
       reviewer: !!acc.exec || (acc.directs || []).length > 0 || Object.values(myPerms).some((p) => (p || []).includes('applications.review')) };
     access['reviewer-lead'] = access.reviewer && !acc.admin;
+    myLeads = acc.leads || [];   // teams whose tickets I answer (department Tickets tab, deptviews.js)
     setDirectorAccess(acc.directs, roles, !!acc.exec, acc.run_sessions);
     return;
   }
@@ -499,6 +501,7 @@ function setAccess(me, roles, acc) {
 }
 // Directors hub: departments I direct (my_access().directs; worked out from my roles until the database says).
 let myDirects = [];
+let myLeads = [];
 let myPerms = {};   // rank permissions per department (my_perms(), 0027); a department page opens with 'dept.view'
 const hasPerm = (perm, dept) => !!access.exec || myDirects.includes(dept) || (myPerms[dept] || []).includes(perm);
 function setDirectorAccess(directs, roles, exec, runSessions) {
@@ -652,6 +655,7 @@ function findRoute() {
   // #review/<id>, older Discord posts) open that application in its department's Applications tab.
   const legacy = location.hash.match(/^#(?:admin\/applications|review)\/(\d+)/);
   if (legacy && typeof appLegacyLink === 'function') { appLegacyLink(+legacy[1]); return null; }
+  if (typeof dvRedirect === 'function' && dvRedirect()) return null;   // Sessions, Tickets, Commands moved (0.32.2)
   if (typeof redirectHubLink === 'function' && redirectHubLink()) return null;   // #admin/... and #exec/... moved (0.29.0)
   const [a, b] = location.hash.slice(1).split('/');
   if (a === 'f') {   // a folder opened as its own page (home.js)
@@ -914,6 +918,11 @@ async function renderContact(body) {
     team = b.dataset.t;
     body.querySelectorAll('#c-team .team').forEach((x) => x.classList.toggle('on', x === b));
   };
+  // #contact/website (Support's "Report a problem"): Administration, with the subject started.
+  if (location.hash.split('/')[1] === 'website') {
+    body.querySelector('#c-team [data-t="Administration"]')?.click();
+    const s = body.querySelector('#c-subject'); s.value = 'Website problem: '; body.querySelector('#c-body').focus();
+  }
   body.querySelector('#c-form').onsubmit = async (e) => {
     e.preventDefault();
     const err = body.querySelector('#c-err'); err.hidden = true;
@@ -934,7 +943,7 @@ async function renderContact(body) {
   };
 }
 
-async function renderTeamTickets(body) {
+async function renderTeamTickets(body, team) {   // team: one department's tickets (its Tickets tab, 0.32.2)
   let filter = 'active';
   body.innerHTML = `
     <div class="toolbar"><div class="chips" id="tk-filter">
@@ -950,12 +959,13 @@ async function renderTeamTickets(body) {
   async function load() {
     let q = sb.from('tickets').select('*').order('created_at', { ascending: false }).limit(100);
     q = filter === 'closed' ? q.eq('status', 'closed') : q.in('status', ['open', 'claimed']);
+    if (typeof team === 'string') q = q.eq('team', team);
     const { data, error } = await q;
     if (error) { list.innerHTML = ''; return liveError(list, error); }
     list.innerHTML = data.length ? data.map((t) => ticketRow(t, true)).join('') : `<p class="muted small">${filter === 'closed' ? 'No closed tickets.' : 'No open tickets.'}</p>`;
     list.onclick = (e) => {
       const b = e.target.closest('.ticket'); if (!b) return;
-      renderThread(body, data.find((x) => String(x.id) === b.dataset.id), { staff: true, back: () => renderTeamTickets(body) });
+      renderThread(body, data.find((x) => String(x.id) === b.dataset.id), { staff: true, back: () => renderTeamTickets(body, team) });
     };
   }
   load();

@@ -25,24 +25,15 @@
 
   // ---------- what this person can use ----------
   const hash = () => location.hash || '#';
-  function sessionsHref() { return canSee('sessions') ? (canSee('director') ? '#directors/sessions' : '#admin/sessions') : null; }
+  // The OUTER MENU (owner, 0.32.2): only what's yours wherever you are. Sessions, Courses and Tickets live in each
+  // department's INNER MENU now; Commands is part of Rules & info; Help sits at the bottom.
   function myStuff() {
     return [
       canSee('staff') && myDepartments.length && { href: '#shifts', label: 'My shift', icon: 'clock' },
-      sessionsHref() && { href: sessionsHref(), label: 'Sessions', icon: 'calendar' },
-      typeof crMyCoursesHref === 'function' && crMyCoursesHref() && { href: crMyCoursesHref(), label: 'Courses', icon: 'graduation-cap', ...myCourseCount() },   // courses.js
       { href: '#apply', label: 'Apply', icon: 'resume' },
-      { href: '#contact', label: 'Contact a team', icon: 'chat' },
-      canSee('leads') && { href: '#tickets', label: 'Team tickets', icon: 'inbox' },
-      canSee('staff') && { href: '#roster', label: 'Staff directory', icon: 'people' },
     ].filter(Boolean);
   }
-  // Assigned courses I haven't finished, across departments (my_todo + course_my_todo, 0057): red if any is overdue.
-  function myCourseCount() {
-    let red = 0, orange = 0;
-    for (const t of Object.values(window.deskTodo || {})) { red += Number(t.courses || 0); orange += Number(t.courses_note || 0); }
-    return red ? { n: red + orange, sev: 'red' } : orange ? { n: orange, sev: 'orange' } : {};
-  }
+  const HELP = [{ href: '#rules', label: 'Rules & info', icon: 'book' }, { href: '#support', label: 'Support', icon: 'help' }, { href: '#contact', label: 'Contact a team', icon: 'chat' }];
   // What each department page has waiting (my_todo, migration 0046): red = needs action now, orange = a note.
   function pageCounts(d) {
     const t = window.deskTodo[d.name] || {}, n = (v) => Number(v || 0);
@@ -129,7 +120,7 @@
         ${depts.length ? `<div class="ds-cat">${depts.length === 1 ? 'Your department' : 'Your departments'}</div>${depts.map(deptLink).join('')}` : ''}
         <div class="ds-grow"></div>
         <div class="ds-cat">Help</div>
-        ${link({ href: '#rules', label: 'Rules & info', icon: 'book' })}${link({ href: '#commands', label: 'Commands', icon: 'console' })}
+        ${HELP.map((it) => link(it)).join('')}
       </nav>
       <div class="ds-phone-only">${sessionCard()}</div>`;
     const nav = side.querySelector('.ds-nav');

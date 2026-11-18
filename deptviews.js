@@ -358,3 +358,48 @@ window.dvTargetsCard = async (pane, dept, ranks) => {
     ok.hidden = false;
   };
 };
+
+// ---------- 0.32.2: the outer menu tidy (owner) ----------
+// Sessions and Tickets are department pages now (Leaders in the inner menu); Commands is part of Rules & info.
+const dvMine = () => DEPARTMENTS.filter((d) => canSee('dir:' + d.name));
+const dvTicketsFor = (dept) => !!access.exec || myLeads.includes(dept);
+window.DEPT_TABS.push({ id: 'sessions', label: 'Sessions', icon: 'controller', show: (dept) => canSee('sessions') && (inMyDept(dept) || dvLeader(dept)), render: (pane) => renderSessions(pane) });
+window.DEPT_TABS.push({ id: 'tickets', label: 'Tickets', icon: 'inbox', show: (dept) => dvTicketsFor(dept) && !(dept === 'Administration' && access.admin), render: (pane, dept) => renderTeamTickets(pane, dept) });
+// Old links land on the same thing in your department (or the closest page you can see).
+function dvRedirect() {
+  const h = location.hash;
+  const go = (to) => { location.replace(to); return true; };
+  if (/^#commands(\/|$)/.test(h)) return go('#rules');
+  if (/^#(admin|directors)\/sessions(\/|$)/.test(h)) {
+    const d = dvMine()[0];
+    return go(d ? `#directors/${d.id}/${canSee('sessions') ? 'sessions' : 'events'}` : '#events');
+  }
+  if (/^#tickets(\/|$)/.test(h)) {
+    const d = DEPARTMENTS.find((x) => dvTicketsFor(x.name) && canSee('dir:' + x.name) && !(x.name === 'Administration' && access.admin));
+    return go(d ? `#directors/${d.id}/tickets` : access.admin ? adminHref('tickets') : '#');
+  }
+  return false;
+}
+
+// Rules & info: the rules (still being written) and the Discord commands.
+LIVE.rules = (body) => {
+  body.innerHTML = `<div class="card building-note"><span class="t-ico" style="--c:#3a82d0;--icon:${iconUrl('book')}" aria-hidden="true"></span>
+      <div class="case-main"><strong>The hospital rules are being written</strong><span class="muted small-meta">They'll be here soon.</span></div></div>
+    <h2 class="dv-sec">Discord commands</h2>${commandsPage()}`;
+};
+
+// Support: how to use the site, report a website problem, and where the rules are.
+const DV_FAQ = [
+  ['How do I start a shift?', 'Tap Start shift at the top of any page. If you\u2019re in more than one department, you\u2019ll pick which one on My shift. End shift is in the same place, and Take a break is under your picture.'],
+  ['Where\u2019s my department?', 'In the menu on the left. Each department has its own menu: Overview, Roster, Events and Courses.'],
+  ['How do events work?', 'Your department\u2019s Events tab lists what\u2019s coming up. Tap Attend or Maybe so the host knows you\u2019re coming. Events are posted in Discord too.'],
+  ['How do I check in as a patient?', 'While a session is live, Check in appears in the menu. Fill in the form and you\u2019ll see your place in line.'],
+  ['Where are my courses?', 'In your department\u2019s Courses tab. Your progress is on its Overview.'],
+  ['Who can see my hours?', 'You and your department\u2019s leaders.'],
+];
+LIVE.support = (body) => {
+  body.innerHTML = `<section class="card dv-faq">${DV_FAQ.map(([q, a], i) => `<details${i === 0 ? ' open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
+    <section class="card dv-report"><div><h3>Something not working?</h3><p class="muted small">Tell Administration what happened and what you were trying to do.</p></div>
+      <a class="refresh" href="#contact/website">Report a problem</a></section>
+    <div class="dv-links"><a href="#rules">Rules & info</a><a href="#contact">Contact a team</a></div>`;
+};
