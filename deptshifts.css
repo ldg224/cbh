@@ -1,0 +1,77 @@
+/* Department Shifts page (0.33.0, Bravo; deptshifts.js): On Now, This Week, Leaderboard. Reuses deptviews.css
+   (.dv-card, .dv-bar, .dv-big, .dv-dayh, .dv-count) and cases.css (.ma-seg) so it reads as one window. */
+
+.ds-head { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.ds-head h2 { margin: 0; flex: 1; font-size: 24px; font-weight: 800; letter-spacing: -.01em; text-transform: none; color: var(--text); }
+.ds-ch { margin-bottom: 12px; }
+.ds-ch[hidden] { display: none; }
+.ds-body[aria-busy="true"] { opacity: .6; transition: opacity .15s; }
+
+/* people rows */
+.ds-list { padding: 2px 16px; }
+.ds-row { display: flex; align-items: center; gap: 10px 12px; padding: 11px 0; border-top: 1px solid #eef2f8; min-width: 0; flex-wrap: wrap; }
+.ds-list > .ds-row:first-child { border-top: 0; }
+.ds-row.me { margin: 0 -16px; padding-left: 16px; padding-right: 16px; background: #f1fbfa; box-shadow: inset 3px 0 0 var(--teal); }
+.ds-list > .ds-row.me:first-child { border-radius: 12px 12px 0 0; }
+.ds-list > .ds-row.me:last-child { border-radius: 0 0 12px 12px; }
+.ds-list > .ds-row.me:only-child { border-radius: 12px; }
+.ds-who { flex: 1; min-width: 140px; display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+.ds-who strong { font-size: 14.5px; overflow-wrap: anywhere; }
+.ds-you { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--teal-ink); background: #e5f9f7; border-radius: 6px; padding: 1px 7px; }
+.ds-meta { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.ds-meta small { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+
+/* status pills */
+.ds-sum { display: flex; gap: 8px; margin-bottom: 12px; }
+.ds-pill { font-size: 11.5px; font-weight: 800; border-radius: 99px; padding: 2px 10px; white-space: nowrap; }
+.ds-pill.on { color: #14803d; background: #e7f8ef; }
+.ds-pill.brk { color: #8a4b00; background: #fff3e2; }
+.ds-pill.auto { color: var(--muted); background: var(--raised); }
+.ds-sum .ds-pill { font-size: 12.5px; padding: 4px 12px; }
+.ds-empty { padding: 18px 20px; }
+.ds-empty p { margin: 0; }
+
+/* This Week */
+.ds-wtop { display: grid; gap: 16px; margin-bottom: 20px; }
+.ds-week.lead .ds-wtop { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); align-items: start; }
+.ds-mine .dv-big { margin: 2px 0 2px; }
+.ds-bar i { background: var(--blue); } .ds-bar.met i { background: var(--teal); }
+.ds-team { display: grid; }
+.ds-trow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "f who num" "f bar bar"; align-items: center; gap: 4px 10px; padding: 9px 0; border-top: 1px solid #eef2f8; }
+.ds-team > .ds-trow:first-child { border-top: 0; }
+.ds-trow > .face, .ds-trow > :first-child { grid-area: f; }
+.ds-trow .ds-who { grid-area: who; min-width: 0; }
+.ds-trow .ds-tnum { grid-area: num; text-align: right; white-space: nowrap; }
+.ds-trow .dv-bar, .ds-trow .ds-notgt { grid-area: bar; margin-top: 0; height: 6px; }
+.ds-tnum b { font-size: 14px; font-weight: 800; } .ds-tnum small { font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 600; }
+.ds-day { margin-bottom: 14px; }
+.ds-day h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+
+/* Leaderboard */
+.ds-btools { display: flex; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ds-mine-line { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--teal-wash, #e5f9f7); border: 1px solid rgba(46, 211, 198, .45); font-size: 14.5px; font-weight: 600; }
+.ds-mine-line b { font-weight: 800; color: var(--teal-ink); }
+.ds-place { width: 28px; height: 28px; flex: none; border-radius: 8px; display: grid; place-items: center; font-size: 13px; font-weight: 800; background: var(--raised); color: var(--blue-deep); }
+.ds-row.p1 .ds-place { background: #fdf0c8; color: #7a5600; }
+.ds-row.p2 .ds-place { background: #e9eef5; color: #3d4f6e; }
+.ds-row.p3 .ds-place { background: #f8e2d2; color: #87431b; }
+.ds-nums { display: flex; gap: 6px; margin-left: auto; }
+.ds-nums > span { min-width: 64px; text-align: center; background: #f3f7fc; border-radius: 8px; padding: 5px 8px; display: grid; }
+.ds-nums b { font-size: 14.5px; font-weight: 800; white-space: nowrap; }
+.ds-nums small { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.ds-row.me .ds-nums > span { background: #fff; }
+.ds-rest { margin: 10px 2px 0; }
+
+@media (max-width: 900px) { .ds-week.lead .ds-wtop { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  .ds-head h2 { font-size: 20px; flex-basis: 100%; }
+  .ds-seg { display: flex; width: 100%; }
+  .ds-seg button { flex: 1; padding: 8px 6px; }
+  .ds-btools .ma-seg { display: flex; width: 100%; }
+  .ds-btools .ma-seg button { flex: 1; }
+  .ds-list { padding: 2px 14px; }
+  .ds-row.me { margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+  .ds-meta { margin-left: 52px; justify-content: flex-start; }
+  .ds-board .ds-nums { margin-left: 90px; }
+  .ds-nums > span { min-width: 58px; }
+}
