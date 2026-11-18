@@ -196,3 +196,21 @@ begin
     execute format('revoke execute on function public.%s from public, anon, authenticated', f);
   end loop;
 end $g$;
+
+-- The course page (course_view, 0048/0055) also shows my assignment, and my own due date when the assignment sets one.
+do $r$ begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'course_view_base') then
+    alter function public.course_view(uuid) rename to course_view_base;
+  end if;
+end $r$;
+revoke execute on function public.course_view_base(uuid) from public, anon, authenticated;
+create or replace function public.course_view(cid uuid)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select case when v is null then null else v || jsonb_build_object(
+      'due_at', coalesce(to_jsonb(a.due_at), v->'due_at'),
+      'assigned', case when a.id is null then null else jsonb_build_object('by', a.assigned_by_name, 'at', a.created_at, 'due_at', a.due_at, 'note', a.note) end) end
+  from public.course_view_base(cid) v
+  left join public.course_assignments a on a.course_id = cid and a.discord_id = public.my_discord_id()
+$$;
+revoke execute on function public.course_view(uuid) from public, anon;
+grant execute on function public.course_view(uuid) to authenticated;
