@@ -898,7 +898,7 @@ async function renderDept(body, tool) {
     pane.innerHTML = `${head}<p class="error" id="rk-err" hidden></p>
       <div class="rk${rk.open ? ' open' : ''}">${list}<div class="rk-pane"><button type="button" class="rk-back" data-rkback>‹ All ${word}s</button>${body}</div></div>`;
     loadFaces(pane);
-    if (!ex) { loadRankExtras().then(() => { if (pane.isConnected && tab === 'manage') drawRanks(); }); return; }
+    if (!ex) { loadRankExtras().then(() => { if (pane.isConnected && pane.querySelector('.rk')) drawRanks(); }); return; }   // redraw only if the editor is still showing (not History)
     wireRanks();
   }
   function wireRanks() {
@@ -958,7 +958,7 @@ async function renderDept(body, tool) {
       const save = async () => {
         if (inp.value === was || inp.dataset.busy) return;
         const v = inp.value === '' ? null : Number(inp.value);
-        if (v != null && (!Number.isFinite(v) || v < 0 || v > 10080)) return fail('A target is a number of minutes from 0 to 10080 (one week).');
+        if (v != null && (!Number.isInteger(v) || v < 0 || v > 10080)) return fail('A target is a whole number of minutes from 0 to 10080 (one week).');
         inp.dataset.busy = '1'; fail('');
         const { error } = await sb.rpc('dept_set_target', { p_department: dept, p_minutes: v, p_rank_role_id: inp.dataset.tgt || null });
         delete inp.dataset.busy;
