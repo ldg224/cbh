@@ -94,7 +94,10 @@ window.DEPT_TABS.push({
       return `<div class="dv-bar ds-bar${mins >= tgt ? ' met' : ''}" role="progressbar" aria-label="Weekly target" aria-valuenow="${pc}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pc}%"></i></div>`;
     };
     function drawWeek(data) {
-      const me = data.me || {}, log = data.log || [], people = data.people;
+      // Exec view switched off (0.35.0, app.js execViewOff): show the page as the person's own roles. A page filter only;
+      // the database still answers as an exec. dvLeader follows the switch.
+      const asSelf = !!window.execViewOff?.() && !dvLeader(dept);
+      const me = data.me || {}, log = (data.log || []).filter((s) => !asSelf || s.me), people = asSelf ? null : data.people;
       const meCard = inMyDept(dept) || me.shifts ? `<section class="card dv-card ds-mine"><div class="dp-head"><h2>My Week</h2>${me.target && me.minutes >= me.target ? '<span class="dv-streak">Target met</span>' : ''}</div>
           <div class="dv-big">${esc(dvMins(me.minutes))} <span>${me.target ? 'of ' + esc(dvMins(me.target)) : 'on shift'} · ${Number(me.shifts || 0)} ${me.shifts == 1 ? 'shift' : 'shifts'}</span></div>
           ${me.target ? bar(me.minutes, me.target) : ''}</section>` : '';
