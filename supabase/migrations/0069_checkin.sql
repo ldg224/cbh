@@ -10,6 +10,9 @@ alter table public.chart_cases add constraint chart_cases_arrival_check check (a
 alter table public.chart_cases drop constraint if exists chart_cases_disposition_check;
 alter table public.chart_cases add constraint chart_cases_disposition_check check (disposition in ('discharged', 'admitted', 'or', 'transferred', 'deceased', 'ama', 'lwbs'));
 
+alter table public.chart_cases add column if not exists cared_for text[] not null default '{}';
+alter table public.chart_cases add column if not exists checkin_confirmed text[] not null default '{}';
+
 create table if not exists public.chart_checkins (
   id               bigint generated always as identity primary key,
   case_id          bigint not null unique references public.chart_cases (id) on delete cascade,
@@ -30,7 +33,8 @@ create table if not exists public.chart_checkins (
   staff_message_id text,
   rating           smallint check (rating between 1 and 5),
   comment          text check (comment is null or char_length(comment) <= 500),
-  rated_at         timestamptz
+  rated_at         timestamptz,
+  answers          jsonb not null default '{}'::jsonb   -- what the patient said at check-in (staff confirm or correct it on the case)
 );
 create unique index if not exists chart_checkins_one_active on public.chart_checkins (discord_id) where state in ('waiting', 'claimed', 'in_room');
 create index if not exists chart_checkins_who on public.chart_checkins (discord_id, created_at desc);
@@ -105,6 +109,8 @@ returns jsonb language sql stable security definer set search_path = '' as $$
     'position', (select w.pos from public.checkin_waiting() w where w.id = k.id),
     'waited_seconds', extract(epoch from coalesce(k.claimed_at, k.ended_at, now()) - k.created_at)::int,
     'room', k.room, 'staff_name', k.claimed_by_name, 'staff_discord_id', k.claimed_by, 'created_at', k.created_at, 'claimed_at', k.claimed_at,
+    'staff_department', case when k.claimed_by is not null then c.department end,
+    'staff_rank', case when k.claimed_by is not null then public.checkin_rank_label(k.claimed_by, c.department) end,
     'ended_at', k.ended_at, 'ended_reason', k.ended_reason)
   from public.chart_checkins k join public.chart_cases c on c.id = k.case_id where k.id = kid
 $$;
@@ -114,7 +120,8 @@ $$;
 create or replace function public.checkin_summary_json(kid bigint)
 returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object('checkin_id', k.id, 'case_id', c.id, 'patient_name', c.patient_name, 'staff_name', k.claimed_by_name,
-    'treated_by', coalesce((select jsonb_agg(x.n order by x.f) from (select e.author_name n, min(e.at) f from public.chart_entries e
+    'treated_by', coalesce(case when cardinality(c.cared_for) > 0 then (select jsonb_agg(public.checkin_name(w) order by n) from unnest(c.cared_for) with ordinality u(w, n)) end,
+                  (select jsonb_agg(x.n order by x.f) from (select e.author_name n, min(e.at) f from public.chart_entries e
                    where e.case_id = c.id and e.error_at is null and e.kind not in ('update', 'note', 'handoff') group by e.author_name) x), jsonb_build_array(k.claimed_by_name)),
     'diagnosis', case when c.diagnosis is null then null else public.chart_label('diagnosis', c.diagnosis) end,
     'treatment', coalesce((select jsonb_agg(x.l order by x.f) from (select coalesce(cat.label, e.item) l, min(e.at) f from public.chart_entries e
@@ -168,6 +175,12 @@ begin
 end $$;
 drop trigger if exists checkin_after_change on public.chart_checkins;
 create trigger checkin_after_change after insert or update on public.chart_checkins for each row execute function public.checkin_after_change();
+
+-- Ratings: that department's Director and owners (and each staff member for their own patients).
+create or replace function public.checkin_sees_ratings(dept text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select public.is_exec() or (dept is not null and public.chart_rank(dept) >= 6)
+$$;
 
 -- The Chart drives the end of a check-in: closing the case = discharged, voiding = cancelled; an ESI change may reorder the line.
 create or replace function public.checkin_case_sync()
@@ -299,13 +312,43 @@ returns jsonb language sql stable security definer set search_path = '' as $$
                left join lateral (select x.* from public.chart_entries x where x.case_id = o.case_id and x.kind = 'result' and x.error_at is null
                                     and x.data->>'order_id' = o.id::text order by x.at limit 1) r on true
                where o.case_id = c.id and o.kind = 'order' and o.error_at is null), '[]'::jsonb),
+    'cared_for', to_jsonb(c.cared_for),
     'checkin', (select jsonb_build_object('id', k.id, 'state', k.state, 'pain', k.pain, 'source', k.source, 'created_at', k.created_at, 'claimed_at', k.claimed_at,
+                 'answers', (select jsonb_object_agg(f.key, jsonb_build_object('original', k.answers->f.key, 'current', f.cur,
+                                 'confirmed', f.key = any (c.checkin_confirmed), 'corrected', k.answers ? f.key and (k.answers->f.key) is distinct from f.cur))
+                             from (values ('name', to_jsonb(c.patient_name)), ('age', to_jsonb(c.age)), ('roblox_username', to_jsonb(c.roblox_username)),
+                                          ('symptoms', to_jsonb(c.symptoms)), ('pain', to_jsonb(k.pain)), ('onset', to_jsonb(c.onset)),
+                                          ('allergies', case when c.nkda then to_jsonb('none'::text) else to_jsonb(c.allergies) end),
+                                          ('history', to_jsonb(c.past_history)), ('last_intake', to_jsonb(c.last_intake))) f(key, cur)),
                  'staff_name', k.claimed_by_name, 'waited_seconds', extract(epoch from coalesce(k.claimed_at, k.ended_at, now()) - k.created_at)::int)
                 from public.chart_checkins k where k.case_id = c.id),
     'latest_vitals', public.chart_latest_vitals(c.id),
     'pending_cosign', (select count(*) from public.chart_entries e where e.case_id = c.id and e.needs_cosign and e.cosigned_at is null and e.error_at is null))
   from public.chart_cases c where c.id = cid
 $$;
+
+drop function if exists public.chart_close(bigint, text, text, text);
+create or replace function public.chart_close(case_id bigint, disposition text, note text default null, follow_up text default null, cared_for text[] default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare c public.chart_cases; dep text; cosign boolean;
+begin
+  if not public.chart_can_write() then raise exception 'Only clinical staff can write in the CBH Chart.'; end if;
+  if disposition is null or disposition not in ('discharged', 'admitted', 'or', 'transferred', 'deceased', 'ama') then raise exception 'Pick a disposition.'; end if;
+  select * into c from public.chart_cases where id = chart_close.case_id for update;
+  if c.id is null then raise exception 'That case doesn''t exist.'; end if;
+  if c.status <> 'open' then raise exception 'This case is already %.', c.status; end if;
+  if char_length(coalesce(follow_up, '')) > 500 then raise exception 'Keep the follow-up advice under 500 characters.'; end if;
+  -- act for a department where it's in scope if I have one, else my main one (then it needs a cosign)
+  select x.name into dep from public.chart_my_depts() x order by public.chart_scope_ok('disposition', x.name) desc, x.rank desc limit 1;
+  cosign := disposition in ('discharged', 'admitted', 'transferred') and not public.chart_scope_ok('disposition', dep);
+  insert into public.chart_entries (case_id, kind, department, item, data, author, author_name, author_rank, author_rank_label, shift_id, session_id, needs_cosign)
+  select c.id, 'disposition', dep, 'disposition', jsonb_strip_nulls(jsonb_build_object('disposition', chart_close.disposition, 'note', left(nullif(btrim(coalesce(note, '')), ''), 500))),
+         public.my_discord_id(), public.chart_my_name(), x.rank, x.rank_label, public.chart_my_shift(), public.chart_live_session(), cosign
+  from public.chart_my_depts() x where x.name = dep;
+  update public.chart_cases set status = 'closed', disposition = chart_close.disposition, follow_up = nullif(btrim(coalesce(chart_close.follow_up, '')), ''),
+         cared_for = coalesce((select array_agg(distinct w) from unnest(chart_close.cared_for) w where exists (select 1 from public.members m where m.discord_id = w)), '{}'), closed_by = public.my_discord_id(), closed_at = now(), last_at = now() where id = c.id;
+  return public.chart_case_json(c.id);
+end $$;
 
 create or replace function public.chart_list(status text default 'open', mine boolean default false, session_id bigint default null,
                                              department text default null, q text default null, before_id bigint default null, lim int default 30)
@@ -333,6 +376,55 @@ begin
 end $$;
 
 
+-- Rough wait estimate for a waiting patient: their place in line x the recent average door-to-claim (default 5 min).
+create or replace function public.checkin_est_wait(kid bigint)
+returns int language sql stable security definer set search_path = '' as $$
+  select case when w.pos is null then null else greatest(1, round(w.pos * coalesce(
+           (select avg(extract(epoch from k.claimed_at - k.created_at)) / 60 from public.chart_checkins k where k.claimed_at > now() - interval '3 hours'), 5)))::int end
+  from (select (select x.pos from public.checkin_waiting() x where x.id = kid) pos) w
+$$;
+
+create or replace function public.checkin_short_name(full_name text)
+returns text language sql immutable set search_path = '' as $$
+  select left(split_part(full_name, ' ', 1), 12) || coalesce(' ' || upper(left(nullif(split_part(full_name, ' ', 2), ''), 1)) || '.', '')
+$$;
+
+-- The waiting board (every member, and the bot): first name + last initial only.
+create or replace function public.checkin_board()
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+begin
+  if not (public.chart_is_service() or exists (select 1 from public.members m where m.discord_id = public.my_discord_id())) then
+    raise exception 'Join the CareBeyond server to see the board.'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', k.id, 'board_name', public.checkin_short_name(c.patient_name), 'state', k.state,
+      'position', w.pos, 'waited_min', (extract(epoch from now() - k.created_at) / 60)::int, 'waited_seconds', extract(epoch from now() - k.created_at)::int,
+      'with_name', case when k.claimed_by_name is not null then public.checkin_short_name(k.claimed_by_name) end, 'room', k.room)
+      order by (k.state <> 'waiting'), w.pos, k.claimed_at)
+    from public.chart_checkins k join public.chart_cases c on c.id = k.case_id left join public.checkin_waiting() w on w.id = k.id
+    where k.state in ('waiting', 'claimed', 'in_room')), '[]'::jsonb);
+end $$;
+
+-- Staff confirm what the patient said (each answer can be confirmed; corrections go through chart_update and show as "corrected").
+create or replace function public.chart_confirm(case_id bigint, fields text[] default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare c public.chart_cases; dep text; ok text[] := array['name', 'age', 'roblox_username', 'symptoms', 'pain', 'onset', 'allergies', 'history', 'last_intake']; f text; add text[] := '{}';
+begin
+  if not public.chart_can_write() then raise exception 'Only clinical staff can write in the CBH Chart.'; end if;
+  select * into c from public.chart_cases where id = chart_confirm.case_id for update;
+  if c.id is null then raise exception 'That case doesn''t exist.'; end if;
+  if c.status <> 'open' then raise exception 'Take the patient first.'; end if;
+  foreach f in array coalesce(fields, ok) loop
+    if not f = any (ok) then raise exception 'Can''t confirm "%".', f; end if;
+    if not f = any (c.checkin_confirmed) and not f = any (add) then add := add || f; end if;
+  end loop;
+  if cardinality(add) = 0 then return public.chart_case_json(c.id); end if;
+  dep := public.chart_dept_for(null);
+  update public.chart_cases set checkin_confirmed = checkin_confirmed || add, last_at = now() where id = c.id;
+  insert into public.chart_entries (case_id, kind, department, data, author, author_name, author_rank, author_rank_label, shift_id, session_id)
+  select c.id, 'update', dep, jsonb_build_object('confirmed', to_jsonb(add)), public.my_discord_id(), public.chart_my_name(), x.rank, x.rank_label, public.chart_my_shift(), public.chart_live_session()
+  from public.chart_my_depts() x where x.name = dep;
+  return public.chart_case_json(c.id);
+end $$;
+
 -- ---------- patient side ----------
 create or replace function public.checkin_status(p_discord_id text default null)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
@@ -355,6 +447,9 @@ begin
   end if;
   return jsonb_build_object('session_live', sid is not null,
     'session', (select jsonb_build_object('id', x.id, 'started_at', x.started_at) from public.sessions x where x.id = sid),
+    'next_session', (select jsonb_build_object('id', x.id, 'scheduled_for', x.scheduled_for) from public.sessions x
+                     where x.status = 'scheduled' and x.scheduled_for > now() order by x.scheduled_for limit 1),
+    'est_wait_min', case when act is not null then public.checkin_est_wait(act) end,
     'can_check_in', reason is null, 'reason', reason,
     'active', case when act is null then null else public.checkin_json(act) end,
     'feedback_due', coalesce((select jsonb_agg(jsonb_build_object('id', k.id, 'case_id', k.case_id, 'ended_at', k.ended_at, 'staff_name', k.claimed_by_name) order by k.ended_at desc)
@@ -401,6 +496,9 @@ begin
   begin
     insert into public.chart_checkins (case_id, discord_id, roblox_name, pain, source, session_id)
     values (cid, who, rn, p_pain::smallint, coalesce(p_source, 'website'), public.checkin_live_session()) returning id into kid;
+    update public.chart_checkins set answers = jsonb_strip_nulls(jsonb_build_object('name', pn, 'age', p_age, 'roblox_username', rn, 'symptoms', to_jsonb(sym), 'pain', p_pain,
+           'onset', nullif(btrim(coalesce(p_onset, '')), ''), 'allergies', nullif(btrim(coalesce(p_allergies, '')), ''),
+           'history', nullif(btrim(coalesce(p_history, '')), ''), 'last_intake', nullif(btrim(coalesce(p_last_oral, '')), ''))) where id = kid;
   exception when unique_violation then raise exception 'You''re already checked in.';
   end;
   return public.checkin_json(kid);
@@ -433,7 +531,10 @@ begin
   if k.state not in ('waiting', 'claimed', 'in_room') then raise exception 'This check-in has ended.'; end if;
   if p_pain is not null and (p_pain < 0 or p_pain > 10) then raise exception 'Pain is 0 to 10.'; end if;
   perform public.checkin_apply_details(k.case_id, p_onset, p_allergies, p_history, p_last_oral);
-  if p_pain is not null then update public.chart_checkins set pain = p_pain where id = k.id; end if;
+  update public.chart_checkins set pain = coalesce(p_pain::smallint, pain),
+         answers = answers || jsonb_strip_nulls(jsonb_build_object('pain', p_pain, 'onset', nullif(btrim(coalesce(p_onset, '')), ''), 'allergies', nullif(btrim(coalesce(p_allergies, '')), ''),
+                   'history', nullif(btrim(coalesce(p_history, '')), ''), 'last_intake', nullif(btrim(coalesce(p_last_oral, '')), '')))
+  where id = k.id;
   return public.checkin_json(k.id);
 end $$;
 
@@ -483,10 +584,19 @@ begin
   return jsonb_build_object('session_live', public.checkin_live_session() is not null,
     'queue', coalesce((select jsonb_agg(public.checkin_json(k.id) || jsonb_build_object(
                  'esi', c.esi, 'recommended', w.pos = 1, 'staff_message_id', case when svc then k.staff_message_id end,
+                 'diagnosis_label', case when c.diagnosis is null then null else public.chart_label('diagnosis', c.diagnosis) end,
+                 'pending_cosign', (select count(*) from public.chart_entries e where e.case_id = c.id and e.needs_cosign and e.cosigned_at is null and e.error_at is null),
                  'symptoms', (public.chart_case_json(c.id))->'symptoms')
                order by (k.state <> 'waiting'), w.pos, k.claimed_at)
                from public.chart_checkins k join public.chart_cases c on c.id = k.case_id left join public.checkin_waiting() w on w.id = k.id
                where k.state in ('waiting', 'claimed', 'in_room')), '[]'::jsonb),
+    'recent', coalesce((select jsonb_agg(jsonb_build_object('id', k.id, 'case_id', k.case_id, 'board_name', public.checkin_short_name(c.patient_name), 'state', k.state,
+                 'diagnosis_label', case when c.diagnosis is null then null else public.chart_label('diagnosis', c.diagnosis) end,
+                 'staff_name', k.claimed_by_name, 'minutes', round(extract(epoch from k.ended_at - k.created_at) / 60)::int, 'ended_at', k.ended_at,
+                 'rating', case when not svc and (k.claimed_by = public.my_discord_id() or public.checkin_sees_ratings(c.department)) then k.rating end)
+               order by k.ended_at desc)
+               from public.chart_checkins k join public.chart_cases c on c.id = k.case_id
+               where k.state in ('discharged', 'left') and k.ended_at > now() - interval '12 hours'), '[]'::jsonb),
     'suggested_staff', coalesce((select jsonb_agg(x.j order by x.n, x.started) from (
                select jsonb_build_object('discord_id', s.discord_id, 'name', public.checkin_name(s.discord_id), 'department', s.department,
                         'active_patients', count(k.id), 'on_shift_minutes', (extract(epoch from now() - s.started_at) / 60)::int) j, count(k.id) n, s.started_at started
@@ -572,13 +682,15 @@ do $g$
 declare f text;
 begin
   foreach f in array array['chart_actor(text)', 'checkin_live_session()', 'checkin_staff_shift(text)', 'checkin_name(text)', 'checkin_waiting()',
-                           'checkin_json(bigint)', 'checkin_notify_top()', 'checkin_summary_json(bigint)', 'checkin_apply_details(bigint, text, text, text, text)', 'checkin_rank_label(text, text)', 'checkin_after_change()', 'checkin_case_sync()', 'chart_add_core(bigint, text, jsonb, text)',
+                           'checkin_json(bigint)', 'checkin_notify_top()', 'checkin_summary_json(bigint)', 'checkin_apply_details(bigint, text, text, text, text)', 'checkin_rank_label(text, text)',
+                           'checkin_est_wait(bigint)', 'checkin_sees_ratings(text)', 'checkin_after_change()', 'checkin_case_sync()', 'chart_add_core(bigint, text, jsonb, text)',
                            'chart_case_json(bigint)'] loop
     execute format('revoke execute on function public.%s from public, anon, authenticated', f);
   end loop;
   revoke execute on function public.chart_is_service() from public, anon;
   foreach f in array array['checkin_status(text)', 'checkin_create(text, text, int, text, jsonb, int, text, text, text, text, text)', 'checkin_cancel(bigint, text)',
-                           'checkin_details(bigint, text, text, text, text, text, int)', 'checkin_summary(bigint, text)',
+                           'checkin_details(bigint, text, text, text, text, text, int)', 'checkin_summary(bigint, text)', 'checkin_board()',
+                           'chart_confirm(bigint, text[])', 'chart_close(bigint, text, text, text, text[])',
                            'checkin_feedback(bigint, int, text, text)', 'checkin_queue()', 'checkin_take(bigint, text)', 'checkin_release(bigint, text)',
                            'checkin_room(bigint, text, text)', 'checkin_left(bigint, text, text)', 'chart_set_esi(bigint, int)',
                            'chart_list(text, boolean, bigint, text, text, bigint, int)'] loop

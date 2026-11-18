@@ -19,12 +19,6 @@ end $$;
 revoke execute on function public.checkin_expire() from public, anon, authenticated;
 grant execute on function public.checkin_expire() to service_role;
 
--- Ratings are for that department's Director and owners only.
-create or replace function public.checkin_sees_ratings(dept text)
-returns boolean language sql stable security definer set search_path = '' as $$
-  select public.is_exec() or (dept is not null and public.chart_rank(dept) >= 6)
-$$;
-revoke execute on function public.checkin_sees_ratings(text) from public, anon, authenticated;
 
 create or replace function public.checkin_metrics(since timestamptz, until timestamptz default now(), department text default null)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
@@ -48,7 +42,7 @@ begin
         and (public.is_exec() or public.has_perm('activity.view', d.dept))), '[]'::jsonb),
     'staff', coalesce((select jsonb_agg(jsonb_build_object('discord_id', s.who, 'name', public.checkin_name(s.who), 'department', s.dept, 'taken', s.n,
           'discharged', s.dis, 'avg_door_to_claim_min', s.d2c,
-          'avg_rating', case when public.checkin_sees_ratings(s.dept) then s.rat end, 'ratings', case when public.checkin_sees_ratings(s.dept) then s.nrat end) order by s.dept, s.n desc)
+          'avg_rating', case when s.who = me or public.checkin_sees_ratings(s.dept) then s.rat end, 'ratings', case when s.who = me or public.checkin_sees_ratings(s.dept) then s.nrat end) order by s.dept, s.n desc)
       from (select k.claimed_by who, c.department dept, count(*) n, count(*) filter (where k.state = 'discharged') dis,
                    round((avg(extract(epoch from k.claimed_at - k.created_at)) / 60)::numeric, 1) d2c, round(avg(k.rating)::numeric, 2) rat, count(k.rating) nrat
             from public.chart_checkins k join public.chart_cases c on c.id = k.case_id
@@ -69,10 +63,18 @@ begin
       and public.checkin_sees_ratings(c.department)), '[]'::jsonb);
 end $$;
 
+-- My own patient rating (staff): average and count only, never the comments.
+create or replace function public.checkin_my_rating(since timestamptz default null)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object('avg_rating', round(avg(k.rating)::numeric, 2), 'ratings', count(k.rating), 'patients', count(*))
+  from public.chart_checkins k
+  where k.claimed_by = public.my_discord_id() and k.state = 'discharged' and (since is null or k.ended_at >= since)
+$$;
+
 do $g$
 declare f text;
 begin
-  foreach f in array array['checkin_metrics(timestamptz, timestamptz, text)', 'checkin_feedback_list(timestamptz, text)'] loop
+  foreach f in array array['checkin_metrics(timestamptz, timestamptz, text)', 'checkin_feedback_list(timestamptz, text)', 'checkin_my_rating(timestamptz)'] loop
     execute format('revoke execute on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
