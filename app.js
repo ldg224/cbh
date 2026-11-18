@@ -1584,7 +1584,7 @@ function robloxJoinUrl(code) {
 }
 function joinGameBtn(code, cls = '') {
   const u = robloxJoinUrl(code);
-  return u ? `<a class="join-game${cls ? ' ' + cls : ''}" href="${esc(u)}" target="_blank" rel="noopener" aria-label="Join game: open Maple Hospital in Roblox">Join game</a>` : '';
+  return u ? `<a class="join-game${cls ? ' ' + cls : ''}" href="${esc(u)}" target="_blank" rel="noopener" aria-label="Join game: open Maple Hospital in Roblox"><span>Join game</span></a>` : '';
 }
 let currentSession = null;   // what the home banner shows; the Sessions tile repeats it
 function buildSessionBanner(sess) {

@@ -1158,11 +1158,14 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .join-game { display: inline-flex; align-items: center; gap: 7px; flex: none; background: var(--teal); color: var(--text); font-weight: 700; font-size: 13.5px;
   border-radius: 8px; padding: 8px 13px; text-decoration: none; white-space: nowrap; }
 .join-game::before { content: ""; width: 17px; height: 17px; background: currentColor; -webkit-mask: url('assets/icons/controller.png') center / contain no-repeat; mask: url('assets/icons/controller.png') center / contain no-repeat; }
+.join-game > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.join-game::before { flex: none; }
 .join-game:hover { filter: brightness(.96); text-decoration: none; }
 .join-game:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .join-game.small { font-size: 12.5px; padding: 6px 11px; }
 .join-game.small::before { width: 15px; height: 15px; }
 .join-game.on-dark { box-shadow: 0 0 0 1px rgba(255, 255, 255, .5); }
-.join-game.ds-join { display: flex; justify-content: center; font-size: 12px; padding: 6px 10px; border-radius: 8px; gap: 6px; margin-top: 8px; }
+/* Sidebar card: its own row, exactly the card's width, never wider (0.27.2). */
+.join-game.ds-join { display: flex; justify-content: center; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; overflow: hidden; font-size: 12px; padding: 6px 10px; border-radius: 8px; gap: 6px; margin: 2px 0 0; }
 .join-game.ds-join::before { width: 13px; height: 13px; }
 #session .join-game { margin-left: 8px; }

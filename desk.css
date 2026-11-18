@@ -64,7 +64,7 @@ body.desk .desk-side { display: flex; }
 .ds-sub .ds-link[aria-current="page"] { background: color-mix(in srgb, var(--c) 13%, #fff); box-shadow: inset 3px 0 0 var(--c); }
 
 /* live session card + you */
-.ds-session { margin: 0 12px 10px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; flex: none; }
+.ds-session { margin: 0 12px 10px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; flex: none; min-width: 0; box-sizing: border-box; overflow: hidden; }
 .ds-srow { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ds-live { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 12.5px; color: var(--muted); }
 .ds-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--desk-faint); flex: none; }
