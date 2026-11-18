@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.27.1 (2026-11-18)
+
+**Added:**
+- **Join game:** one tap from the website (next to every join code) or from a session post in Discord loads you straight into the CareBeyond server in Maple Hospital. On phones, the Roblox app opens it.
+
+**Bot:**
+- A **🎮 Join game** button on session announcements, the 15-minute reminder and scheduled-session posts; it's removed when the session ends or is cancelled.
+
+Database change: no.
+
 ## 0.27.0 (2026-11-18)
 
 **Changed:**
