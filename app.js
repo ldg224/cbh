@@ -399,6 +399,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 // (log in, log out, different account), not on background token renewals or tab switches.
 function onSession(session) {
   $('loading').hidden = true;
+  document.documentElement.classList.remove('has-session');   // the front page's early guess (index.html) is settled
   const user = session && session.user;
   const id = user ? user.id : null;
   if (id === currentUserId) return;

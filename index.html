@@ -3,8 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CareBeyond Dashboard</title>
-  <meta name="robots" content="noindex">
+  <title>CareBeyond Hospital – Maple Hospital roleplay community</title>
+  <meta name="description" content="CareBeyond Hospital is a Roblox hospital roleplay community. Join regular sessions in our Maple Hospital custom server, train as staff and work in Nursing, Medical, Surgical or Paramedicine.">
+  <link rel="canonical" href="https://ldg224.github.io/cbh/">
+  <!-- GOOGLE SEARCH CONSOLE: paste the verification tag on the next line, e.g. <meta name="google-site-verification" content="..."> -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="CareBeyond Hospital">
+  <meta property="og:title" content="CareBeyond Hospital – Maple Hospital roleplay community">
+  <meta property="og:description" content="A Roblox hospital roleplay community with regular sessions in our Maple Hospital custom server, staff training and real departments.">
+  <meta property="og:url" content="https://ldg224.github.io/cbh/">
+  <meta property="og:image" content="https://ldg224.github.io/cbh/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="CareBeyond Hospital, a Maple Hospital roleplay community">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CareBeyond Hospital – Maple Hospital roleplay community">
+  <meta name="twitter:description" content="A Roblox hospital roleplay community with regular sessions in our Maple Hospital custom server.">
+  <meta name="twitter:image" content="https://ldg224.github.io/cbh/assets/og-image.png">
+  <script type="application/ld+json">
+  {"@context": "https://schema.org", "@type": "Organization", "name": "CareBeyond Hospital", "alternateName": "CBH",
+   "url": "https://ldg224.github.io/cbh/", "logo": "https://ldg224.github.io/cbh/assets/icon-512.png",
+   "description": "A Roblox hospital roleplay community running sessions in a Maple Hospital custom server, with staff training and departments for Nursing, Medical, Surgical and Paramedicine."}
+  </script>
+  <!-- Logged in on this device (or coming back from the Discord login)? Hide the front page until app.js knows. -->
+  <script>try { if (/[?&]code=/.test(location.search) || Object.keys(localStorage).some(function (k) { return /^sb-.+-auth-token$/.test(k); })) document.documentElement.classList.add('has-session'); } catch (e) { /* storage blocked: show the front page */ }</script>
   <meta name="theme-color" content="#ffffff">
   <link rel="icon" href="assets/cbh-icon.svg" type="image/svg+xml">
   <!-- Home-screen icons: iPhones ignore SVG and fill see-through corners with black, so they get a square PNG -->
@@ -28,6 +50,7 @@
   <link rel="stylesheet" href="desk.css?v=0.37.0">
   <link rel="stylesheet" href="roles.css?v=0.37.0">
   <link rel="stylesheet" href="chart.css?v=0.37.0">
+  <link rel="stylesheet" href="front.css?v=0.37.0">
 </head>
 <body>
   <header class="bar">
@@ -52,40 +75,90 @@
       <button id="refresh" class="refresh">Refresh</button>
     </div>
 
-    <section id="signed-out" class="card center login" hidden>
-      <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="88" height="88">
-
-      <div id="login-main">
-        <h1>Welcome to CareBeyond</h1>
-        <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
-        <div class="login-actions">
-          <!-- The last account on this device (name and photo kept in this browser only; no tokens). -->
-          <button id="login-again" class="discord login-again" type="button" hidden><img id="login-again-img" alt="" hidden><span>Continue as <b id="login-again-name"></b></span></button>
-          <button id="login" class="discord">Log in with Discord</button>
-          <button id="code-login" class="ghost">Log in with a code</button>
-          <button id="login-other" class="linkish login-other" type="button" hidden>Not you? Use another account</button>
-        </div>
-        <p id="login-error" class="error" hidden></p>
-        <p id="inapp-note" class="inapp-note" hidden>Stuck? Try <b>Log in with a code</b>.</p>
-      </div>
-
-      <!-- Log in with a code: type /login CODE in Discord, the bot confirms, this page logs in by itself. -->
-      <div id="login-code" hidden>
-        <h1>Log in with a code</h1>
-        <div id="code-box" class="code-box" aria-live="polite">
-          <div id="code-text" class="code-text"></div>
-          <p class="code-how">Type <code id="code-cmd"></code> in the CareBeyond - Hospital server.</p>
-          <div class="code-row">
-            <button id="copy-cmd" class="ghost">Copy</button>
-            <span id="code-timer" class="code-timer"></span>
+    <!-- Public front page (0.38.0): what Google and logged-out visitors see. Static text only: no private data.
+         It is visible without JavaScript; app.js hides it once someone is logged in. -->
+    <section id="signed-out" class="fp">
+      <div class="fp-hero">
+        <div class="fp-intro">
+          <span class="fp-eyebrow">Maple Hospital roleplay on Roblox</span>
+          <h1>CareBeyond Hospital</h1>
+          <p class="fp-lead">A friendly Roblox hospital roleplay community. We run regular sessions in our own Maple Hospital custom server, with trained staff, real ranks and a patient journey that feels like a real hospital.</p>
+          <div class="fp-ctas">
+            <!-- PLACEHOLDER: the permanent Discord invite needs the owner's OK before it goes live. -->
+            <a class="fp-btn fp-discord" href="https://discord.gg/PLACEHOLDER" rel="noopener"><span class="fp-bico" aria-hidden="true"></span>Join our Discord</a>
+            <a class="fp-btn fp-ghost" href="#staff-login" data-fp-login>Staff login</a>
+          </div>
+          <div class="fp-join">
+            <span class="fp-join-ico" aria-hidden="true"></span>
+            <div class="fp-join-t"><b>Maple Hospital custom server</b><span>Join code <strong id="fp-code">4920-4087</strong></span></div>
+            <a id="fp-join-game" class="fp-btn fp-teal" href="https://www.roblox.com/games/8704997000/Maple-Hospital" target="_blank" rel="noopener">Join game</a>
           </div>
         </div>
-        <p id="code-error" class="error" hidden></p>
-        <div class="login-actions">
-          <button id="new-code" class="refresh" hidden>Get a new code</button>
-          <button id="code-back" class="linkish">Back</button>
+        <div id="staff-login" class="card center login fp-login" tabindex="-1">
+          <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="64" height="64">
+        <div id="login-main">
+          <h2 class="fp-login-h">Staff login</h2>
+          <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
+          <div class="login-actions">
+            <!-- The last account on this device (name and photo kept in this browser only; no tokens). -->
+            <button id="login-again" class="discord login-again" type="button" hidden><img id="login-again-img" alt="" hidden><span>Continue as <b id="login-again-name"></b></span></button>
+            <button id="login" class="discord">Log in with Discord</button>
+            <button id="code-login" class="ghost">Log in with a code</button>
+            <button id="login-other" class="linkish login-other" type="button" hidden>Not you? Use another account</button>
+          </div>
+          <p id="login-error" class="error" hidden></p>
+          <p id="inapp-note" class="inapp-note" hidden>Stuck? Try <b>Log in with a code</b>.</p>
+        </div>
+
+        <!-- Log in with a code: type /login CODE in Discord, the bot confirms, this page logs in by itself. -->
+        <div id="login-code" hidden>
+          <h2 class="fp-login-h">Log in with a code</h2>
+          <div id="code-box" class="code-box" aria-live="polite">
+            <div id="code-text" class="code-text"></div>
+            <p class="code-how">Type <code id="code-cmd"></code> in the CareBeyond - Hospital server.</p>
+            <div class="code-row">
+              <button id="copy-cmd" class="ghost">Copy</button>
+              <span id="code-timer" class="code-timer"></span>
+            </div>
+          </div>
+          <p id="code-error" class="error" hidden></p>
+          <div class="login-actions">
+            <button id="new-code" class="refresh" hidden>Get a new code</button>
+            <button id="code-back" class="linkish">Back</button>
+          </div>
+        </div>
         </div>
       </div>
+
+      <section class="fp-sect" aria-labelledby="fp-what">
+        <h2 id="fp-what">Roblox hospital roleplay, done properly</h2>
+        <div class="fp-cards">
+          <article class="fp-card"><span class="fp-ico" style="--icon:url('assets/icons/calendar.png')" aria-hidden="true"></span><h3>Regular sessions</h3><p>Sessions in our Maple Hospital custom server, announced in Discord. Join with the code, clock in and start treating patients.</p></article>
+          <article class="fp-card"><span class="fp-ico" style="--icon:url('assets/icons/graduation-cap.png')" aria-hidden="true"></span><h3>Staff training</h3><p>Courses and practical sign-offs teach you how CareBeyond Hospital works, from your first shift to leading a ward.</p></article>
+          <article class="fp-card"><span class="fp-ico" style="--icon:url('assets/icons/star.png')" aria-hidden="true"></span><h3>Ranks that mean something</h3><p>Move up through the years of your department as you learn and take part. Every rank has its own responsibilities.</p></article>
+        </div>
+      </section>
+
+      <section class="fp-sect" aria-labelledby="fp-depts">
+        <h2 id="fp-depts">Our departments</h2>
+        <div class="fp-depts">
+          <article class="fp-dept" style="--c:#ff3d7e"><span class="fp-ico" style="--icon:url('assets/icons/nurse.png')" aria-hidden="true"></span><div><h3>Nursing</h3><p>The heart of the ward: assessing patients, vitals and care from arrival to discharge.</p></div></article>
+          <article class="fp-dept" style="--c:#2f7af2"><span class="fp-ico" style="--icon:url('assets/icons/stethoscope.png')" aria-hidden="true"></span><div><h3>Medical</h3><p>Doctors who review patients, order tests and decide on a diagnosis.</p></div></article>
+          <article class="fp-dept" style="--c:#229147"><span class="fp-ico" style="--icon:url('assets/icons/scalpel.png')" aria-hidden="true"></span><div><h3>Surgical</h3><p>Surgeons who take patients from Pre-Op through to theatre and recovery.</p></div></article>
+          <article class="fp-dept" style="--c:#ff5533"><span class="fp-ico" style="--icon:url('assets/icons/ambulance.png')" aria-hidden="true"></span><div><h3>Paramedicine</h3><p>Paramedics who answer emergency calls and bring patients into the hospital.</p></div></article>
+          <article class="fp-dept" style="--c:#5c72ff"><span class="fp-ico" style="--icon:url('assets/icons/clipboard.png')" aria-hidden="true"></span><div><h3>Administration</h3><p>The team that keeps the hospital running: sessions, moderation and support.</p></div></article>
+          <article class="fp-dept" style="--c:#ffaa00"><span class="fp-ico" style="--icon:url('assets/icons/handshake.png')" aria-hidden="true"></span><div><h3>Community Engagement</h3><p>Events, news and a warm welcome for new members.</p></div></article>
+        </div>
+      </section>
+
+      <section class="fp-sect" aria-labelledby="fp-how">
+        <h2 id="fp-how">How to join</h2>
+        <ol class="fp-steps">
+          <li><b>Join our Discord</b><span>Say hello and see when the next session is.</span></li>
+          <li><b>Play Maple Hospital</b><span>Open Maple Hospital on Roblox and join our custom server with the code.</span></li>
+          <li><b>Visit as a patient or apply as staff</b><span>Anyone can come in as a patient. To work in a department, log in here and apply.</span></li>
+        </ol>
+      </section>
     </section>
 
     <!-- One fixed-size card: name, one line of badges (extra ones behind "+N"), and the Discord photo. -->
@@ -157,5 +230,6 @@
   <script src="roles.js?v=0.37.0"></script>
   <script src="chart.js?v=0.37.0"></script>
   <script src="pageviews.js?v=0.37.0"></script>
+  <script src="front.js?v=0.37.0"></script>
 </body>
 </html>

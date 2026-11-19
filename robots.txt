@@ -1,0 +1,5 @@
+# Crawlers only read robots.txt at the root of a host (ldg224.github.io/robots.txt), so this file is informational
+# for a project site; the sitemap is submitted in Google Search Console instead.
+User-agent: *
+Allow: /
+Sitemap: https://ldg224.github.io/cbh/sitemap.xml
