@@ -6,7 +6,16 @@
 // who reads, writes, sets the ESI and cosigns; this file only draws what chart_me() and chart_get().can allow.
 // Everything lives in this closure; the only globals it adds are LIVE.chart and window.chartNav / chartLogBtn /
 // chartTab (sidebar, shift card and phone tab hooks used by desk.js and home.js).
+// CBH_CHART_OFF (owner, 0.37.0): the Chart and Check In are off until the Chart is rebuilt. Code and data stay;
+// set this to false to bring every entry point back (sidebar, Home card, shift card button, phone tab, search, pages).
+window.CBH_CHART_OFF = true;
 (() => {
+  if (window.CBH_CHART_OFF) {
+    // Old #chart / #checkin links go Home. The pages are never registered, so search and the menus don't list them.
+    const home = () => { if (/^#(chart|checkin)(\/|$)/.test(location.hash)) location.replace('#'); };
+    home(); window.addEventListener('hashchange', home);
+    return;
+  }
   const api = async (fn, args) => {
     const { data, error } = await sb.rpc(fn, args || {});
     if (error) throw new Error(error.message || 'Something went wrong. Try again.');
