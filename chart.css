@@ -228,13 +228,13 @@ body.dragging-v { cursor: row-resize; user-select: none; }
 .chx .ph-row b { display: block; font-size: 16px; }
 .chx .ph-row small { color: var(--muted); font-size: 12.5px; }
 .chx .ph-tiles { display: grid; gap: 10px; }
-.chx .tile { text-align: left; border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 16px; display: grid; gap: 3px; min-height: 72px; border-left: 6px solid var(--u, var(--teal)); }
-.chx .tile b { font-size: 17px; }
-.chx .tile b i { font-style: normal; font-size: 12px; background: var(--bad); color: #fff; padding: 1px 8px; border-radius: 999px; vertical-align: 2px; }
-.chx .tile span { color: var(--muted); font-size: 13px; }
-.chx .tile.ghost { border-left-color: var(--line); }
-.chx .tile.navy { background: var(--text); color: #fff; border-color: var(--text); }
-.chx .tile.navy span { color: #c7d3ea; }
+.chx .cx-tile { text-align: left; border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 16px; display: grid; gap: 3px; min-height: 72px; border-left: 6px solid var(--u, var(--teal)); }
+.chx .cx-tile b { font-size: 17px; }
+.chx .cx-tile b i { font-style: normal; font-size: 12px; background: var(--bad); color: #fff; padding: 1px 8px; border-radius: 999px; vertical-align: 2px; }
+.chx .cx-tile span { color: var(--muted); font-size: 13px; }
+.chx .cx-tile.ghost { border-left-color: var(--line); }
+.chx .cx-tile.navy { background: var(--text); color: #fff; border-color: var(--text); }
+.chx .cx-tile.navy span { color: #c7d3ea; }
 .chx .udot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--u); margin-right: 6px; }
 .chx .ph-center { flex: 1; display: grid; align-content: center; justify-items: center; gap: 14px; text-align: center; }
 .chx .ph-center p { margin: 0; color: var(--muted); }
@@ -965,3 +965,4 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 .chx .care-note { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px; background: #fff4e5; color: #8a4b00; font-size: 11px; font-weight: 800; line-height: 18px; vertical-align: 2px; }
 .chx .rh-care { padding: 6px 10px; border-radius: 10px; background: #fff4e5; color: #8a4b00; font-size: 13px; font-weight: 700; }
 .chx .pain-pick .chip { min-width: 38px; text-align: center; }
+.chx .ph-screen .btn.r-req2 { min-height: 40px; }
