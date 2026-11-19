@@ -60,7 +60,7 @@
         <span class="wordmark" aria-hidden="true"><span class="wm-name"><span class="wm-care">Care</span><span class="wm-beyond">Beyond</span></span><span class="wm-rule"></span><span class="wm-sub">Hospital</span></span>
       </a>
     </div>
-    <a class="fp-head-login" href="#log-in" data-fp-login>Log in</a>
+    <button type="button" class="fp-head-login" data-fp-dialog>Log in</button>
     <div id="who" class="who" hidden>
       <img id="avatar" class="avatar" alt="" width="30" height="30">
       <span id="name"></span>
@@ -99,6 +99,12 @@
               <span class="fp-mico" style="--icon:url('assets/icons/chat.png')" aria-hidden="true"></span>
               <span class="fp-mt"><b>Join our Discord</b><small>Meet the team and hear about sessions</small></span>
             </a>
+          </div>
+          <!-- Members (0.38.1): one click straight to Discord ("Continue as" when this device remembers them). -->
+          <div class="fp-member fp-rise">
+            <span class="fp-member-q">Already a member?</span>
+            <button type="button" class="fp-member-go" id="fp-member-go"><img id="fp-member-img" alt="" hidden><span id="fp-member-label">Log in with Discord</span></button>
+            <button type="button" class="fp-member-code" data-fp-code>Use a login code</button>
           </div>
           <p id="fp-soon-note" class="fp-soon-note" role="status" hidden>Online check-in is launching soon. <a href="https://discord.gg/xxqTP4shRA" rel="noopener">Join our Discord</a> to hear first. Until then, walk in and check in at reception in game.</p>
           <!-- The join code comes from config.js (publicJoinCode); front.js fills it in. -->
@@ -229,6 +235,7 @@
         </div>
       </section>
     </section>
+    <dialog id="fp-login-dlg" class="fp-dlg" aria-label="Log in"><button type="button" class="fp-dlg-x" data-fp-close aria-label="Close">×</button><div id="fp-dlg-slot"></div></dialog>
 
     <!-- One fixed-size card: name, one line of badges (extra ones behind "+N"), and the Discord photo. -->
     <section id="signed-in" class="card welcome" hidden>

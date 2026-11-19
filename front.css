@@ -208,3 +208,31 @@ body:has(#signed-out[hidden]) .fp-head-login, html.has-session .fp-head-login { 
   .fp-feats b { font-size: 14px; }
   .fp-feats li > span { font-size: 13px; }
 }
+
+/* Member log in (0.38.1): in the hero, under the two big actions; the login card opens in a dialog. */
+.fp-member { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.fp-member-q { font-size: 14.5px; font-weight: 600; color: #e3ecf9; }
+.fp-member-go { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 18px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .14); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.fp-member-go:hover { background: rgba(255, 255, 255, .24); }
+.fp-member-go img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .7); object-fit: cover; }
+.fp-member-code { background: none; border: 0; padding: 6px 4px; font: inherit; font-size: 14px; font-weight: 600; color: #cfe0f6; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.fp-member-code:hover { color: #fff; }
+.fp-member-go:focus-visible, .fp-member-code:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+button.fp-head-login { background: var(--panel); font-family: inherit; cursor: pointer; }
+
+.fp-dlg { border: 0; padding: 0; border-radius: 18px; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
+  box-shadow: 0 24px 60px rgba(11, 30, 74, .35); background: var(--panel); color: var(--text); }
+.fp-dlg::backdrop { background: rgba(11, 30, 74, .45); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.fp-dlg .fp-login { box-shadow: none; border: 0; max-width: none; padding: 30px 26px 26px; }
+.fp-dlg-x { position: absolute; top: 10px; right: 10px; z-index: 1; width: 36px; height: 36px; padding: 0; border-radius: 10px; background: var(--raised); color: var(--muted); font-size: 20px; line-height: 1; }
+.fp-dlg-x:hover { color: var(--text); }
+@media (max-width: 560px) {
+  .fp-member { margin-top: 16px; }
+  .fp-member-q { flex: 1 1 100%; }
+  .fp-member-go { flex: 1 1 100%; justify-content: center; min-height: 50px; }
+  .fp-member-code { flex: 1 1 100%; text-align: center; }
+}
+
+.fp-dlg .fp-login-h { margin: 0 0 6px; font-size: 22px; font-weight: 800; text-transform: none; letter-spacing: -.01em; color: var(--text); }
+.fp-dlg .fp-login .hero-icon { margin-bottom: 10px; }
