@@ -1,0 +1,62 @@
+/* Department + role icons (Alpha, 0.39.2): the outer menu's departments, the CBH Chart role screen and role card.
+   Loaded after desk.css and chart.css. Bold one-colour Icons8 ios_filled stencils, recoloured by CSS (never emoji),
+   on the department gradients used by the front page's department cards. Attribute selectors only, so the markup in
+   desk.js / chart.js (Delta) stays as it is. */
+:root {
+  --ic-administration: url('assets/icons/clipboard.png'); --ic-nursing: url('assets/icons/nurse.png'); --ic-paramedicine: url('assets/icons/ambulance.png');
+  --ic-community: url('assets/icons/handshake.png'); --ic-medical: url('assets/icons/stethoscope.png'); --ic-surgical: url('assets/icons/scalpel.png');
+}
+.dg { background: linear-gradient(140deg, color-mix(in srgb, var(--c) 55%, #0b1e4a) 0%, color-mix(in srgb, var(--c) 85%, #0b1e4a) 55%, var(--c) 100%); }
+
+/* ---- outer menu: a small gradient tile with the department's icon instead of a plain colour square ---- */
+.ds-dept .ds-dot { position: relative; background: linear-gradient(140deg, color-mix(in srgb, var(--c) 55%, #0b1e4a), color-mix(in srgb, var(--c) 85%, #0b1e4a) 55%, var(--c));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--c) 30%, transparent); }
+.ds-dept .ds-dot::after { content: ""; position: absolute; inset: 5px; background: #fff; -webkit-mask: var(--dicon, none) center / contain no-repeat; mask: var(--dicon, none) center / contain no-repeat; }
+.ds-dept[href="#directors/administration"] { --dicon: var(--ic-administration); }
+.ds-dept[href="#directors/nursing"] { --dicon: var(--ic-nursing); }
+.ds-dept[href="#directors/paramedicine"] { --dicon: var(--ic-paramedicine); }
+.ds-dept[href="#directors/community"] { --dicon: var(--ic-community); }
+.ds-dept[href="#directors/medical"] { --dicon: var(--ic-medical); }
+.ds-dept[href="#directors/surgical"] { --dicon: var(--ic-surgical); }
+
+/* ---- Chart role screen: each choice gets its icon on a gradient tile ---- */
+.chx .rc-ic { position: relative; box-shadow: 0 6px 16px rgba(11, 30, 74, .14); }
+.chx .rc-ic::after { content: ""; position: absolute; inset: 11px; background: #fff; -webkit-mask: var(--ri) center / contain no-repeat; mask: var(--ri) center / contain no-repeat; }
+.chx .rc-rec { --ri: url('assets/icons/front-desk.png'); background: linear-gradient(135deg, #FFD66B, #FFAA00); box-shadow: 0 6px 16px rgba(255, 170, 0, .3); }
+.chx .rc-rec::after { background: #0b1e4a; }
+.chx .rc-care { --ri: url('assets/icons/heart-pulse.png'); background: linear-gradient(135deg, #ff7aa6, #FF3D7E 55%, #d42a66); box-shadow: 0 6px 16px rgba(255, 61, 126, .3); }
+.chx .rc-sup { --ri: url('assets/icons/manager.png'); background: linear-gradient(135deg, #2ED3C6, #3A82D0); box-shadow: 0 6px 16px rgba(58, 130, 208, .3); }
+.chx .rc[disabled] .rc-ic { filter: grayscale(1); opacity: .6; }
+/* Room / On call / Road inside Patient Care: a small icon before each title */
+.chx .pc-opt > b { display: inline-flex; align-items: center; gap: 8px; }
+.chx .pc-opt > b::before { content: ""; width: 22px; height: 22px; flex: none; background: var(--teal-ink); -webkit-mask: var(--pi) center / contain no-repeat; mask: var(--pi) center / contain no-repeat; }
+.chx .pc-opt:has([data-role="room"]) { --pi: url('assets/icons/hospital-bed.png'); }
+.chx .pc-opt:has([data-role="oncall"], [data-role="on_call"]) { --pi: url('assets/icons/doctors-bag.png'); }
+.chx .pc-opt:has([data-role="road"]) { --pi: url('assets/icons/ambulance.png'); }
+/* department buttons: their icon in the department colour */
+.chx .rc-depts .btn { display: inline-flex; align-items: center; gap: 8px; }
+.chx .rc-depts .btn::before { content: ""; width: 20px; height: 20px; flex: none; background: color-mix(in srgb, var(--dc) 75%, #0b1e4a); -webkit-mask: var(--bi) center / contain no-repeat; mask: var(--bi) center / contain no-repeat; }
+.chx [data-rdept="Nursing"] { --bi: var(--ic-nursing); } .chx [data-rdept="Medical"] { --bi: var(--ic-medical); }
+.chx [data-rdept="Surgical"] { --bi: var(--ic-surgical); } .chx [data-rdept="Paramedicine"] { --bi: var(--ic-paramedicine); }
+
+/* ---- Chart role card + rail chip: the role's icon (needs data-role / data-dept on them, chart.js) ---- */
+.chx .role-card[data-role] { padding-left: 64px; }
+.chx .role-card[data-role]::before { content: ""; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 11px;
+  background: rgba(255, 255, 255, .22) var(--rci-bg, none); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35); }
+.chx .role-card[data-role] > .rci { display: none; }
+.chx .role-card[data-role]::after { content: ""; position: absolute; left: 22px; top: 50%; width: 22px; height: 22px; margin-top: -11px; right: auto; border-radius: 0;
+  background: currentColor; opacity: 1; -webkit-mask: var(--rci) center / contain no-repeat; mask: var(--rci) center / contain no-repeat; }
+.chx .role-card.small[data-role] { padding-left: 58px; }
+.chx .role-card.small[data-role]::before { width: 34px; height: 34px; left: 12px; } .chx .role-card.small[data-role]::after { left: 19px; width: 20px; height: 20px; margin-top: -10px; }
+.chx [data-role="reception"] { --rci: url('assets/icons/front-desk.png'); }
+.chx [data-role="super"], .chx [data-role="supervisor"] { --rci: url('assets/icons/manager.png'); }
+.chx [data-role="road"] { --rci: var(--ic-paramedicine); }
+.chx [data-role="room"], .chx [data-role="oncall"], .chx [data-role="on_call"] { --rci: url('assets/icons/heart-pulse.png'); }
+.chx [data-dept="Nursing"] { --rci: var(--ic-nursing); } .chx [data-dept="Medical"] { --rci: var(--ic-medical); }
+.chx [data-dept="Surgical"] { --rci: var(--ic-surgical); } .chx [data-dept="Paramedicine"] { --rci: var(--ic-paramedicine); }
+.chx [data-role="reception"][data-dept], .chx [data-role="super"][data-dept] { }   /* role wins for non-department roles (set below) */
+.chx [data-role="reception"][data-dept] { --rci: url('assets/icons/front-desk.png'); } .chx [data-role="super"][data-dept] { --rci: url('assets/icons/manager.png'); }
+/* the rail chip ("RM"/"OC"/…) shows the icon instead of letters */
+.chx .role-chip[data-role] { font-size: 0; position: relative; }
+.chx .role-chip[data-role]::after { content: ""; position: absolute; inset: 0; margin: auto; width: 22px; height: 22px; background: currentColor;
+  -webkit-mask: var(--rci) center / contain no-repeat; mask: var(--rci) center / contain no-repeat; }

@@ -214,6 +214,31 @@
         "id": "8773",
         "commonName": "siren",
         "use": "Drill events (0.32.0)"
+      },
+      "front-desk": {
+        "id": "8025",
+        "commonName": "front-desk",
+        "use": "CBH Chart: Reception role"
+      },
+      "hospital-bed": {
+        "id": "nVEdXqUOXN8u",
+        "commonName": "hospital-bed",
+        "use": "CBH Chart: Room role (bedside nurse)"
+      },
+      "manager": {
+        "id": "11224",
+        "commonName": "manager",
+        "use": "CBH Chart: Supervisor role"
+      },
+      "heart-pulse": {
+        "id": "35588",
+        "commonName": "heart-with-pulse",
+        "use": "CBH Chart: Patient Care"
+      },
+      "doctors-bag": {
+        "id": "9731",
+        "commonName": "doctors-bag",
+        "use": "CBH Chart: On call role"
       }
     }
   }
