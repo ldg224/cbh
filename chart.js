@@ -344,12 +344,13 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     S.ready = !!me.ready; S.readyAt = me.ready_since || null; S.readyExp = me.ready_expires_at || null;
     S.myDepts = me.departments || []; S.canPick = me.can_pick || []; S.canSuper = !!me.can_supervise; S.offer = me.offer || null;
     (me.notices || []).forEach((n) => { if (!(S.seenNotices || (S.seenNotices = new Set())).has(n.id)) { S.seenNotices.add(n.id); toast(esc(n.text), 6000); } });
+    S.launched = ops.launched !== false;
     S.session = ops.session === 'live'; S.autoMode = !!ops.auto_mode; S.superOther = !ops.auto_mode && S.role !== 'super';
     S.recOpen = ops.reception_open !== false; S.online = (ops.online_mode || 'open') === 'open';
     // cases (open board) + the desk's recently discharged
     const cases = (s.cases || []).map(toP);
     const closed = (s.recent_discharged || []).map((x) => { const o = P().find((y) => y.id === x.id) || {};
-      return Object.assign({ vitals: [], did: [], orders: [], colourLog: [], log: [], symptoms: [] }, o, { id: x.id, name: x.short_name, stage: 'closed', discharged: true, outcome: OUT_IN[x.outcome] || x.outcome, closedAt: x.discharged_at, rating: x.rated ? o.rating || 1 : null, ratedBy: x.rated ? o.ratedBy || 'patient' : null, deskDone: false }); });
+      return Object.assign({ vitals: [], did: [], orders: [], colourLog: [], log: [], symptoms: [] }, o, { id: x.id, name: x.short_name, stage: 'closed', discharged: true, outcome: OUT_IN[x.outcome] || x.outcome, closedAt: x.discharged_at, papersGiven: !!x.papers, rating: x.rated ? o.rating || 1 : null, ratedBy: x.rated ? o.ratedBy || 'patient' : null, deskDone: false }); });
     D.patients = [...cases, ...closed];
     S.queueIds = s.queue || [];
     S.incoming = (s.incoming || []).map((id) => { const p = byId(id); return p ? { id, name: p.name, urgency: p.urgency || 4, what: '', at: p.queuedAt || p.arrived, eta: null, by: S.role === 'road' ? 'me' : 'x', done: false } : null; }).filter(Boolean);
@@ -380,9 +381,10 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
         arrived: c.opened_at || c.queued_at } };
       const p = byId(id); if (p) Object.assign(p, RECS[id].p);
       render();
-    } catch (e) { if (e.hint === 'no_access' && S.open === id) { S.open = null; toast(esc(e.message)); render(); } }
+    } catch (e) { if (e.hint === 'no_access') { (S.noRec || (S.noRec = new Set())).add(id); if (S.open === id) { S.open = null; if (S.ph.length > 1 && (S.ph[S.ph.length - 1] || {}).id === id) S.ph.pop(); const p = byId(id); toast(p ? boardLine(p) : esc(e.message)); render(); } } }
     loadingRec = null;
   }
+  const boardLine = (p) => `${esc(p.name)}${p.room ? `, ${esc(p.room)}` : ''}: ${esc(status(p).toLowerCase())}${p.nurse && p.nurse !== 'me' ? ` · with ${esc(first(p.nurse))}` : ''}. You can't open their record.`;
   const canDo = (p, k) => { const r = RECS[p.id]; return r ? r.can[k] !== false : true; };
 
   // ---------- small pieces the screens use ----------
@@ -621,7 +623,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
       ${inCare().filter((p) => !callOuts().includes(p)).length ? `<details class="card with-staff"${S.editFor && byId(S.editFor) && byId(S.editFor).stage === 'care' && !callOuts().includes(byId(S.editFor)) ? ' open' : ''}><summary><h3>With staff <span class="count">${inCare().filter((p) => !callOuts().includes(p)).length}</span></h3><span class="muted small">Edit to add a team</span></summary>
         <ul class="wlist">${inCare().filter((p) => !callOuts().includes(p)).map((p) => `<li style="--u:${U(p.urgency).colour}"><span class="ubar"></span>${pnameRow(p, ` · ${esc(p.room || p.where || '')} · ${esc(first(p.nurse))} · ${esc(status(p))}`)}<span></span><span class="row-btns"><button type="button" class="btn small ghost" data-edit="${p.id}">Edit</button></span>${S.editFor === p.id ? editBox(p) : ''}</li>`).join('')}</ul></details>` : ''}`;
     if (S.deskTab === 'checkout') body = `<p class="muted small">Discharged patients. Their case is already closed: open one only if they come back to the desk.</p>` + (checkouts().length ? checkouts().map((p) => { const c = S.checkout[p.id] || (S.checkout[p.id] = { follow: '', rating: 0 });
-      if (S.backFor !== p.id) return `<section class="card cb-row"><div><b>${esc(p.name)}</b> <small class="muted">${esc(outName(p.outcome))} · discharged by ${esc(title(p.nurse))} · ${ago(p.closedAt || p.arrived)} ago${p.rating ? ' · rated ' + p.rating + '/5' : ''}</small></div><button type="button" class="btn small ghost" data-back="${p.id}">Came back to the desk</button></section>`;
+      if (S.backFor !== p.id) return `<section class="card cb-row"><div><b>${esc(p.name)}</b> <small class="muted">${esc(outName(p.outcome))} · discharged by ${esc(title(p.nurse))} · ${ago(p.closedAt || p.arrived)} ago${p.papersGiven ? ' · papers given' : ''}${p.rating ? ' · rated ' + p.rating + '/5' : ''}</small></div><button type="button" class="btn small ghost" data-back="${p.id}">Came back to the desk</button></section>`;
       return `<section class="card"><div class="card-head"><h3>${esc(p.name)} <small>discharged by ${esc(title(p.nurse))} · ${ago(p.closedAt || p.arrived)} ago</small></h3><button type="button" class="link" data-back="${p.id}">Close</button></div>${papers(p, p.outcome, c.follow)}
         <div class="f"><span>Follow-up <em>(optional)</em></span>${c.follow ? `<span class="res-v">${esc(c.follow)} <button type="button" class="link" data-furm="${p.id}">Change</button></span>` : fbox('fu' + p.id, 'follow', '', 'e.g. come back if it gets worse', 'Save')}</div>
         ${ratingField(p, c)}
@@ -1055,7 +1057,8 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   const holdScreen = (h, t, btn) => `<div class="role-screen"><div class="rs-in"><span class="lab">CBH Chart</span><h1>${h}</h1>${t ? `<p class="muted">${t}</p>` : ''}${btn || ''}</div></div>`;
   const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} Try again in a moment.` : '')
     : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, '<a class="btn" href="#shifts">Go to Shift Manager</a>')
-    : S.role ? '' : roleScreen());
+    : S.role ? '' : !S.launched && !S.canSuper ? holdScreen('The Chart isn’t open yet', 'It opens for everyone once the hospital launches it.')
+    : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
   const openReqCount = () => S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && (S.role === 'super' || canAccept(r))).length;
   const codeBar = () => (S.codes.length ? `<div class="code-bar" role="alert">${S.codes.map((c) => { const p = byId(c.pid); return `<div><b>CODE BLUE</b><span>Room ${esc(roomIdOf(p.room) || '?')} · ${esc(p.name)} · ${elapsed(c.at)}</span>${p.nurse === 'me' || S.role === 'super' ? `<button type="button" class="btn small" data-codeclear="${p.id}">Clear</button>` : ''}</div>`; }).join('')}</div>` : '');
@@ -1574,7 +1577,7 @@ ${nextBarHtml(p)}
     else if (ds.tab) { S.tab = ds.tab; S.vopen = false; }
     else if (ds.dtab) { S.deskTab = ds.dtab; S.confirmFor = null; S.recheckFor = null; }
     else if (ds.sec) S.sec = ds.sec;
-    else if (ds.open) { const p = byId(+ds.open); if (p && (p.stage === 'care' || (p.stage === 'queue' && S.role === 'super' && !isPhone()))) openP(p.id); else if (p) toast(`${esc(p.name)}: ${esc(status(p).toLowerCase())}.`); }
+    else if (ds.open) { const p = byId(+ds.open); if (p && S.noRec && S.noRec.has(p.id) && p.nurse !== 'me') toast(boardLine(p)); else if (p && (p.stage === 'care' || (p.stage === 'queue' && S.role === 'super' && !isPhone()))) openP(p.id); else if (p) toast(`${esc(p.name)}: ${esc(status(p).toLowerCase())}.`); }
     else if (ds.popen) { go('patient', { id: +ds.popen }); S.outcome = null; }
     else if (ds.pgo) { if (ds.pgo === 'p-num') S.vdraft = {}; go(ds.pgo, { id: ds.pid ? +ds.pid : top().id }); }
     else if (ds.proot) S.ph = [{ s: ds.proot }];
