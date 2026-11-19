@@ -494,7 +494,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   function pickRole(r, dept) {
     call('chart_role_set', { p_role: ROLE_OUT[r] || null, p_department: dept || null },
       { reception: 'You’re on Reception.', room: `You’re on Room · ${esc(dept || '')}.`, oncall: `You’re On call · ${esc(dept || '')}.`, road: 'You’re on Road.', super: 'You’re supervising from the floor plan.' }[r] || '',
-      { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); }, not_launched: () => { S.launched = false; render(); } })
+      { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); }, not_launched: (e) => { S.launched = false; toast(esc(e.message)); render(); } })
       .then((res) => { if (!res) return;
         Object.assign(S, { open: null, face: null, roomPanel: null, endShift: false, reqMenu: false, pick: !!res.need_room });
         S.sec = SECTIONS[r][0][0]; S.ph = [{ s: isPhone() && r === 'super' ? 'board' : S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue'; render(); });
