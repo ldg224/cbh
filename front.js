@@ -12,7 +12,9 @@
   }
   // "Check in online" is launching soon: the big button opens a short note (Discord to hear first, walk in meanwhile).
   const ci = $('fp-checkin'), note = $('fp-soon-note');
+  if (window.CBH_CONFIG?.patientCheckinLive) document.querySelectorAll('#signed-out .fp-soon').forEach((b) => b.remove());   // launched
   ci?.addEventListener('click', () => {
+    if (window.CBH_CONFIG?.patientCheckinLive) { location.hash = '#visit'; return; }   // launched: the check-in page (visit.js)
     if (!note) return;
     note.hidden = !note.hidden;
     ci.setAttribute('aria-expanded', String(!note.hidden));
