@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.40.0 (2026-11-19)
+
+**Added:**
+- **Correct or delete Chart records.** A new department permission, "Edit chart history" (Directors and owners have it), lets people correct details and entries on past records, strike out entries, or delete a whole record. Every change needs a reason and shows on the record with who made it. Nothing is erased: owners can show deleted records and restore them.
+
+**Fixed:**
+- The Chart keeps titles in names ("Dr. Turtle", not "Dr. T.").
+- People given "Post department news" now see it everywhere, not just on the Overview.
+
+Database change: yes (0093).
+
 ## 0.39.7 (2026-11-19)
 
 **Added:**
