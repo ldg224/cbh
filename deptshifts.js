@@ -62,7 +62,7 @@ window.DEPT_TABS.push({
       if (!body.isConnected) return;
       if (error) { body.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
       shownSig = part + dsSig(data);
-      body.innerHTML = part === 'now' ? drawNow(data) : part === 'week' ? drawWeek(data) : drawBoard(data);
+      body.innerHTML = part === 'now' ? drawNow(data || {}) : part === 'week' ? drawWeek(data || {}) : drawBoard(data || {});
       wire();
       loadFaces(body);
     }

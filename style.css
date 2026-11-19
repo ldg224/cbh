@@ -289,7 +289,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .page-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 26px; }
 .page-title .pt-ico { width: 26px; height: 26px; background: var(--ink, var(--blue-deep));
   -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
-.page-body { display: grid; gap: 16px; }
+.page-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
 .form-sk { display: grid; gap: 12px; }
 .team-pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -1165,3 +1165,6 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 .join-game.ds-join { display: flex; justify-content: center; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; overflow: hidden; font-size: 12px; padding: 6px 10px; border-radius: 8px; gap: 6px; margin: 2px 0 0; }
 .join-game.ds-join::before { width: 13px; height: 13px; }
 #session .join-game { margin-left: 8px; }
+
+/* 0.41.1 (Charlie): a section label straight after a card gets the same breathing room as the others (Shift Manager) */
+.card + h2.menu-label { margin-top: 28px; }

@@ -3,6 +3,18 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.41.1 (2026-11-20)
+
+**Fixed:**
+- Phones: Staff & Roster no longer runs off the right edge of the screen (the Rank Editor's styles were leaking into it; they now only apply to the Rank Editor). Every page is also kept to the screen's width.
+- Phones: on Home's "Needs You" and a department's "Needs Your Attention", the button now sits under the text, so long titles aren't cut short or squeezed into one word per line.
+- Computers: a department's menu column now runs to the bottom of the window instead of stopping where the page's content ends.
+- Shift Manager: "Your Shifts" has the same space above it as the other sections.
+- Smaller laptops: the top bar's search label stays on one line.
+- A department's Shifts tab no longer breaks if the server sends back nothing.
+
+Database change: no.
+
 ## 0.41.0 (2026-11-20)
 
 **Added:**

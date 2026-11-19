@@ -321,3 +321,11 @@ button.dp-quiet:hover { filter: brightness(.96); text-decoration: underline; }
   .rk-back { display: inline-block; }
   .rk-add { grid-template-columns: 1fr; }
 }
+
+/* 0.41.1 (Charlie): Needs Your Attention on phones: the button goes under the text, so titles aren't cut to "Take atte…" */
+@media (max-width: 560px) {
+  .dv-attn .dp-mini { flex-wrap: wrap; row-gap: 6px; }
+  .dv-attn .dp-m { flex: 1 1 calc(100% - 52px); }
+  .dv-attn .dp-m strong { white-space: normal; overflow-wrap: anywhere; }
+  .dv-attn .dp-mini > .small-btn { margin-left: 50px; }
+}

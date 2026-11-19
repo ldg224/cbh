@@ -244,3 +244,15 @@ body.desk .h-sec { margin-top: 26px; }
 
 /* 0.39.1: the running time on the top-bar shift button */
 .dt-time { font-variant-numeric: tabular-nums; font-weight: 800; padding-right: 8px; margin-right: 2px; border-right: 1px solid currentColor; border-right-color: color-mix(in srgb, currentColor 30%, transparent); }
+
+/* 0.41.1 (Charlie): Needs You rows on phones: the button drops under the text, so long titles don't wrap word by word */
+@media (max-width: 560px) {
+  .hd-item { flex-wrap: wrap; row-gap: 8px; padding: 12px 14px; }
+  .hd-txt { flex: 1 1 calc(100% - 52px); }
+  .hd-item > .hd-go, .hd-item > .hd-acts { margin-left: 51px; }
+}
+
+/* 0.41.1 (Charlie): the department's menu column runs to the bottom of the window, not just as far as the page's content */
+@media (min-width: 861px) { body.desk.in-dept main { background: linear-gradient(90deg, #f6f9fd 0 227px, #e1e8f2 227px 228px, #fff 228px); } }
+/* 0.41.1: the top bar's search label stays on one line on smaller laptops */
+.dt-search .dt-st { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
