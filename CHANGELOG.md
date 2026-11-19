@@ -3,6 +3,18 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.3 (2026-11-19)
+
+**Fixed:**
+- CBH Chart: picking your room works (tap your beds, then Done).
+- CBH Chart: when the Chart refuses something it always says why.
+- Ending the last shift of the day now tidies up the Chart properly, and supervisors can give someone a room.
+
+**Changed:**
+- The Chart is open: the Launch / Pause controls are removed.
+
+Database change: yes (0091, already applied).
+
 ## 0.39.2 (2026-11-19)
 
 **Changed:**
