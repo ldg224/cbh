@@ -3,6 +3,15 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.41.3 (2026-11-20)
+
+**Fixed:**
+- CBH Chart on computers: with a patient's record open beside the floor plan, the beds show the patient's name again (the bed letter was pushing it out of sight), and Paediatric rooms say "Child" so the tag no longer runs under the room's pencil.
+- CBH Chart on tablets: the ward picture on the Floor Plan tab sits beside the Open button instead of filling the screen.
+- CBH Chart: removed the "Nothing typed before yet…" line under Care given.
+
+Database change: no.
+
 ## 0.41.2 (2026-11-20)
 
 **Fixed:**

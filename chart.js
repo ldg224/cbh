@@ -993,7 +993,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     return [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])); };
   const suggChips = (id, kind, key, typed) => { const t = (typed || '').trim().toLowerCase();
     const list = usage(kind, key).filter(([w]) => !t || w.toLowerCase().includes(t)).slice(0, 8);
-    return list.length ? `<span class="sg-l">Suggestions</span>${list.map(([w, n]) => `<button type="button" class="chip sug" data-fbpick="${id}" data-fbval="${esc(w)}">${esc(w)}${n > 1 ? ` <i>×${n}</i>` : ''}</button>`).join('')}` : (t ? '' : '<span class="sg-l">Nothing typed before yet. What you add here will show up as a suggestion next time.</span>'); };
+    return list.length ? `<span class="sg-l">Suggestions</span>${list.map(([w, n]) => `<button type="button" class="chip sug" data-fbpick="${id}" data-fbval="${esc(w)}">${esc(w)}${n > 1 ? ` <i>×${n}</i>` : ''}</button>`).join('')}` : ''; };
   const fbox = (id, kind, key, placeholder, btn) => `<div class="fbox"><div class="fb-row"><input id="fb-${id}" data-fb="${id}" data-fbkind="${kind}" data-fbkey="${esc(key || '')}" value="${esc((S.fb || {})[id] || '')}" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="done"><button type="button" class="btn" data-fbadd="${id}">${btn}</button></div>
     <div class="fb-sugg" id="sg-${id}">${suggChips(id, kind, key, (S.fb || {})[id])}</div></div>`;
   // Symptoms in the record. Anyone working the case can add them (the server allows the desk, the owner and anyone who
