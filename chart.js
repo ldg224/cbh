@@ -150,7 +150,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   let nextId = 100;
   const P = () => D.patients;
   const byId = (id) => P().find((p) => p.id === id);
-  const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
+  // Phones get the phone layout upright AND sideways (a landscape phone is wider than 860px but very short), and while
+  // the full-screen floor plan is open (Charlie, 20 Nov 2026).
+  const isPhone = () => !!(S && S.fp) || window.matchMedia('(max-width: 860px), (pointer: coarse) and (max-height: 520px)').matches;
   // ----- derived lists -----
   const qOrder = (a, b) => (!!b.bumped - !!a.bumped) || (a.urgency - b.urgency) || (new Date(a.queuedAt) - new Date(b.queuedAt));
   const upNext = () => (S.queueIds || []).map((id) => byId(id)).filter((p) => p && p.stage === 'queue');
@@ -352,7 +354,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     (ops.supervisors || []).forEach((x) => { const sid = person(x.discord_id, x.name); if (sid !== 'me' && !S.staffRole[sid]) S.staffRole[sid] = 'super'; });
     // me
     const wasRole = S.role; S.onShift = me.on_shift !== false; S.role = ROLE_IN[me.role] || null; S.rdept = me.department || null;
-    if (S.role && S.role !== wasRole) { S.sec = SECTIONS[S.role][0][0]; S.ph = [{ s: isPhone() && S.role === 'super' ? 'board' : S.sec }]; S.deskTab = S.role === 'reception' ? 'checkin' : 'queue'; }
+    if (S.role && S.role !== wasRole) { S.sec = SECTIONS[S.role][0][0]; S.ph = [{ s: S.sec }]; S.deskTab = S.role === 'reception' ? 'checkin' : 'queue'; }
     S.ready = !!me.ready; S.readyAt = me.ready_since || null; S.readyExp = me.ready_expires_at || null;
     S.myDepts = me.departments || []; S.canPick = me.can_pick || []; S.canSuper = !!me.can_supervise; S.offer = me.offer || null;
     (me.notices || []).forEach((n) => { if (!(S.seenNotices || (S.seenNotices = new Set())).has(n.id)) { S.seenNotices.add(n.id); toast(esc(n.text), 6000); } });
@@ -512,7 +514,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); }, })
       .then((res) => { if (!res) return;
         Object.assign(S, { open: null, face: null, roomPanel: null, endShift: false, reqMenu: false, pick: !!res.need_room });
-        S.sec = SECTIONS[r][0][0]; S.ph = [{ s: isPhone() && r === 'super' ? 'board' : S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue'; render(); });
+        S.sec = SECTIONS[r][0][0]; S.ph = [{ s: S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue'; render(); });
   }
   // Ends the site shift too (the same shift_end the top bar uses), then shows Shift Manager.
   const endMyShift = async () => { S.endShift = false; const { error } = await sb.rpc('shift_end'); if (error) toast(`Handed over. ${esc(error.message || 'End your shift in Shift Manager.')}`); else toast('Handed over and clocked out.');
@@ -761,7 +763,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   function pickSection() {
     const n = pickSelNow().length;
     return `<div class="pane-pad rooms-pad"><div class="pane-head"><div><h2>${n ? 'Your room' : 'Pick your room'}</h2><p class="muted">Tap beds to take them, up to ${D.LIMIT}: a 2-bed room, any two 1-bed rooms, or one bed in a shared room. ${esc(S.rdept || '')} rooms are outlined. You stay in it for the shift.</p></div>${n ? `<button type="button" class="btn" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>
-      ${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${r.id} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? 'Bed ' + b.slice(-1) : 'Bed', 'pick')).join('')}</div>`).join('')
+      ${isPhone() ? fpLaunch('fppick', 'Pick on the floor plan', 'Full screen · turn your phone sideways') + '<h4 class="ph-sub ph-or">Or pick from the list</h4>' : ''}${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${r.id} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? 'Bed ' + b.slice(-1) : 'Bed', 'pick')).join('')}</div>`).join('')
         : `<div class="floor-wrap"><div class="floor pick" aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
   }
 
@@ -919,6 +921,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const cls = `bed${bedOff(bed) ? ' off' : ''}${p ? ' used' : ''}${p && p.stage === 'queue' ? ' hb' : ''}${p && codeFor(p) ? ' code' : ''}${o === 'me' ? ' mine' : ''}${S.moveFor && !p ? ' target' : ''}`;
     const placing = mode === 'super' && S.placeFor && !p ? (dropWhy(byId(S.placeFor), bed) ? ' no-drop' : ' fit') : '';
     if (placing === ' fit') return `<button type="button" class="${cls} fit" data-placebed="${esc(bed)}" aria-label="Place ${esc(byId(S.placeFor).name)} in ${esc(bed)}"><span class="bed-n">${esc(short)}</span><small class="free-l">Place</small></button>`;
+    if (mode === 'super' && S.moveFor && !p && byId(S.moveFor) && !dropWhy(byId(S.moveFor), bed)) return `<button type="button" class="${cls} fit" data-mv-to="${esc(bed)}" aria-label="Move ${esc(byId(S.moveFor).name)} to ${esc(bed)}"><span class="bed-n">${esc(short)}</span><small class="free-l">Move here</small></button>`;
     if (mode === 'pick') { const on = pickSelNow().includes(bed), other = o && o !== 'me' ? o : null; return `<button type="button" class="${cls.replace(' mine', '')}${on ? ' mine picked' : ''} pickable" data-pickbed="${esc(bed)}" aria-pressed="${on}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}><span class="bed-n">${esc(short)}</span>${on ? `${face('me')}<b>Yours</b>` : other ? `${face(other)}<b>${esc(first(other))}</b>` : `<small class="free-l">${p ? `${esc(p.name)} waiting · nobody's` : bedOff(bed) ? 'Unavailable' : closedBed(bed) ? `Closed${S.roomCfg[roomIdOf(bed)].why ? ': ' + esc(S.roomCfg[roomIdOf(bed)].why) : ''}` : 'Free'}</small>`}</button>`; }
     return `<div class="${cls}${placing}" data-bed="${esc(bed)}"${p ? ` style="--u:${U(p.urgency).colour}" data-open="${p.id}"${mode === 'super' ? ` data-drag="${p.id}"` : ''} role="button" tabindex="0" aria-label="${esc(p.name)} in ${esc(bed)}${o ? ', ' + esc(nm(o)) + '\u2019s bed' : ''}. Enter opens the record${mode === 'super' ? ', M moves them' : ''}."` : ''}>
       ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}">${esc(narrow ? p.name.split(' ')[0] : p.name)}</b>${narrow ? '' : `<small class="bed-st">${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}</small>`}<span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l">${bedOff(bed) ? 'Off' : narrow ? '' : 'Free'}</small>`}</div>`; };
@@ -1102,8 +1105,8 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const roleGrad = () => { if (S.role === 'reception') return 'background:linear-gradient(135deg,#FFD66B,#FFAA00);color:#0B1E4A';
     if (S.role === 'super') return 'background:linear-gradient(135deg,#2ED3C6,#3A82D0)';
     const c = deptColour(S.rdept || 'Nursing'); return `background:linear-gradient(135deg,color-mix(in srgb,${c} 72%,white),color-mix(in srgb,${c} 88%,#0B1E4A))`; };
-  const roleCard = (cls = '') => `<div class="role-card ${cls}" style="${roleGrad()}" data-role="${S.role || ''}" data-dept="${esc(S.rdept || '')}"><span>You</span><b>${esc(roleLabel())}</b><small>${esc(roleSub())}</small>
-    <div class="rc-alerts"><button type="button" class="snd-chip${A.on ? ' on' : ''}" data-a="sndtoggle" aria-pressed="${A.on}" title="${A.on ? 'Mute alert sounds' : 'Turn alert sounds on'}">${A.on ? 'Sounds on' : 'Muted'}</button><button type="button" class="snd-set" data-a="alertset" aria-expanded="${!!S.alertSet}" aria-label="Alert settings" title="Alert settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button></div></div>${S.alertSet ? alertSettings() : ''}`;
+  const roleCard = (cls = '', extra = '') => `<div class="role-card ${cls}" style="${roleGrad()}" data-role="${S.role || ''}" data-dept="${esc(S.rdept || '')}"><span>You</span><b>${esc(roleLabel())}</b><small>${esc(roleSub())}</small>
+    <div class="rc-alerts">${extra}<button type="button" class="snd-chip${A.on ? ' on' : ''}" data-a="sndtoggle" aria-pressed="${A.on}" title="${A.on ? 'Mute alert sounds' : 'Turn alert sounds on'}">${A.on ? 'Sounds on' : 'Muted'}</button><button type="button" class="snd-set" data-a="alertset" aria-expanded="${!!S.alertSet}" aria-label="Alert settings" title="Alert settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button></div></div>${S.alertSet ? alertSettings() : ''}`;
   // ---------- ALERTS (owner, 19 Nov 2026): a ping when something is for you, a flashing tab title, desktop notifications ----------
   const A = Object.assign({ on: true, vol: 0.6, desk: false, asked: false }, load('alerts', {}));
   const saveA = () => save('alerts', { on: A.on, vol: A.vol, desk: A.desk, asked: A.asked });
@@ -1224,6 +1227,49 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       <div class="pp-screen">${p ? `<div class="pp-visit"><b>Your visit</b><span class="pp-url">cbh/visit/${esc(p.vkey)}</span><small>Bookmark this page to follow your visit. It's private: only people with this link can see it.</small></div>` : ''}${h}</div>${p ? '<button type="button" class="link pp-reset" data-a="pdreset">Start again as a new patient</button>' : ''}</aside>`;
   }
 
+  // ---------- PHONE FLOOR PLAN (Charlie, 20 Nov 2026): full screen and sideways ----------
+  // Opens from the Floor Plan tab (Supervisor) or Pick your room (Room). Android goes into real fullscreen and locks
+  // landscape; where that isn't allowed (iPhone, Discord's browser) the CSS turns the view sideways while the phone is
+  // held upright (.fpx under @media (orientation: portrait)), so it works the same everywhere. Touch has no drag here:
+  // tap someone in Up next, then a lit bed; tap a patient's bed for Open record / Move / Give to someone.
+  function fpOpen(mode, place) {
+    Object.assign(S, { fp: mode, placeFor: place || null, bedAct: null, face: null, roomPanel: null, moveFor: null });
+    document.body.classList.add('fp-open');
+    try { const el = document.documentElement;
+      if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen({ navigationUI: 'hide' }).then(() => { try { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}); } catch { /* no lock */ } }).catch(() => {});
+    } catch { /* no fullscreen */ }
+  }
+  function fpClose() {
+    Object.assign(S, { fp: false, placeFor: null, bedAct: null, face: null, roomPanel: null, moveFor: null, who: null, pending: null, teamWarn: null, pendRoom: null });
+    document.body.classList.remove('fp-open');
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch { /* fine */ }
+    try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); } catch { /* fine */ }
+  }
+  function bedActPanel() { const p = S.bedAct && byId(S.bedAct); if (!p) return '';
+    return `<div class="move-ask"><div class="ma-h"><b>${esc(p.name)}</b><button type="button" class="link" data-a="bedactx">Close</button></div>
+      <span class="muted small">${esc(p.room || '')} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}${p.nurse ? ' · ' + esc(first(p.nurse)) : ''}</span>
+      <div class="fpx-acts">${p.stage === 'care' ? `<button type="button" class="btn" data-fprec="${p.id}">Open record</button>` : ''}${p.stage === 'queue' ? `<button type="button" class="btn" data-fpwho="${p.id}">Give to someone</button>` : ''}<button type="button" class="btn ghost" data-mvopen="${p.id}">Move to another bed</button></div></div>`; }
+  // a small, non-interactive picture of the ward for the phone's Floor Plan tab (the real one opens full screen)
+  const miniFloor = () => `${FLOOR.walls.map((w) => `<i class="fp-block" style="${box(w)}"></i>`).join('')}<i class="mf-hub" style="${box([95, 95, 230, 115])}"></i><i class="mf-hub" style="${box([150, 205, 140, 95])}"></i>${D.ROOMS.map((r) => { const g = FLOOR.rooms[r.id]; if (!g) return '';
+    const beds = D.BEDS.filter((b) => D.roomOfBed(b) === r), c = S.roomCfg[r.id] || {};
+    return `<i class="mf-room${c.closed ? ' closed' : ''}" style="${box(g)};--dc:${deptColour(S.roomDept[r.id])}"><b>${r.id}</b><em>${beds.map((b) => { const p = roomsInUse()[b]; return `<u class="${p ? 'on' : ''}${ownerOf(b) ? ' own' : ''}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}></u>`; }).join('')}</em></i>`; }).join('')}`;
+  const fpLaunch = (a, t, sub) => `<button type="button" class="fp-launch" data-a="${a}"><span class="floor mini" aria-hidden="true">${miniFloor()}</span><span class="fp-go"><b>${t}</b><small>${sub}</small></span></button>`;
+  function fpView() {
+    const pick = S.fp === 'pick', q = upNext(), n = pick ? pickSelNow().length : 0;
+    const sheet = pick ? '' : `${S.endSess ? endSessionPanel() : ''}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}${bedActPanel()}${S.roomPanel ? roomPanel() : ''}${S.face ? facePanel() : ''}`;
+    const ppl = D.STAFF.filter((x) => !x.you);
+    const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
+    const side = pick ? `<div class="fpx-pick"><b>${n ? `${n} bed${n > 1 ? 's' : ''} picked` : 'Tap beds to take them'}</b><span>Up to ${D.LIMIT}: a 2-bed room, any two 1-bed rooms, or one bed in a shared room.${S.rdept ? ` ${esc(S.rdept)} rooms are outlined.` : ''}</span>${n ? `<button type="button" class="btn big" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>`
+      : sheet ? `<div class="fpx-sheet">${sheet}</div>`
+      : `<div class="fpx-ppl plan-s"><span class="ps-l fpx-h">People</span>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('') || '<p class="muted small">Nobody else is on the Chart.</p>'}</div>`;
+    const bar = pick ? '<b class="fpx-t">Pick your room</b>'
+      : `<div class="fpx-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span>${q.length ? q.map((p) => `<button type="button" class="q-chip${S.placeFor === p.id ? ' sel' : ''}" style="--u:${U(p.urgency).colour}" data-place="${p.id}" aria-pressed="${S.placeFor === p.id}">${p.room ? bell : ''}<b>${esc(p.name)}</b><small>${ago(p.queuedAt)}</small></button>`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>`;
+    const hint = S.placeFor && !pick && !sheet && byId(S.placeFor) ? `<div class="fpx-hint"><b>Place ${esc(byId(S.placeFor).name)}</b><span>Tap a lit bed.</span><button type="button" class="link" data-place="${S.placeFor}">Cancel</button></div>` : '';
+    return `<div class="fpx${pick ? ' pick' : ''}" role="dialog" aria-modal="true" aria-label="${pick ? 'Pick your room' : 'Floor plan'}">
+      <div class="fpx-bar"><button type="button" class="fpx-x" data-a="fpclose" aria-label="Close the floor plan">×</button>${bar}</div>
+      <div class="fpx-main"><div class="fpx-floor"><div class="floor${pick ? ' pick' : ''}">${floorInner(pick ? 'pick' : 'super')}</div></div><div class="fpx-side">${hint}${side}</div></div></div>`;
+  }
+
   // ---------- PHONE (staff): one thing per screen ----------
   const top = () => S.ph[S.ph.length - 1];
   const go = (s, extra = {}) => { S.ph.push({ s, ...extra }); };
@@ -1233,6 +1279,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const gp = gate(); if (gp) return `<div class="phone-ui">${gp}</div>`;
     const t = top(), p = t.id && byId(t.id); let h = '';
     const plist = (list, attrs, extra) => `<ul class="ph-list">${list.map((x) => `<li style="--u:${x.urgency ? U(x.urgency).colour : '#9aa9c4'}"><button type="button" class="ph-row" ${attrs(x)}><span class="ubar"></span><span><b>${esc(x.name)}</b><small>${extra(x)}</small></span></button></li>`).join('')}</ul>`;
+    if (S.fp && (S.fp === 'pick' ? !S.pick : S.role !== 'super')) S.fp = false;
+    if (t.s === 'plan') h = `${phHead('Floor Plan', `Main ward · ${Object.keys(roomsInUse()).length} of ${D.BEDS.length} beds in use`)}${fpLaunch('fpopen', 'Open the floor plan', 'Full screen · turn your phone sideways')}
+      <h4 class="ph-sub">Up next</h4>${upNext().length ? plist(upNext(), (x) => `data-fpplace="${x.id}"`, (x) => `${x.room ? 'Waiting in ' + esc(x.room) : ago(x.queuedAt)} · tap to place`) : '<p class="muted">Nobody waiting.</p>'}`;
     if (t.s === 'myroom') h = myRoomSection();
     if (t.s === 'reqs') h = reqSection();
     if (t.s === 'road') h = roadSection();
@@ -1281,9 +1330,9 @@ ${nextBarHtml(p)}
     if (t.s === 'p-leave' && p) h = `${phHead('Discharge', esc(p.name))}${nextBarHtml(p)}${leaveBody(p)}`;
     const NAV = { reception: [['desk', 'Front Desk', deskCount()]], room: [['myroom', 'My Room', mine().filter((x) => x.phase === 'assigned').length], ['board', 'Ward Board', 0]],
       oncall: [['reqs', 'Requests', openReqCount()], ['board', 'Ward Board', 0]], road: [['road', 'Incoming', 0], ['board', 'Ward Board', 0]],
-      super: [['board', 'Board', 0], ['desk', 'Front Desk', deskCount()], ['reqs', 'Requests', openReqCount()], ['rooms', 'Rooms', 0]] };
+      super: [['plan', 'Floor Plan', upNext().length], ['desk', 'Front Desk', deskCount()], ['reqs', 'Requests', openReqCount()], ['board', 'Board', 0]] };
     const nav = NAV[S.role];
-    return `${codeBar()}<div class="phone-ui"><div class="ph-screen">${S.role === 'room' && t.s === 'myroom' ? mine().filter((x) => x.phase === 'assigned').map((x) => `<div class="gotit sticky" style="--u:${U(x.urgency).colour}"><span class="lab">${x.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(x.name)}${x.age ? ', ' + x.age : ''}</b>${upill(x.urgency)}<span>${esc(x.room)} · ${esc(x.symptoms.join(', ') || 'no symptoms given')}</span><button type="button" class="btn big" data-gotit="${x.id}">Accept patient <small class="gi-t">${countdown(x.assignedAt, 60)}</small></button></div>`).join('') : ''}${S.ph.length === 1 && !(S.role === 'room' && mine().some((x) => x.phase === 'assigned')) ? `<div class="ph-role">${roleCard('small')}<button type="button" class="link" data-a="changerole">Change role</button></div>` : ''}${h || phHead('Not here any more', 'That patient has moved on.')}</div><nav class="ph-nav" style="grid-template-columns:repeat(${nav.length}, 1fr)">${nav.map(([k, l, n]) => `<button type="button" class="${S.ph[0].s === k ? 'on' : ''}" data-proot="${k}">${l}${n ? ` <i>${n}</i>` : ''}</button>`).join('')}</nav></div>`;
+    return `${codeBar()}<div class="phone-ui"><div class="ph-screen">${S.role === 'room' && t.s === 'myroom' ? mine().filter((x) => x.phase === 'assigned').map((x) => `<div class="gotit sticky" style="--u:${U(x.urgency).colour}"><span class="lab">${x.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(x.name)}${x.age ? ', ' + x.age : ''}</b>${upill(x.urgency)}<span>${esc(x.room)} · ${esc(x.symptoms.join(', ') || 'no symptoms given')}</span><button type="button" class="btn big" data-gotit="${x.id}">Accept patient <small class="gi-t">${countdown(x.assignedAt, 60)}</small></button></div>`).join('') : ''}${S.ph.length === 1 && !(S.role === 'room' && mine().some((x) => x.phase === 'assigned')) ? `<div class="ph-role">${roleCard('small', '<button type="button" class="rc-change" data-a="changerole">Change role</button>')}</div>` : ''}${h || phHead('Not here any more', 'That patient has moved on.')}</div><nav class="ph-nav" style="grid-template-columns:repeat(${nav.length}, 1fr)">${nav.map(([k, l, n]) => `<button type="button" class="${S.ph[0].s === k ? 'on' : ''}" data-proot="${k}">${l}${n ? ` <i>${n}</i>` : ''}</button>`).join('')}</nav></div>${S.fp ? fpView() : ''}`;
   }
 
   // ---------- render (keeps every scroll area and the focus) ----------
@@ -1307,7 +1356,7 @@ ${nextBarHtml(p)}
     const dock = !isPhone() && S.role === 'super' && S.sec === 'plan' && !!S.open;
     $('#chx-view').classList.toggle('docked-view', dock); $('#chx-dhost').classList.toggle('docked', dock); document.body.classList.toggle('phone', isPhone());
     drawer();
-    app.classList.toggle('is-phone', isPhone());
+    app.classList.toggle('is-phone', isPhone()); document.body.classList.toggle('fp-open', !!S.fp);
     alertWatch();
     AREAS.forEach((sel) => { const e = $(sel), b = before[sel]; if (e && b && b[1] === areaKey(sel)) e.scrollTop = b[0]; });
     se.scrollTop = before.page[1] === areaKey('page') ? before.page[0] : 0;
@@ -1430,6 +1479,7 @@ ${nextBarHtml(p)}
   app.addEventListener('focusin', (e) => { const x = e.target.closest('.plan-s .staff-drop'); if (x) hl(x.dataset.sid, true); });
   app.addEventListener('focusout', (e) => { const x = e.target.closest('.plan-s .staff-drop'); if (x) hl(x.dataset.sid, false); });
   document.addEventListener('keydown', (e) => { if (e.key !== 'Escape' || !app.isConnected) return;
+    if (S.fp) { fpClose(); render(); return; }
     if (S.sessMenu || S.face || S.railOpen) { S.sessMenu = false; S.face = null; S.roleAsk = null; S.railOpen = false; }
     else if (S.teamWarn || S.who || S.pendRoom || S.roomPanel || S.endSess || S.moveFor || S.pending) Object.assign(S, { teamWarn: null, who: null, pendRoom: null, roomPanel: null, endSess: false, moveFor: null, pending: null });
     else if (S.open && !isPhone()) { S.open = null; S.reqMenu = false; S.handbackFor = null; } else return;
@@ -1440,15 +1490,23 @@ ${nextBarHtml(p)}
     if (justDragged) { e.preventDefault(); return; }
     let closed = false;
     if (S.sessMenu && !e.target.closest('.sess-m')) { S.sessMenu = false; closed = true; }
-    if (S.face && !e.target.closest('.popover, .staff-drop')) { S.face = null; S.roleAsk = null; closed = true; }
-    if (S.roomPanel && !e.target.closest('.room-pop, .rh-edit')) { S.roomPanel = null; closed = true; }
+    if (S.face && !e.target.closest('.popover, .staff-drop, .fpx-sheet')) { S.face = null; S.roleAsk = null; closed = true; }
+    if (S.roomPanel && !e.target.closest('.room-pop, .rh-edit, .fpx-sheet')) { S.roomPanel = null; closed = true; }
     if (S.railOpen && !e.target.closest('.rail')) { S.railOpen = false; S.alertSet = false; closed = true; }
     const b = e.target.closest('button, tr[data-open], li[data-open], div[data-open]'); if (!b || b.disabled) { if (closed) render(); return; }
     S.lastAct = Date.now();
     const ds = b.dataset, cur = () => (isPhone() ? byId(top().id) : byId(S.open));
-    const home = () => { S.ph = [{ s: S.role === 'super' ? 'board' : SECTIONS[S.role][0][0] }]; };
+    const home = () => { S.ph = [{ s: SECTIONS[S.role][0][0] }]; };
     const openP = (id) => { S.urgOpen = false; if (isPhone()) go('patient', { id }); else { S.open = id; S.tab = 'chart'; S.vopen = false; S.outcome = null; S.reqMenu = false; S.rq = null; } };
     const sure = (v, msg) => { if (String(v || '').trim()) return true; toast(msg); return false; };
+    // the phone floor plan (full screen)
+    if (ds.a === 'fpopen' || ds.a === 'fppick' || ds.fpplace) { fpOpen(ds.a === 'fppick' ? 'pick' : 'super', ds.fpplace ? +ds.fpplace : null); render(); return; }
+    if (ds.a === 'fpclose') { fpClose(); render(); return; }
+    if (ds.a === 'bedactx') { S.bedAct = null; render(); return; }
+    if (S.fp === 'super' && b.matches('.bed[data-open]')) { Object.assign(S, { bedAct: +ds.open, face: null, roomPanel: null, moveFor: null, placeFor: null }); render(); return; }
+    if (ds.fprec) { const id = +ds.fprec; fpClose(); openP(id); render(); return; }
+    if (ds.fpwho) { const p = byId(+ds.fpwho); S.bedAct = null; if (p) S.who = { pid: p.id, bed: p.room }; render(); return; }
+    if (ds.a === 'pickdone' && S.fp) fpClose();
     // roles and Ready
     if (ds.role) pickRole(ds.role, ds.rdept);
     else if (ds.a === 'changerole') { if (mine().length) { S.endShift = 'role'; if (S.role === 'room') { S.sec = 'myroom'; S.ph = [{ s: 'myroom' }]; } toast('Hand over or finish your patients before changing role.'); }
@@ -1477,7 +1535,7 @@ ${nextBarHtml(p)}
     else if (ds.a === 'mvbedopen') S.mvBed = S.mvBed === S.open || S.mvBed === (top() || {}).id ? null : (isPhone() ? top().id : S.open);
     else if (ds.a === 'mvbedx') S.mvBed = null;
     else if (ds.mvbed) { const id = S.mvBed; S.mvBed = null; planMove(id, ds.mvbed); }
-    else if (ds.place) { S.placeFor = S.placeFor === +ds.place ? null : +ds.place; if (S.placeFor) toast('Lit beds can take them: click one.'); }
+    else if (ds.place) { S.placeFor = S.placeFor === +ds.place ? null : +ds.place; if (S.placeFor && !S.fp) toast('Lit beds can take them: click one.'); }
     else if (ds.placebed) { const id = S.placeFor; S.placeFor = null; dropOnBed(id, ds.placebed); }
     else if (ds.rqchase) req.chase(reqById(ds.rqchase));
     else if (ds.a === 'incnew') S.incDone = false;
@@ -1578,7 +1636,7 @@ ${nextBarHtml(p)}
     else if (ds.mvYes !== undefined) doMove(S.pending.pid, S.pending.bed);
     else if (ds.mvSwap !== undefined) doMove(S.pending.pid, S.pending.bed, S.pending.swap);
     else if (ds.mvNo !== undefined) { S.pending = null; S.moveFor = null; }
-    else if (ds.mvopen) S.moveFor = +ds.mvopen;
+    else if (ds.mvopen) { S.moveFor = +ds.mvopen; S.bedAct = null; }
     else if (ds.a === 'moveto') { S.sec = 'plan'; S.moveFor = S.open; S.open = null; }
     else if (ds.a === 'arrive') toast('Online check-ins come from patients on the #visit page.');
     else if (ds.a === 'npopen') S.npOpen = true; else if (ds.a === 'npx') S.npOpen = false;
@@ -1673,6 +1731,6 @@ ${nextBarHtml(p)}
     document.body.classList.add('in-chart'); setPageTitle('stethoscope', 'CBH Chart', 'staff');
     body.replaceChildren(app); render(); poll(true);
   };
-  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#chart')) document.body.classList.remove('in-chart'); });
+  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#chart')) { document.body.classList.remove('in-chart'); if (S.fp) fpClose(); } });
 
 })();

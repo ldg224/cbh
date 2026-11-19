@@ -970,3 +970,6 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 /* QA L2: the End session list scrolls so "Close all and end" stays in view at 1366x768 */
 .chx .es-list { max-height: min(40vh, 320px); overflow: auto; }
 .chx .top-change { white-space: nowrap; }
+/* the Chart's own mark at the top of its menu: the stethoscope (the CBH Chart's menu icon) on the teal tile (Charlie, 20 Nov 2026) */
+.chx .in-tile { position: relative; background: linear-gradient(135deg, #2ED3C6, #3A82D0); }
+.chx .in-tile::after { content: ""; position: absolute; inset: 22%; background: #fff; -webkit-mask: url(assets/icons/stethoscope.png) center / contain no-repeat; mask: url(assets/icons/stethoscope.png) center / contain no-repeat; }

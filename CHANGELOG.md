@@ -3,6 +3,24 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.41.0 (2026-11-20)
+
+**Added:**
+- **The floor plan on phones.** Supervisors get a Floor Plan tab with a small picture of the ward; tap it to open the full floor plan full screen and sideways (Android locks to landscape; on iPhone and in Discord's browser the plan turns itself, so just turn the phone). Tap someone in Up next, then a lit bed, to give them out; tap a patient's bed to open their record, move them or give them to someone; tap a room's pencil for its settings and a person for their role.
+- **Pick your room on the floor plan** on phones (Room role), as well as from the list.
+- Moving a patient on the floor plan (computer too): the free beds they can go to now light up as "Move here".
+
+**Changed:**
+- Phones: the big role card is now one slim bar with Change, sound and alert settings, so each screen has more room.
+- Phones held sideways now get the phone layout instead of a squashed computer layout.
+- The CBH Chart's own menu shows its stethoscope mark instead of a plain teal square.
+
+**Fixed:**
+- Phones: names in Up next on the Ward Board and Front Desk were in spaced capitals.
+- Phones: the Send to the ER button sat on top of the bottom tabs.
+
+Database change: no.
+
 ## 0.40.0 (2026-11-19)
 
 **Added:**

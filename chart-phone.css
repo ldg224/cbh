@@ -1,0 +1,144 @@
+/* CBH Chart on phones (Charlie, 20 Nov 2026). Loaded after chart.css, chart-plan.css and depticons.css.
+   1. The full-screen floor plan (.fpx): sideways. Where the browser can't lock landscape (iPhone, Discord's browser)
+      it is turned 90 degrees while the phone is held upright, so the user just turns the phone.
+   2. Phone fixes: a slim role bar, Up next names in normal case, shorter tabs, landscape phones. */
+
+/* ---------- 1. the full-screen floor plan ---------- */
+body.fp-open { overflow: hidden; }
+.chx .fpx { position: fixed; z-index: 2000; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: #F3F7FC;
+  display: grid; grid-template-rows: auto minmax(0, 1fr); overscroll-behavior: contain; touch-action: manipulation; }
+@media (orientation: portrait) {
+  .chx .fpx { width: 100vh; width: 100dvh; height: 100vw; transform-origin: top left; transform: rotate(90deg) translateY(-100%); }
+}
+.chx .fpx-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; background: #fff; border-bottom: 1px solid var(--line); min-width: 0; }
+.chx .fpx-x { flex: none; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 24px; line-height: 1; color: var(--text); }
+.chx .fpx-t { font-size: 16px; font-weight: 800; }
+.chx .fpx-q { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.chx .fpx-q::-webkit-scrollbar { display: none; }
+.chx .fpx-q .pq-l { flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.chx .fpx-q .pq-l i { font-style: normal; color: var(--text); }
+.chx .fpx-q .q-chip { flex: none; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; min-height: 36px; padding: 4px 10px; touch-action: manipulation; cursor: pointer; color: var(--text); }
+.chx .fpx-q .q-chip small { color: var(--muted); font-weight: 600; font-size: 11px; }
+.chx .fpx-q .q-chip.sel { background: var(--teal-wash); box-shadow: 0 0 0 3px var(--teal); }
+.chx .fpx-main { display: grid; grid-template-columns: auto minmax(180px, 1fr); min-height: 0; min-width: 0; }
+.chx .fpx-floor { min-height: 0; min-width: 0; height: 100%; display: flex; align-items: center; justify-content: center; padding: 20px 92px 24px 8px; }
+.chx .fpx .floor { height: 100%; width: auto; max-width: 100%; min-width: 0; aspect-ratio: 415 / 300; }
+.chx .fpx-side { min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); background: #fff; padding: 8px; display: grid; align-content: start; gap: 8px; }
+.chx .fpx-side .move-ask { margin: 0; box-shadow: none; border: 1px solid var(--line); background: #fff; }
+.chx .fpx-sheet { display: grid; gap: 8px; }
+.chx .fpx-sheet .chips { max-height: none; }
+.chx .fpx-acts { display: grid; gap: 6px; margin-top: 4px; }
+.chx .fpx-acts .btn { width: 100%; min-height: 42px; }
+.chx .fpx-hint { display: grid; gap: 2px; padding: 8px 10px; border-radius: 12px; background: var(--teal-wash); border: 1px solid color-mix(in srgb, var(--teal) 55%, white); }
+.chx .fpx-hint b { font-size: 13.5px; } .chx .fpx-hint span { font-size: 12px; color: var(--muted); } .chx .fpx-hint .link { justify-self: start; font-size: 12.5px; }
+.chx .fpx-ppl { display: grid; gap: 5px; }
+.chx .fpx-ppl .ps-l { font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.chx .fpx-ppl .fpx-h { margin-top: 0; color: var(--text); }
+.chx .fpx-ppl .staff-drop { touch-action: manipulation; cursor: pointer; padding: 5px 7px; }
+.chx .fpx-ppl .staff-drop small { display: none; }
+.chx .fpx-ppl .staff-drop .ps-st { font-size: 10.5px; }
+.chx .fpx-pick { display: grid; gap: 6px; }
+.chx .fpx-pick b { font-size: 15px; } .chx .fpx-pick span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.chx .fpx-pick .btn.big { width: 100%; margin-top: 4px; }
+/* the floor itself, smaller: keep room numbers, bed names and icons; drop the long lines */
+.chx .fpx .fp-room { padding: 3px 4px; gap: 2px; border-width: 1.5px; }
+.chx .fpx .fp-rh { gap: 3px; min-height: 0; }
+.chx .fpx .fp-rh > b { font-size: 12px !important; }
+.chx .fpx .fp-rh .rd-tag, .chx .fpx .fp-rh .ad-tag, .chx .fpx .rh-who i { display: none; }
+.chx .fpx .fp-rh .ped-tag { font-size: 0; padding: 0 5px; line-height: 1.4; }
+.chx .fpx .fp-rh .ped-tag::after { content: "Child"; font-size: 8.5px; }
+.chx .fpx .rh-edit { width: 20px; height: 20px; }
+.chx .fpx .rh-who .face, .chx .fpx .fp-rh .face { width: 16px; height: 16px; font-size: 9px; }
+.chx .fpx .fp-beds { gap: 3px; }
+.chx .fpx .bed { padding: 2px 4px; min-height: 0; border-radius: 6px; }
+.chx .fpx .bed .bed-n { font-size: 8.5px; }
+.chx .fpx .bed b { font-size: 10.5px !important; line-height: 1.15; }
+.chx .fpx .bed .bed-st, .chx .fpx .fp-room.stack .bed small:not(.free-l) { display: none; }
+.chx .fpx .bed .free-l { font-size: 9.5px; }
+.chx .fpx .bed.fit .free-l { font-weight: 800; }
+.chx .fpx .bed-tags { transform: scale(.8); transform-origin: left center; }
+.chx .fpx .fp-hub-label b { font-size: 11px; } .chx .fpx .fp-hub-label small { display: none; }
+.chx .fpx .fp-rest b { font-size: 8px; }
+.chx .fpx .fp-exit { font-size: 9px; }
+.chx .fpx .cl-why { font-size: 9.5px; } .chx .fpx .cl-why span { display: none; }
+.chx .fpx .floor.pick .bed { padding: 3px 5px; }
+.chx .fpx .floor.pick .bed .face { width: 16px; height: 16px; font-size: 9px; }
+.chx .fpx .floor.pick .bed b { font-size: 10.5px !important; }
+.chx .fpx .floor.pick .free-l { font-size: 9px; line-height: 1.15; }
+
+/* the launcher on the phone's Floor Plan tab and Pick your room: a small picture of the ward */
+.chx .fp-launch { display: grid; gap: 0; padding: 0; border: 1px solid var(--line); border-radius: 16px; background: #fff; overflow: hidden; text-align: left; box-shadow: 0 6px 18px rgba(11, 30, 74, .08); }
+.chx .fp-launch .floor.mini { display: block; position: relative; width: 100%; min-width: 0; aspect-ratio: 415 / 300; background: #eef1f5; margin: 0; }
+.chx .fp-launch .floor.mini > * { position: absolute; box-sizing: border-box; }
+.chx .fp-launch .fp-block { background: repeating-linear-gradient(45deg, #e3e8ef 0 5px, #d6dde8 5px 10px); }
+.chx .fp-launch .mf-hub { background: #dfe6f0; }
+.chx .fp-launch .mf-room { background: #fff; border: 1.5px solid color-mix(in srgb, var(--dc) 65%, #8fa3c0); box-shadow: inset 0 3px 0 var(--dc); display: grid; align-content: space-between; padding: 4px 4px 3px; font-style: normal; }
+.chx .fp-launch .mf-room.closed { background: repeating-linear-gradient(45deg, #f4f6f9 0 4px, #e4e8ef 4px 8px); }
+.chx .fp-launch .mf-room b { font-size: 10px; font-weight: 800; color: var(--text); line-height: 1; }
+.chx .fp-launch .mf-room em { display: flex; gap: 3px; }
+.chx .fp-launch .mf-room u { width: 9px; height: 9px; border-radius: 3px; border: 1.5px solid #c3cfdf; background: #fff; }
+.chx .fp-launch .mf-room u.own { border-color: var(--teal-ink); }
+.chx .fp-launch .mf-room u.on { background: var(--u); border-color: var(--u); }
+.chx .fp-go { display: grid; gap: 1px; padding: 12px 14px; background: linear-gradient(135deg, #2ED3C6, #3A82D0); color: #fff; }
+.chx .fp-go b { font-size: 16px; font-weight: 800; }
+.chx .fp-go small { font-size: 12px; font-weight: 600; opacity: .92; }
+.chx .ph-or { margin-top: 10px; }
+
+/* ---------- 2. phone fixes ---------- */
+/* Up next on the Ward Board / Front Desk: the strip label rule caught every chip (names came out in spaced capitals) */
+.chx .q-strip > .q-chip { font-size: 12.5px; font-weight: 700; letter-spacing: normal; text-transform: none; color: var(--text); margin-right: 0; }
+.chx .inc-strip > .q-chip { letter-spacing: normal; text-transform: none; }
+/* the role card becomes one slim bar on phones (it took a quarter of every screen) */
+.chx .phone-ui .ph-role { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+.chx .phone-ui .ph-role .role-card.small { flex: 1; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 0; align-items: center;
+  padding: 7px 8px 7px 50px; border-radius: 12px; box-shadow: 0 4px 12px rgba(11, 30, 74, .1); min-height: 48px; }
+.chx .phone-ui .ph-role .role-card.small > span { display: none; }
+.chx .phone-ui .ph-role .role-card.small b { grid-column: 1; grid-row: 1; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chx .phone-ui .ph-role .role-card.small small { grid-column: 1; grid-row: 2; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chx .phone-ui .ph-role .role-card.small .rc-alerts { grid-column: 2; grid-row: 1 / 3; margin-top: 0; }
+.chx .phone-ui .ph-role .role-card.small[data-role]::before { width: 30px; height: 30px; left: 9px; border-radius: 9px; }
+.chx .phone-ui .ph-role .role-card.small[data-role]::after { left: 15px; width: 18px; height: 18px; margin-top: -9px; }
+.chx .phone-ui .ph-role .role-card.small .rc-alerts { gap: 5px; }
+.chx .phone-ui .ph-role .rc-change { border: 0; border-radius: 999px; padding: 0 11px; height: 28px; font: inherit; font-size: 11.5px; font-weight: 800; background: #fff; color: var(--text); cursor: pointer; white-space: nowrap; box-shadow: 0 1px 3px rgba(11, 30, 74, .15); }
+.chx .phone-ui .ph-role .snd-chip { height: 28px; font-size: 0; padding: 0 9px; }
+.chx .phone-ui .ph-role .snd-chip::after { content: "Sound"; font-size: 11px; }
+.chx .phone-ui .ph-role .snd-chip::before { margin-right: 5px; }
+.chx .phone-ui .ph-role .snd-chip:not(.on) { text-decoration: line-through; }
+.chx .phone-ui .ph-role .snd-set { width: 28px; height: 28px; }
+.chx .ph-head p { text-transform: none; letter-spacing: normal; font-weight: 500; font-size: 13px; }
+.chx .phone-ui .ph-role .alert-pop { flex-basis: 100%; }
+.chx .phone-ui .ph-screen { padding: 12px 12px 18px; gap: 10px; }
+.chx .phone-ui .pane-pad { padding: 0; }
+.chx .phone-ui .pane-head { padding: 0; }
+.chx .ph-nav { padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+.chx .ph-nav button { height: 44px; }
+/* phones held sideways without the full-screen plan: keep it short */
+@media (orientation: landscape) and (max-height: 520px) {
+  .chx .phone-ui .ph-screen { padding: 8px 14px 12px; }
+  .chx .phone-ui .ph-role .role-card.small { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
+  .chx .phone-ui .ph-role .role-card.small small { display: none; }
+  .chx .ph-nav { padding: 4px 8px; }
+  .chx .ph-nav button { height: 36px; }
+  .chx .fp-launch { grid-template-columns: auto minmax(0, 1fr); align-items: stretch; }
+  .chx .fp-launch .floor.mini { height: 150px; width: auto; }
+  .chx .fp-go { align-content: center; }
+}
+.chx .phone-ui .fp-launch { width: 100%; }
+.chx .phone-ui .pane-head { flex-wrap: wrap; gap: 8px; }
+.chx .phone-ui .rooms-pad .pane-head > .btn { width: 100%; height: 48px; }
+.chx .phone-ui .rooms-pad { display: grid; gap: 10px; }
+/* forms on phones: the sticky footer sat on top of the bottom tabs */
+.chx .phone-ui .np-foot { position: static; margin: 8px 0 0; padding: 10px 0 0; background: none; border-radius: 0; }
+.chx .phone-ui .np-foot .btn { width: 100%; height: 50px; }
+/* the role bar's buttons, compact so the role's name fits: "Change" and a speaker */
+.chx .phone-ui .ph-role .rc-change { font-size: 0; }
+.chx .phone-ui .ph-role .rc-change::after { content: "Change"; font-size: 11.5px; }
+.chx .phone-ui .ph-role .snd-chip { width: 28px; padding: 0; display: grid; place-items: center; text-decoration: none !important; }
+.chx .phone-ui .ph-role .snd-chip::after { content: none; }
+.chx .phone-ui .ph-role .snd-chip::before { width: 16px; height: 16px; margin: 0; border-radius: 0; opacity: 1; vertical-align: 0;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9h4l5-4v14l-5-4H4z'/%3E%3Cpath d='M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9h4l5-4v14l-5-4H4z'/%3E%3Cpath d='M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+.chx .phone-ui .ph-role .snd-chip:not(.on)::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9h4l5-4v14l-5-4H4z'/%3E%3Cpath d='M16 9l6 6M22 9l-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9h4l5-4v14l-5-4H4z'/%3E%3Cpath d='M16 9l6 6M22 9l-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+.chx .fpx:not(.pick) .fp-rh .ped-tag { display: none; }
