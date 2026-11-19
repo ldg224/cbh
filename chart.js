@@ -303,6 +303,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const old = P().find((x) => x.id === c.id) || {};
     const rec = (RECS[c.id] || {}).p || {};
     return Object.assign({ vitals: [], did: [], orders: [], diagnosis: null, notes: '', colourLog: [], log: [], consults: [], symptoms: [] }, rec, {
+      ...(Array.isArray(c.symptoms) ? { symptoms: c.symptoms } : {}), symKnown: Array.isArray(c.symptoms) || !!RECS[c.id],
       id: c.id, name: c.short_name, roblox: c.roblox_username || old.roblox || '', urgency: c.esi, colourConfirmed: !!c.colour_confirmed,
       stage, phase: transferred ? 'transferred' : ph || null, where: transferred ? c.off_ward : null, source: c.source,
       teams: [c.team || 'Any', ...(c.extra_teams || [])], dept: c.team, child: !!c.child, npc: !!c.npc,
@@ -570,7 +571,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     <p class="explain">${sel ? `<b>${U(sel).name} · ${U(sel).label}:</b> ${U(sel).what} ${U(sel).within}.` : 'Tap a colour, or answer the questions below. Each colour says how soon they should be seen.'}</p>`;
   const colourQs = (attr) => `<div class="cq"><span>Not sure? Ask these, top to bottom. The first “yes” is the colour.</span>${D.COLOUR_QUESTIONS.map(([n, q]) => `<button type="button" class="cq-q" style="--u:${U(n).colour}" ${attr}="${n}"><i></i><span>${esc(q)}</span><b>${U(n).name}</b></button>`).join('')}</div>`;
   const careTag = (p) => (p.careNotes ? `<span class="care-note" title="Care notes">${esc(p.careNotes)}</span>` : '');
-  const pnameRow = (p, extra = '') => `<div class="wl-m"><b>${esc(p.name)}${careTag(p)}${p.stage === 'checkin' ? '' : teamChips(p)}${flags(p)}</b><small>${upill(p.urgency)} ${esc(p.symptoms.join(', ') || 'No symptoms given')}${extra}</small></div>`;
+  const pnameRow = (p, extra = '') => `<div class="wl-m"><b>${esc(p.name)}${careTag(p)}${p.stage === 'checkin' ? '' : teamChips(p)}${flags(p)}</b><small>${upill(p.urgency)} ${esc(p.symptoms.join(', ') || (p.symKnown ? 'No symptoms given' : ''))}${extra}</small></div>`;
   // Waiting in a room for someone to take them: their own colour stays, plus a small pulsing bell (owner, 19 Nov 2026).
   const bell = '<span class="wait-bell" role="img" aria-label="Waiting for someone to take them" title="Waiting for someone to take them"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span>';
   const handbackFlag = (p) => (p.handback && p.room ? `<div class="wir" style="--u:${U(p.urgency).colour}"><b>${bell}Waiting in ${esc(p.room || 'their room')}</b><span>Handed over by ${esc(first(p.handback.by))} ${ago(p.handback.at)} ago: “${esc(p.handback.note)}”</span></div>` : '');
@@ -715,19 +716,20 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     // A new patient takes over the top. Phone: a sticky card with the big Accept. Computer: the record opens with Accept as
     // its primary, so this card just opens it (one home per action).
     const gotIt = isPhone() ? '' : asg.map((p) => `<div class="gotit${isPhone() ? ' sticky' : ''}" style="--u:${U(p.urgency).colour}"><span class="lab">${p.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(p.name)}${p.age ? ', ' + p.age : ''}${teamChips(p)}</b>${upill(p.urgency)}
-      <span>${esc(p.room)} · ${esc(p.symptoms.join(', ') || 'no symptoms given')}${p.handback ? ` · handed over: “${esc(p.handback.note)}”` : ''}${p.lost ? ' · <b>Needs a new nurse</b>' : ''}</span>
+      <span>${esc(p.room)} · ${esc(p.symptoms.join(', ') || (p.symKnown ? 'no symptoms given' : ''))}${p.handback ? ` · handed over: “${esc(p.handback.note)}”` : ''}${p.lost ? ' · <b>Needs a new nurse</b>' : ''}</span>
       ${isPhone() ? `<button type="button" class="btn big" data-gotit="${p.id}">Accept patient <small class="gi-t">${countdown(p.assignedAt, 60)}</small></button>` : `<button type="button" class="btn ghost" data-open="${p.id}">Open their record · accept within ${countdown(p.assignedAt, 60)}</button>`}</div>`).join('');
     const offers = [];   // the server offers open rooms (me.offer)
     const free = `${cap} bed${cap === 1 ? '' : 's'} free`;
     const card = m.length >= D.LIMIT ? `<div class="ready-line"><b>You have ${D.LIMIT} patients</b><span>That's the most at once. Finish or hand over one to get another.</span></div>`
       : cap <= 0 ? `<div class="ready-line"><b>Your bed${beds.length > 1 ? 's are' : ' is'} in use</b><span>${beds.length < D.LIMIT ? 'One bed means one patient at a time.' : 'Ready comes back when a bed frees.'}</span>${beds.length < D.LIMIT ? '<button type="button" class="btn small ghost" data-a="pick">Add a room</button>' : ''}</div>`
-      : S.ready ? `<div class="${m.length ? 'ready-line on' : 'ready-card on'}"><span class="ready-dot" aria-hidden="true"></span><b>You're Ready</b><span>${superOn() ? 'The supervisor will give you your next patient.' : 'You\u2019ll get the next patient who fits your beds.'} Expires in ${countdown(S.readyExp ? new Date(Date.parse(S.readyExp) - 600000).toISOString() : new Date(Date.now() + SKEW).toISOString(), 600)} if nothing happens.</span><span class="row-btns"><button type="button" class="btn small ghost" data-a="stayready">Stay ready</button><button type="button" class="btn small ghost" data-a="notready">Not ready</button></span>${m.length ? '' : deskOffer}</div>`
+      : S.ready ? `<div class="${m.length ? 'ready-line on' : 'ready-card on'}"><span class="ready-dot" aria-hidden="true"></span><b>You're Ready</b><span>${superOn() ? 'The supervisor will give you your next patient.' : 'You\u2019ll get the next patient who fits your beds.'} Expires in ${countdown(S.readyExp ? new Date(Date.parse(S.readyExp) - 600000).toISOString() : new Date(Date.now() + SKEW).toISOString(), 600)} if nothing happens.</span><span class="row-btns"><button type="button" class="btn small ghost" data-a="stayready">Stay ready</button><button type="button" class="btn small ghost" data-a="notready">Not ready</button></span></div>`
       : m.length ? `<div class="ready-line"><b>Ready for another?</b><span>${free}</span><button type="button" class="btn small" data-a="ready">Ready</button></div>`
       : `<div class="ready-card">${S.readyGone ? '<b>Your Ready status expired</b><span>10 minutes went by with no patient. Still free?</span>' : `<b>Ready for a patient?</b><span>${superOn() ? 'Press Ready and the supervisor will give you one.' : 'Press Ready and you\u2019ll be given the next patient who fits your beds.'}</span>`}<button type="button" class="btn big ready-btn" data-a="ready">Ready</button></div>`;
     return `<div class="pane-pad care"><div class="pane-head"><div><h2>My Room</h2><p class="muted">${beds.map(esc).join(' · ')} · ${m.length} of ${D.LIMIT} patients</p></div>${m.length ? '' : '<button type="button" class="btn ghost" data-a="pick">Change room</button>'}</div>
       ${movePanel()}${gotIt}
       ${rest.length ? `<h3 class="care-h">Your patient${rest.length === 1 ? '' : 's'}</h3><div class="care-list">${rest.map(careCard).join('')}</div>` : ''}
       ${card}
+      ${S.hadPatient || m.length ? (S.hadPatient = true, deskOffer) : ''}
       ${S.offer ? `<div class="offer-card" style="--u:#f0a530"><div><b>${bell}Nobody has room ${esc(S.offer.room)}${S.offer.waiting ? `: ${S.offer.waiting} waiting` : ''}</b><span>Take it over to look after ${S.offer.waiting > 1 ? 'them' : 'them'}.</span></div><button type="button" class="btn small ghost" data-takeover="1">Take over ${esc(S.offer.room)}</button></div>` : ''}
       ${!S.session ? (S.npc ? npcForm() : `<div class="npc-row"><button type="button" class="btn ghost" data-a="npc"${cap > 0 ? '' : ' disabled'}>+ NPC patient</button><span class="muted small">No session is running, so NPC patients can be charted. They count towards your ${D.LIMIT}.</span></div>`) : ''}
       ${!S.deskBy && S.session ? (S.npOpen ? newPatient() : '<div class="npc-row"><button type="button" class="btn ghost" data-a="npopen">+ Walk-in patient</button><span class="muted small">Nobody is on Reception. A walk-in goes through the queue like anyone else.</span></div>') : ''}
@@ -1157,6 +1159,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const pill = (on, t) => `<span class="spill${on ? ' on' : ''}">${t}</span>`;
     return `<div class="ch-top"><nav class="vtabs" role="tablist" aria-label="Views">${SECTIONS[S.role].map(([k, l]) => `<button type="button" role="tab" aria-selected="${S.sec === k}" data-sec="${k}">${l}${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</nav>
       <div class="sess">${pill(S.session, S.session ? 'Session live' : 'No session')}${pill(S.recOpen, S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Reception open' : 'Reception closed')}${pill(S.online, S.online ? 'Online check-in open' : 'Walk-ins only')}${superOn() ? '' : pill(false, 'Auto mode')}
+        <button type="button" class="btn small ghost top-change" data-a="changerole">Change role</button>
         ${S.role === 'super' ? `<div class="sess-m"><button type="button" class="btn small ghost" data-a="sessmenu" aria-expanded="${!!S.sessMenu}">Session ▾</button>${S.sessMenu ? `<div class="sess-pop" role="menu">
           <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Reception open</button>
           <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
@@ -1471,7 +1474,7 @@ ${nextBarHtml(p)}
     else if (ds.a === 'reqmenu') { S.reqMenu = !S.reqMenu; S.rq = null; }
     else if (ds.rqpick) S.rq = S.rq === ds.rqpick ? null : ds.rqpick;
     else if (ds.rqmode) S.rqMode = ds.rqmode;
-    else if (ds.rqgo) { req.ask(byId(+ds.rqgo), S.rq, ($('#rq-note') || {}).value, S.rq === 'surgery' ? S.rqMode : undefined); if (isPhone()) back(); }
+    else if (ds.rqgo) { req.ask(byId(+ds.rqgo), S.rq, ($('#rq-note') || {}).value, S.rq === 'surgery' ? S.rqMode : undefined); S.reqMenu = false; S.rq = null; if (isPhone()) back(); }
     else if (ds.rqcode) { req.ask(byId(+ds.rqcode), 'code'); if (isPhone()) back(); }
     else if (ds.codeclear) call('chart_code_clear', { p_case: +ds.codeclear }, 'Code Blue cleared.');
     else if (ds.accept) { const r = reqById(ds.accept); if (r) req.accept(r).then((ok) => { if (ok) { openP(r.pid); render(); } }); }

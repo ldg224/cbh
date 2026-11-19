@@ -967,3 +967,6 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 .chx .pain-pick .chip { min-width: 38px; text-align: center; }
 .chx .ph-screen .btn.r-req2 { min-height: 40px; }
 .chx .launch-ask { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #f7fafd; max-width: 260px; }
+/* QA L2: the End session list scrolls so "Close all and end" stays in view at 1366x768 */
+.chx .es-list { max-height: min(40vh, 320px); overflow: auto; }
+.chx .top-change { white-space: nowrap; }
