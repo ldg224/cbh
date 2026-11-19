@@ -112,7 +112,6 @@ main:has(> #signed-out:not([hidden])) { max-width: 1080px; }
 .fp-path > div { display: grid; gap: 4px; flex: 1; min-width: 180px; }
 .fp-path p { font-size: 13.5px; color: var(--muted); line-height: 1.55; }
 .fp-path .fp-ico { background: #fff; }
-.fp-path-btn { min-height: 40px; padding: 0 18px; font-size: 14px; align-self: center; }
 
 .fp-staffline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; color: var(--muted); padding-top: 4px; border-top: 1px solid var(--raised); padding-top: 16px; }
 .fp-staffline b { color: var(--text); }
@@ -131,5 +130,4 @@ main:has(> #signed-out:not([hidden])) { max-width: 1080px; }
 }
 @media (max-width: 560px) {
   .fp-visit { padding: 24px 16px 20px; border-radius: 16px; }
-  .fp-path-btn { flex: 1 1 100%; }
 }
