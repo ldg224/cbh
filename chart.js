@@ -1077,7 +1077,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const db = (r, d) => `<button type="button" class="btn" style="--dc:${deptColour(d)}" data-role="${r}" data-rdept="${d}">${d}</button>`;
     return `<div class="role-screen"><div class="rs-in"><span class="lab">${S.session ? 'Session live' : 'No session running'} · CBH Chart</span><h1>What are you doing ${S.session ? 'this session' : 'right now'}?</h1>
       <p class="muted">${S.session ? 'Pick one. During a session the patients are players only: no NPCs.' : `No session is on, so NPC patients can be charted.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`}</p>
-      <div class="role-cards">
+      ${extLink()}<div class="role-cards">
         ${can('reception') || !S.recOpen ? `<button type="button" class="rc" data-role="reception"${S.recOpen ? '' : ' disabled'}><span class="rc-ic rc-rec" aria-hidden="true"></span><b>Reception</b><span>${S.recOpen ? 'Check people in, set their colour, call them in, check them out. You only see the front desk.' : 'The supervisor has closed Reception, so everyone is Patient Care.'}</span></button>` : ''}
         <div class="rc care"><span class="rc-ic rc-care" aria-hidden="true"></span><b>Patient Care</b>
           ${!room.length && !oc.length && !(can('road') && ds.includes('Paramedicine')) ? '<p class="muted small">None of your departments work at the bedside.</p>' : ''}${room.length ? `<div class="pc-opt"><b>Room</b><span>Pick your room, press Ready, and you're given patients.</span><div class="rc-depts">${room.map((d) => db('room', d)).join('')}</div></div>` : ''}
@@ -1089,7 +1089,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const nextSess = () => { try { const n = typeof currentSession === 'object' && currentSession && currentSession.next; return n && typeof whenAhead === 'function' ? whenAhead(n.scheduled_for) : ''; } catch { return ''; } };
   const holdScreen = (h, t, btn) => `<div class="role-screen"><div class="rs-in"><span class="lab">CBH Chart</span><h1>${h}</h1>${t ? `<p class="muted">${t}</p>` : ''}${btn || ''}</div></div>`;
   const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} It tries again by itself in a few seconds.` : '')
-    : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, '<a class="btn" href="#shifts">Go to Shift Manager</a>')
+    : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, extLink() + '<a class="btn" href="#shifts">Go to Shift Manager</a>')
     : S.role ? '' : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
   const openReqCount = () => S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && (S.role === 'super' || canAccept(r))).length;
@@ -1158,16 +1158,40 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const red = { desk: 1, reqs: 1, myroom: 1 };
     return `<nav class="inner" aria-label="CBH Chart"><div class="in-head"><span class="in-tile" aria-hidden="true"></span><div><b>CBH Chart</b><small class="${S.session ? 'open' : ''}">${S.session ? 'Session live' : 'No session running'}${superOn() ? '' : ' · auto mode'}</small></div></div>
       ${roleCard()}<button type="button" class="link in-change" data-a="changerole">Change role</button>
-      <div class="in-views"><span class="in-l">Views</span>${SECTIONS[S.role].map(([k, l]) => `<button type="button" class="in-link${S.sec === k ? ' on' : ''}" data-sec="${k}"${S.sec === k ? ' aria-current="page"' : ''}><span>${l}</span>${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</div>
+      <div class="in-views"><span class="in-l">Views</span>${SECTIONS[S.role].concat(extTabs()).map(([k, l]) => `<button type="button" class="in-link${S.sec === k ? ' on' : ''}" data-sec="${k}"${S.sec === k ? ' aria-current="page"' : ''}><span>${l}</span>${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</div>
       <p class="in-note">${S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Nobody on Reception' : 'Reception closed'}${S.online ? '' : ' · walk-ins only'}</p>
 </nav>`;
   }
 
+  // ---------- extension views: other files add whole views to the Chart (Alpha's "Past patients", chart-history.js) ----------
+  // A file registers window.CBHChartViews.<id> = { mount(el, ctx), unmount(), label(snapshot) }. The Chart shows it as a
+  // tab (and at #chart/<id>), also for people off shift or without a role, and mounts it ONCE into a host element that
+  // survives the Chart's redraws; unmount() runs when the person leaves it. ctx = { isPhone, toast, rpc }.
+  const EXT = () => window.CBHChartViews || {};
+  const extId = () => { const m = location.hash.match(/^#chart\/([a-z0-9-]+)/i); return m && EXT()[m[1]] ? m[1] : null; };
+  const extLabel = (id) => { const v = EXT()[id]; try { return (v.label && v.label(SNAP)) || 'More'; } catch { return 'More'; } };
+  const extTabs = () => Object.keys(EXT()).map((id) => [`x:${id}`, extLabel(id)]);
+  const EXT_HOST = {}; let extOn = null;
+  const extPlaceholder = (id) => `<div class="ext-slot" data-extslot="${esc(id)}"></div>`;
+  function extAttach() {
+    const id = location.hash.startsWith('#chart') ? extId() : null, slot = id && $(`[data-extslot="${id}"]`);
+    if (extOn && extOn !== id) { try { EXT()[extOn] && EXT()[extOn].unmount && EXT()[extOn].unmount(); } catch (e) { console.error('CBH Chart view:', e); } delete EXT_HOST[extOn]; extOn = null; }
+    if (!slot) return;
+    let host = EXT_HOST[id];
+    if (!host) { host = EXT_HOST[id] = document.createElement('div'); host.className = 'ext-view'; extOn = id;
+      try { EXT()[id].mount(host, { isPhone, toast, rpc }); } catch (e) { console.error('CBH Chart view:', e); host.innerHTML = '<p class="muted">This view didn\u2019t load.</p>'; } }
+    slot.replaceWith(host);
+  }
+  const extLink = () => { const ids = Object.keys(EXT()); return ids.length ? `<p class="ext-links">${ids.map((id) => `<a class="btn ghost" href="#chart/${esc(id)}">${esc(extLabel(id))}</a>`).join(' ')}</p>` : ''; };
+  // Off shift or without a role: the view on its own, with a way back.
+  const extAlone = (id) => `<div class="pane-pad ext-alone"><a class="link ext-back" href="#chart">‹ CBH Chart</a>${extPlaceholder(id)}</div>`;
   function computer() {
+    const xid = extId();
+    if (xid && (!SNAP || !S.onShift || !S.role)) return SNAP ? extAlone(xid) : gate();
     const g = gate(); if (g) return g;
     if (S.open && (!byId(S.open) || !['care', 'queue'].includes(byId(S.open).stage))) S.open = null;
-    const allowed = SECTIONS[S.role]; if (!allowed.some((x) => x[0] === S.sec)) S.sec = allowed[0][0];
-    const sec = { board: boardSection, desk: deskSection, myroom: myRoomSection, reqs: reqSection, road: roadSection, plan: planSection }[S.sec]();
+    const allowed = SECTIONS[S.role].concat(extTabs()); if (xid) S.sec = `x:${xid}`; else if (S.sec.startsWith('x:') || !allowed.some((x) => x[0] === S.sec)) S.sec = SECTIONS[S.role][0][0];
+    const sec = xid ? extPlaceholder(xid) : { board: boardSection, desk: deskSection, myroom: myRoomSection, reqs: reqSection, road: roadSection, plan: planSection }[S.sec]();
     return `${codeBar()}<div class="chart-wrap">${rail()}
       <div class="ch-main">${chTop()}<section class="pane-sec" aria-label="${allowed.find((x) => x[0] === S.sec)[1]}">${sec}</section></div>
       </div>`;
@@ -1186,7 +1210,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const badge = { plan: upNext().length, desk: deskCount(), reqs: openReqCount(), myroom: mine().filter((p) => p.phase === 'assigned').length, road: 0, board: 0 };
     const red = { desk: 1, reqs: 1, myroom: 1 };
     const pill = (on, t) => `<span class="spill${on ? ' on' : ''}">${t}</span>`;
-    return `<div class="ch-top"><nav class="vtabs" role="tablist" aria-label="Views">${SECTIONS[S.role].map(([k, l]) => `<button type="button" role="tab" aria-selected="${S.sec === k}" data-sec="${k}">${l}${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</nav>
+    return `<div class="ch-top"><nav class="vtabs" role="tablist" aria-label="Views">${SECTIONS[S.role].concat(extTabs()).map(([k, l]) => `<button type="button" role="tab" aria-selected="${S.sec === k}" data-sec="${k}">${l}${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</nav>
       <div class="sess">${pill(S.session, S.session ? 'Session live' : 'No session')}${pill(S.recOpen, S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Reception open' : 'Reception closed')}${pill(S.online, S.online ? 'Online check-in open' : 'Walk-ins only')}${superOn() ? '' : pill(false, 'Auto mode')}
         <button type="button" class="btn small ghost top-change" data-a="changerole">Change role</button>
         ${S.role === 'super' ? `<div class="sess-m"><button type="button" class="btn small ghost" data-a="sessmenu" aria-expanded="${!!S.sessMenu}">Session ▾</button>${S.sessMenu ? `<div class="sess-pop" role="menu">
@@ -1230,6 +1254,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const back = () => { if (S.ph.length > 1) S.ph.pop(); };
   const phHead = (t, sub) => `<div class="ph-head">${S.ph.length > 1 ? '<button type="button" class="ph-back" data-pb aria-label="Back">‹</button>' : ''}<div><h2>${t}</h2>${sub ? `<p>${sub}</p>` : ''}</div></div>`;
   function phone() {
+    const pxid = extId(); if (pxid && SNAP) return `<div class="phone-ui"><div class="ph-screen">${extAlone(pxid)}</div></div>`;
     const gp = gate(); if (gp) return `<div class="phone-ui">${gp}</div>`;
     const t = top(), p = t.id && byId(t.id); let h = '';
     const plist = (list, attrs, extra) => `<ul class="ph-list">${list.map((x) => `<li style="--u:${x.urgency ? U(x.urgency).colour : '#9aa9c4'}"><button type="button" class="ph-row" ${attrs(x)}><span class="ubar"></span><span><b>${esc(x.name)}</b><small>${extra(x)}</small></span></button></li>`).join('')}</ul>`;
@@ -1282,7 +1307,7 @@ ${nextBarHtml(p)}
     const NAV = { reception: [['desk', 'Front Desk', deskCount()]], room: [['myroom', 'My Room', mine().filter((x) => x.phase === 'assigned').length], ['board', 'Ward Board', 0]],
       oncall: [['reqs', 'Requests', openReqCount()], ['board', 'Ward Board', 0]], road: [['road', 'Incoming', 0], ['board', 'Ward Board', 0]],
       super: [['board', 'Board', 0], ['desk', 'Front Desk', deskCount()], ['reqs', 'Requests', openReqCount()], ['rooms', 'Rooms', 0]] };
-    const nav = NAV[S.role];
+    const nav = NAV[S.role].concat(extTabs().map(([k, l]) => [k, l, 0]));
     return `${codeBar()}<div class="phone-ui"><div class="ph-screen">${S.role === 'room' && t.s === 'myroom' ? mine().filter((x) => x.phase === 'assigned').map((x) => `<div class="gotit sticky" style="--u:${U(x.urgency).colour}"><span class="lab">${x.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(x.name)}${x.age ? ', ' + x.age : ''}</b>${upill(x.urgency)}<span>${esc(x.room)} · ${esc(x.symptoms.join(', ') || 'no symptoms given')}</span><button type="button" class="btn big" data-gotit="${x.id}">Accept patient <small class="gi-t">${countdown(x.assignedAt, 60)}</small></button></div>`).join('') : ''}${S.ph.length === 1 && !(S.role === 'room' && mine().some((x) => x.phase === 'assigned')) ? `<div class="ph-role">${roleCard('small')}<button type="button" class="link" data-a="changerole">Change role</button></div>` : ''}${h || phHead('Not here any more', 'That patient has moved on.')}</div><nav class="ph-nav" style="grid-template-columns:repeat(${nav.length}, 1fr)">${nav.map(([k, l, n]) => `<button type="button" class="${S.ph[0].s === k ? 'on' : ''}" data-proot="${k}">${l}${n ? ` <i>${n}</i>` : ''}</button>`).join('')}</nav></div>`;
   }
 
@@ -1302,7 +1327,7 @@ ${nextBarHtml(p)}
     // every click). It slides in only when a different patient opens; otherwise only its content is swapped, and only
     // when something in it actually changed (ticking timers don't count), keeping its scroll and focus.
     if (!$('#chx-view')) app.innerHTML = '<div id="chx-view"></div><div id="chx-dhost"></div><div class="cx-toast" id="chx-toast" role="status" hidden></div>';
-    $('#chx-view').innerHTML = (isPhone() ? phone() : computer());
+    $('#chx-view').innerHTML = (isPhone() ? phone() : computer()); extAttach();
     // Supervisors on the floor plan: the record docks beside the plan and shrinks it, so the beds stay in view (audit #6).
     const dock = !isPhone() && S.role === 'super' && S.sec === 'plan' && !!S.open;
     $('#chx-view').classList.toggle('docked-view', dock); $('#chx-dhost').classList.toggle('docked', dock); document.body.classList.toggle('phone', isPhone());
@@ -1617,11 +1642,11 @@ ${nextBarHtml(p)}
     else if (ds.out) { S.outcome = ds.out; S.forceAsk = false; }
     else if (ds.tab) { S.tab = ds.tab; S.vopen = false; }
     else if (ds.dtab) { S.deskTab = ds.dtab; S.confirmFor = null; S.recheckFor = null; }
-    else if (ds.sec) S.sec = ds.sec;
+    else if (ds.sec) { if (ds.sec.startsWith('x:')) { location.hash = '#chart/' + ds.sec.slice(2); return; } S.sec = ds.sec; if (extId()) { history.replaceState(null, '', '#chart'); } }
     else if (ds.open) { const p = byId(+ds.open); if (p && S.noRec && S.noRec.has(p.id) && p.nurse !== 'me' && !reqFor(p.id)) toast(boardLine(p)); else if (p && (p.stage === 'care' || (p.stage === 'queue' && S.role === 'super' && !isPhone()))) openP(p.id); else if (p) toast(`${esc(p.name)}: ${esc(status(p).toLowerCase())}.`); }
     else if (ds.popen) { go('patient', { id: +ds.popen }); S.outcome = null; }
     else if (ds.pgo) { if (ds.pgo === 'p-num') S.vdraft = {}; go(ds.pgo, { id: ds.pid ? +ds.pid : top().id }); }
-    else if (ds.proot) S.ph = [{ s: ds.proot }];
+    else if (ds.proot) { if (ds.proot.startsWith('x:')) { location.hash = '#chart/' + ds.proot.slice(2); return; } S.ph = [{ s: ds.proot }]; if (extId()) history.replaceState(null, '', '#chart'); }
     else if (ds.pb !== undefined) back();
     else return;
     render();
@@ -1673,6 +1698,6 @@ ${nextBarHtml(p)}
     document.body.classList.add('in-chart'); setPageTitle('stethoscope', 'CBH Chart', 'staff');
     body.replaceChildren(app); render(); poll(true);
   };
-  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#chart')) document.body.classList.remove('in-chart'); });
+  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#chart')) { document.body.classList.remove('in-chart'); extAttach(); } });
 
 })();
