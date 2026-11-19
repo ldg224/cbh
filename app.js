@@ -1667,7 +1667,7 @@ function sessionForm(slot, mode, opts, ctx) {
 // ---------- session banner ----------
 // Under the Welcome card: the Maple Hospital custom server and its join code (pinned; the owner will say if it
 // changes). Live / next-session status comes once the sessions back end is ready.
-let joinCode = '4920-4087';   // fallback; the live value comes from settings or the session
+let joinCode = CBH_CONFIG.publicJoinCode || '';   // fallback (config.js); the live value comes from settings or the session
 // "Join game" (owner, 18 Nov 2026): a Roblox link that loads straight into the CBH server in Maple Hospital, built from
 // the CURRENT join code. launchData is the JSON {"serverCode": code}; on phones the Roblox app picks the link up.
 const ROBLOX_PLACE = 8704997000;

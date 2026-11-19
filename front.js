@@ -1,9 +1,14 @@
 // Public front page (0.38.0, Alpha): the logged-out screen. Static content lives in index.html so Google can read it;
 // this file only wires the buttons. Loaded after app.js (uses robloxJoinUrl).
 (() => {
-  const game = document.getElementById('fp-join-game');
-  const code = (document.getElementById('fp-code')?.textContent || '').trim();
-  if (game && code && typeof robloxJoinUrl === 'function') game.href = robloxJoinUrl(code);
+  // The join code is one constant in config.js (publicJoinCode). No code set: hide the server card.
+  const code = String(window.CBH_CONFIG?.publicJoinCode || '').trim();
+  const card = document.getElementById('fp-join'), game = document.getElementById('fp-join-game'), slot = document.getElementById('fp-code');
+  if (!code) { if (card) card.hidden = true; }
+  else {
+    if (slot) slot.textContent = code;
+    if (game && typeof robloxJoinUrl === 'function') game.href = robloxJoinUrl(code);
+  }
   // "Staff login" brings the login card into view (it sits below the intro on phones) and highlights it.
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-fp-login]'); if (!a) return;
