@@ -492,7 +492,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   function pickRole(r, dept) {
     call('chart_role_set', { p_role: ROLE_OUT[r] || null, p_department: dept || null },
       { reception: 'You’re on Reception.', room: `You’re on Room · ${esc(dept || '')}.`, oncall: `You’re On call · ${esc(dept || '')}.`, road: 'You’re on Road.', super: 'You’re supervising from the floor plan.' }[r] || '',
-      { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); } })
+      { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); }, not_launched: () => { S.launched = false; render(); } })
       .then((res) => { if (!res) return;
         Object.assign(S, { open: null, face: null, roomPanel: null, endShift: false, reqMenu: false, pick: !!res.need_room });
         S.sec = SECTIONS[r][0][0]; S.ph = [{ s: isPhone() && r === 'super' ? 'board' : S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue'; render(); });
@@ -1057,7 +1057,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   const holdScreen = (h, t, btn) => `<div class="role-screen"><div class="rs-in"><span class="lab">CBH Chart</span><h1>${h}</h1>${t ? `<p class="muted">${t}</p>` : ''}${btn || ''}</div></div>`;
   const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} Try again in a moment.` : '')
     : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, '<a class="btn" href="#shifts">Go to Shift Manager</a>')
-    : S.role ? '' : !S.launched && !S.canSuper ? holdScreen('The Chart isn’t open yet', 'It opens for everyone once the hospital launches it.')
+    : S.role ? '' : !S.launched && !S.canSuper ? holdScreen('The CBH Chart opens soon', 'It isn’t open to staff yet. You’ll be able to pick your role here once it launches.')
     : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
   const openReqCount = () => S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && (S.role === 'super' || canAccept(r))).length;
@@ -1160,8 +1160,17 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
           <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Reception open</button>
           <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
           <span class="muted small">${S.superOther ? 'Supervising: you and 1 other' : 'Supervising: you'}</span>
-          <button type="button" class="btn small warn" data-a="endsess">End session…</button></div>` : ''}</div>` : ''}</div></div>`;
+          <button type="button" class="btn small warn" data-a="endsess">End session…</button>${launchCtl()}</div>` : ''}</div>` : ''}</div></div>`;
   }
+
+  // Owners only (Hospital Director, COO; the server checks too): open the Chart to everyone, or pause it.
+  const launchCtl = () => {
+    if (!window.execReal) return '';
+    const on = S.launched;
+    if (!S.launchAsk) return `<button type="button" class="btn small ${on ? 'ghost' : ''}" data-a="launchask">${on ? 'Pause the CBH Chart…' : 'Launch the CBH Chart…'}</button>`;
+    return `<div class="launch-ask"><b>${on ? 'Pause the CBH Chart?' : 'Launch the CBH Chart?'}</b><span class="muted small">${on ? 'Only owners and Supervisors can pick a role until you launch it again.' : 'This opens the Chart to all staff and online check-in to patients.'}</span>
+      <div class="row-btns"><button type="button" class="btn small${on ? ' warn' : ''}" data-a="launchgo">${on ? 'Pause' : 'Launch'}</button><button type="button" class="btn small ghost" data-a="launchx">Cancel</button></div></div>`;
+  };
 
   // ---------- PATIENT'S PHONE (what someone who checked in online sees, live) ----------
   const joinUrl = () => `https://www.roblox.com/games/start?launchData=${encodeURIComponent(JSON.stringify({ serverCode: String(D.JOIN_CODE) }))}&placeId=${D.ROBLOX_PLACE}`;
@@ -1501,6 +1510,9 @@ ${nextBarHtml(p)}
     else if (ds.a === 'prno') S.pendRoom = null;
     else if (ds.a === 'recopen') { S.sessMenu = false; call('chart_switches', { p_reception_open: !S.recOpen, p_online_mode: S.online ? 'open' : 'walk_ins_only' }, S.recOpen ? 'Reception closed: everyone is Patient Care.' : 'Reception is open.'); }
     else if (ds.a === 'online') { S.sessMenu = false; call('chart_switches', { p_reception_open: S.recOpen, p_online_mode: S.online ? 'walk_ins_only' : 'open' }, S.online ? 'Walk-ins only: online check-in is paused.' : 'Online check-in is open again.'); }
+    else if (ds.a === 'launchask') S.launchAsk = true;
+    else if (ds.a === 'launchx') S.launchAsk = false;
+    else if (ds.a === 'launchgo') { const on = !S.launched; S.launchAsk = false; S.sessMenu = false; call('chart_launch', { p_on: on }, on ? 'The CBH Chart is open to all staff.' : 'The CBH Chart is paused.'); }
     else if (ds.a === 'endsess') { S.endSess = !S.endSess; S.sessMenu = false; } else if (ds.a === 'endsessx') S.endSess = false;
     else if (ds.endcase) toast('Use Close all at the bottom, or Finish now for this one.');
     else if (ds.finish) { S.open = +ds.finish; S.tab = 'leave'; S.outcome = null; }
