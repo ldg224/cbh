@@ -271,16 +271,26 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   async function touch(p) { if (p && p.nurse === 'me' && p.phase === 'called') { try { await rpc('chart_with_patient', { p_case: p.id }); } catch { /* the charting call below still runs */ } } }
   async function chartIt(p, kind, data, ok) { try { await touch(p); await entry(p, kind, data); if (ok) toast(ok); } catch (e) { toast(esc(e.message)); } await poll(true); }
 
+  // A poll asked for while another is in flight runs again straight after it (pollAgain), and whether the Chart page is
+  // open is read AFTER the reply: opening the Chart during a background poll used to leave it on "Loading" for good.
+  let pollAgain = false, drawnWithData = false;
   async function poll(now) {
-    const onPage = app.isConnected;
-    if (polling) { if (now) dirty = true; return; }
+    if (polling) { if (now) pollAgain = true; return; }
     polling = true; clearTimeout(pollT);
+    let onPage = app.isConnected;
     try {
-      const s = await rpc('chart_poll', { p_since_rev: now ? 0 : REV });
-      if (s && !s.unchanged) { ingest(s); if (onPage) { if (drag) dirty = true; else render(); } document.dispatchEvent(new Event('cbh-chart-poll')); }
+      const s = await Promise.race([rpc('chart_poll', { p_since_rev: now ? 0 : REV }), new Promise((_, no) => setTimeout(() => no(new Error('The Chart is taking too long to answer.')), 15000))]);
+      onPage = app.isConnected;
       S.pollErr = null;
-    } catch (e) { S.pollErr = e.message; }
+      const changed = !!(s && !s.unchanged); if (changed) { ingest(s); document.dispatchEvent(new Event('cbh-chart-poll')); }
+      if (onPage && (changed || !drawnWithData)) { if (drag) dirty = true; else render(); }
+    } catch (e) {
+      // Never leave the page spinning: a failed read or a drawing error shows a message, and the next poll starts from scratch.
+      console.error('CBH Chart:', e); S.pollErr = e.hint ? e.message : 'Something went wrong drawing the Chart.'; REV = 0;
+      if (onPage) { try { if (!SNAP) render(); else $('#chx-view').innerHTML = holdScreen('The Chart didn’t load', `${esc(S.pollErr)} It tries again by itself in a few seconds.`); } catch (e2) { console.error('CBH Chart:', e2); } }
+    }
     polling = false;
+    if (pollAgain) { pollAgain = false; return poll(true); }
     if (onPage && S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
     pollT = setTimeout(() => poll(), onPage && !document.hidden ? 3000 : 15000);
   }
@@ -1064,7 +1074,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   }
   const nextSess = () => { try { const n = typeof currentSession === 'object' && currentSession && currentSession.next; return n && typeof whenAhead === 'function' ? whenAhead(n.scheduled_for) : ''; } catch { return ''; } };
   const holdScreen = (h, t, btn) => `<div class="role-screen"><div class="rs-in"><span class="lab">CBH Chart</span><h1>${h}</h1>${t ? `<p class="muted">${t}</p>` : ''}${btn || ''}</div></div>`;
-  const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} Try again in a moment.` : '')
+  const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} It tries again by itself in a few seconds.` : '')
     : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, '<a class="btn" href="#shifts">Go to Shift Manager</a>')
     : S.role ? '' : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
@@ -1270,6 +1280,7 @@ ${nextBarHtml(p)}
     const a = [...el.attributes].filter((x) => x.name.startsWith('data-') && x.name !== 'data-since').map((x) => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
     return a ? el.tagName.toLowerCase() + a : null; };
   function render() {
+    drawnWithData = !!SNAP;
     const se = document.scrollingElement;
     const K0 = render.keys || {}, before = { page: [se.scrollTop, K0.page], ...Object.fromEntries(AREAS.map((sel) => { const e = $(sel); return [sel, e ? [e.scrollTop, K0[sel]] : null]; })) };
     const focusSig = sig(document.activeElement), keep = document.activeElement && document.activeElement.id;
@@ -1634,7 +1645,7 @@ ${nextBarHtml(p)}
   window.CBHChart.visible = visible;
   const openAccess = () => { access.chart = SNAP ? visible() : location.hash.startsWith('#chart'); };
   let wasVisible = null;
-  document.addEventListener('cbh-chart-poll', () => { const v = visible(); if (v !== wasVisible) { wasVisible = v; openAccess(); if (typeof window.deskRefresh === 'function') window.deskRefresh(); } });
+  document.addEventListener('cbh-chart-poll', () => { const v = visible(); if (v !== wasVisible) { wasVisible = v; openAccess(); if (typeof window.deskRefresh === 'function') window.deskRefresh(); if (v && location.hash.startsWith('#chart') && !app.isConnected && typeof route === 'function') route(); } });
   const deskDraw = window.deskDraw;
   if (deskDraw) window.deskDraw = (d) => { const done = deskDraw(d); openAccess(); if (!pollT && !polling) poll(true); if (location.hash.startsWith('#chart') && $('#page').hidden) route(); return done; };
   openAccess();
