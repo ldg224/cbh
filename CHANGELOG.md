@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.38.0 (2026-11-19)
+
+**Added:**
+- **A public front page** for CareBeyond Hospital: what we are, how a visit works (online check-in is launching soon), our departments, how to join, a big Join our Discord button and the join code with Join game. Log in is for team members; patients don't need an account.
+- The site can now be found on Google (title, description, link preview, sitemap).
+
+Database change: no.
+
 ## 0.37.1 (2026-11-19)
 
 **Fixed:**

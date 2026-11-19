@@ -2,4 +2,6 @@
 window.CBH_CONFIG = {
   supabaseUrl: "https://ycrwcwfknqikezynzgyv.supabase.co",
   supabaseKey: "sb_publishable_DckvrwNf5t38g-04vOr4DQ__gytvaQP",
+  // The Maple Hospital custom server code shown on the public front page (and the logged-in fallback). Change it here.
+  publicJoinCode: "4920-4087",
 };
