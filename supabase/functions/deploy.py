@@ -13,10 +13,11 @@ from pathlib import Path
 
 REF = 'ycrwcwfknqikezynzgyv'
 TOKEN = (Path.home() / '.supabase' / 'token.txt').read_text().strip()
-# login-code is called by people who aren't logged in yet and checks its own secret, so Supabase must not require
+# login-code and roblox-lookup are called by people who aren't logged in (login-code checks its own secret,
+# roblox-lookup rate-limits per IP and returns only public Roblox fields), so Supabase must not require
 # a signed-in caller. Every other function (roblox-user, roblox-headshots, ...) needs a login: Supabase checks the
 # token first, and the function checks it again itself.
-OPEN = {'login-code'}
+OPEN = {'login-code', 'roblox-lookup'}   # roblox-lookup: the patient check-in's "Is this you?" (no login; limited per IP inside)
 
 
 def deploy(slug):
