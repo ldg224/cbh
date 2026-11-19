@@ -1078,7 +1078,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const roleGrad = () => { if (S.role === 'reception') return 'background:linear-gradient(135deg,#FFD66B,#FFAA00);color:#0B1E4A';
     if (S.role === 'super') return 'background:linear-gradient(135deg,#2ED3C6,#3A82D0)';
     const c = deptColour(S.rdept || 'Nursing'); return `background:linear-gradient(135deg,color-mix(in srgb,${c} 72%,white),color-mix(in srgb,${c} 88%,#0B1E4A))`; };
-  const roleCard = (cls = '') => `<div class="role-card ${cls}" style="${roleGrad()}"><span>You</span><b>${esc(roleLabel())}</b><small>${esc(roleSub())}</small>
+  const roleCard = (cls = '') => `<div class="role-card ${cls}" style="${roleGrad()}" data-role="${S.role || ''}" data-dept="${esc(S.rdept || '')}"><span>You</span><b>${esc(roleLabel())}</b><small>${esc(roleSub())}</small>
     <div class="rc-alerts"><button type="button" class="snd-chip${A.on ? ' on' : ''}" data-a="sndtoggle" aria-pressed="${A.on}" title="${A.on ? 'Mute alert sounds' : 'Turn alert sounds on'}">${A.on ? 'Sounds on' : 'Muted'}</button><button type="button" class="snd-set" data-a="alertset" aria-expanded="${!!S.alertSet}" aria-label="Alert settings" title="Alert settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button></div></div>${S.alertSet ? alertSettings() : ''}`;
   // ---------- ALERTS (owner, 19 Nov 2026): a ping when something is for you, a flashing tab title, desktop notifications ----------
   const A = Object.assign({ on: true, vol: 0.6, desk: false, asked: false }, load('alerts', {}));
@@ -1154,7 +1154,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const ab = { reception: 'RC', room: 'RM', oncall: 'OC', road: 'RD', super: 'SV' }[S.role] || '';
     return `<nav class="rail${S.railOpen ? ' open' : ''}" aria-label="CBH Chart"><div class="rail-in">
       <div class="in-head"><span class="in-tile" aria-hidden="true"></span><div class="rx"><b>CBH Chart</b><small class="${S.session ? 'open' : ''}">${S.session ? 'Session live' : 'No session running'}</small></div></div>
-      <button type="button" class="role-chip" style="${roleGrad()}" data-a="rail" aria-expanded="${!!S.railOpen}" title="${esc(roleLabel())}">${ab}</button>
+      <button type="button" class="role-chip" style="${roleGrad()}" data-role="${S.role || ''}" data-dept="${esc(S.rdept || '')}" data-a="rail" aria-expanded="${!!S.railOpen}" title="${esc(roleLabel())}">${ab}</button>
       <div class="rx rail-role">${roleCard()}<button type="button" class="link in-change" data-a="changerole">Change role</button></div>
       <div class="rail-grow"></div></div></nav>`;
   }
