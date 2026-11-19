@@ -241,3 +241,6 @@ body.desk .h-sec { margin-top: 26px; }
 .ds-switch input:checked + .ds-sw::after { transform: translateX(14px); }
 .ds-switch input:focus-visible + .ds-sw { outline: 2px solid var(--blue); outline-offset: 2px; }
 @media (max-width: 560px) { .hd-opts { padding-left: 0; } }
+
+/* 0.39.1: the running time on the top-bar shift button */
+.dt-time { font-variant-numeric: tabular-nums; font-weight: 800; padding-right: 8px; margin-right: 2px; border-right: 1px solid currentColor; border-right-color: color-mix(in srgb, currentColor 30%, transparent); }

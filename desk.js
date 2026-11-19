@@ -152,7 +152,7 @@
       ${brand}
       <button class="dt-search" type="button" data-desk="search" aria-label="Search"><span class="dt-si" style="${icon('search')}" aria-hidden="true"></span><span class="dt-st">Search or do anything</span><kbd>/</kbd></button>
       ${live || (s && s.next) ? `<div class="dt-live${live ? ' on' : ''}"><span class="dt-ld" aria-hidden="true"></span><span class="dt-lt">${live ? 'Session live' : esc('Next session ' + whenAhead(s.next.scheduled_for))}${code ? ` · <b>${esc(code)}</b>` : ''}</span>${live && code && typeof joinGameBtn === 'function' ? joinGameBtn(code, 'dt-join') : ''}</div>` : ''}
-      ${canShift ? `<button class="dt-clock${shift ? ' end' : ''}" type="button" data-desk="clock"><span class="dt-cd" aria-hidden="true"></span>${shift ? (Date.now() < endArmed ? 'Tap again to end' : 'End shift') : 'Start shift'}</button>` : ''}
+      ${canShift ? `<button class="dt-clock${shift ? ' end' : ''}" type="button" data-desk="clock"><span class="dt-cd" aria-hidden="true"></span>${shift ? `<span class="dt-time" data-dt-time aria-label="Time on shift">${shiftTimeTxt()}</span>${Date.now() < endArmed ? 'Tap again to end' : 'End shift'}` : 'Start shift'}</button>` : ''}
       ${window.execReal ? `<button class="dt-exec${window.execViewOn() ? ' on' : ''}" type="button" role="switch" data-desk="exec" aria-checked="${window.execViewOn()}" title="${window.execViewOn() ? 'Executive view is on: you see everything. Turn it off to see the site as your own ranks.' : 'Executive view is off: you see the site as your own ranks. Turn it on to see everything.'}"><span class="dt-exsw" aria-hidden="true"></span><span class="dt-exl">Exec</span></button>` : ''}
       <button class="dt-you" type="button" data-desk="you" aria-label="You: ${esc(name)}" aria-expanded="${wasOpen}" aria-haspopup="true"><span class="ds-av ${state}">${photo ? `<img src="${esc(photo)}" alt="">` : `<span class="ds-ini">${esc(ini)}</span>`}</span></button>
       <div class="dt-menu" role="menu"${wasOpen ? '' : ' hidden'}>
@@ -197,10 +197,15 @@
   // ---------- my shift (for Start shift / End shift) ----------
   async function loadShift() {
     if (!myDiscordId || !canSee('staff')) { shift = null; return; }
-    const { data: rows } = await sb.from('shifts').select('id, status, department, started_at').eq('discord_id', myDiscordId)
+    const { data: rows } = await sb.from('shifts').select('id, status, department, started_at, break_seconds, break_started_at').eq('discord_id', myDiscordId)
       .neq('status', 'ended').order('started_at', { ascending: false }).limit(1);
     shift = (rows || [])[0] || null;
   }
+  // The running time on the top-bar shift button (0.39.1): the same sum as Shift Manager (shiftSecs in app.js), ticking every second.
+  const shiftTimeTxt = () => { if (!shift) return ''; if (shift.status === 'break') return 'On break';
+    const t = Math.floor(typeof shiftSecs === 'function' ? shiftSecs(shift) : (Date.now() - new Date(shift.started_at)) / 1000), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60;
+    return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
+  setInterval(() => { if (!shift) return; const v = shiftTimeTxt(); document.querySelectorAll('[data-dt-time]').forEach((el) => { if (el.textContent !== v) el.textContent = v; }); }, 1000);
   async function clock(btn) {
     if (!shift && myDepartments.length > 1) { location.hash = '#shifts'; return; }   // pick the department there
     if (shift && Date.now() > endArmed) { endArmed = Date.now() + 4000; drawTop(); setTimeout(drawTop, 4100); return; }

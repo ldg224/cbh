@@ -614,7 +614,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const tabs = [['checkin', 'Check in', toConfirm().length], ['queue', 'Up next', upNext().length], ['checkout', 'After-care', 0]];
     let body = '';
     if (S.deskTab === 'checkin') body = `${S.npOpen ? newPatient() : '<button type="button" class="btn" data-a="npopen">+ Walk-in patient</button>'}
-      <section class="card"><div class="card-head"><h3>Checked in online <span class="count">${toConfirm().length}</span></h3>${S.online ? '<button type="button" class="link" data-a="arrive">Simulate an online check-in</button>' : '<span class="tag-warn">Online check-in closed: walk-ins only</span>'}</div>
+      <section class="card"><div class="card-head"><h3>Checked in online <span class="count">${toConfirm().length}</span></h3>${S.online ? '' : '<span class="tag-warn">Online check-in closed: walk-ins only</span>'}</div>
         ${toConfirm().length ? `<ul class="wlist">${toConfirm().map((p) => `<li style="--u:#9aa9c4"><span class="ubar"></span>${pnameRow(p, ` · said “${esc(p.said || '–')}” · suggested ${esc(U((p.suggestedEsi || fromSaid[p.said] || 4)).name)}`)}<span class="wl-t" data-since="${new Date(p.arrived).toISOString()}">${ago(p.arrived)}</span>
           <span class="row-btns"><button type="button" class="btn small" data-cconf="${p.id}" data-c="${(p.suggestedEsi || fromSaid[p.said] || 4)}">Confirm ${esc(U((p.suggestedEsi || fromSaid[p.said] || 4)).name)}</button><button type="button" class="btn small ghost" data-confirm="${p.id}">Change</button></span>${S.confirmFor === p.id ? `<div class="sendbox"><div class="f"><span>Which teams? <em>first = main</em></span>${teamPick(S.cdept[p.id] || [], `data-cdeptp="${p.id}" data-v`)}</div><div class="f"><span>Set their colour</span>${urgPicker(null, `data-cconf="${p.id}" data-c`)}</div>${colourQs(`data-cconf="${p.id}" data-c`)}</div>` : ''}</li>`).join('')}</ul>`
           : '<p class="muted">Nobody to confirm. Online check-ins appear here.</p>'}</section>`;
@@ -816,7 +816,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const superBar = () => `<div class="sbar"><span class="sb-who">Supervising: ${S.superOther ? 'you and 1 other' : 'you'}</span>
     <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Reception ${S.recOpen ? 'open' : 'closed'}</button>
     <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">${S.online ? 'Online check-in open' : 'Full: walk-ins only'}</button>
-    <button type="button" class="btn small ghost" data-a="endsess">End session</button></div>`;
+    ${S.session ? '<button type="button" class="btn small ghost" data-a="endsess">End session</button>' : '<span class="muted small">No session running</span>'}</div>`;
   const closeWhy = (id) => { const beds = D.BEDS.filter((b) => roomIdOf(b) === id), pt = beds.map((b) => roomsInUse()[b]).find(Boolean), ow = beds.map(ownerOf).find(Boolean);
     return pt ? `${pt.name} is in it: move them out first.` : ow ? `${ow === 'me' ? 'You have' : nm(ow) + ' has'} it: make it open first (below).` : ''; };
   const roomLog = (id, t) => S.roomCfg[id].log.unshift({ at: new Date(), by: 'me', t });
@@ -868,6 +868,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   function planSection() {
     const q = upNext(), ppl = D.STAFF.filter((x) => !x.you), nReq = S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging').length;
     const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
+    if (!S.session) S.endSess = false;
     const asks = `${S.endSess ? endSessionPanel() : ''}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}`, open = pplOpen();
     return `<div class="plan">${asks ? `<div class="plan-asks">${asks}</div>` : ''}
       <div class="plan-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span><div class="pq-row">${incomingChips()}${q.length ? q.map((p) => `<button type="button" class="q-chip" style="--u:${U(p.urgency).colour}" data-drag="${p.id}" data-open="${p.id}" title="${esc(p.name)} · ${esc(U(p.urgency).name)}${isChild(p) ? ' · child' : ''}${p.room ? ' · waiting in ' + esc(p.room) : ''} · ${ago(p.queuedAt)}. Press to read their record; drag onto a bed or a person.">${p.room ? bell : ''}<b>${esc(p.name)}</b>${teamChips(p)}${flags(p)}${p.lost ? '<span class="rq-ic rt rt-wait">Needs a new nurse</span>' : ''}<small>${ago(p.queuedAt)}</small></button>`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>${nReq ? `<button type="button" class="link pq-req" data-sec="reqs">${nReq} request${nReq > 1 ? 's' : ''}</button>` : ''}</div>
@@ -1135,7 +1136,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       ${roleCard()}<button type="button" class="link in-change" data-a="changerole">Change role</button>
       <div class="in-views"><span class="in-l">Views</span>${SECTIONS[S.role].map(([k, l]) => `<button type="button" class="in-link${S.sec === k ? ' on' : ''}" data-sec="${k}"${S.sec === k ? ' aria-current="page"' : ''}><span>${l}</span>${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</div>
       <p class="in-note">${S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Nobody on Reception' : 'Reception closed'}${S.online ? '' : ' · walk-ins only'}</p>
-      <div class="in-sep"></div><button type="button" class="in-link demo${S.phone ? ' on' : ''}" data-a="phone"><span>Patient's phone</span><small>demo</small></button></nav>`;
+</nav>`;
   }
 
   function computer() {
@@ -1168,7 +1169,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
           <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Reception open</button>
           <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
           <span class="muted small">${S.superOther ? 'Supervising: you and 1 other' : 'Supervising: you'}</span>
-          <button type="button" class="btn small warn" data-a="endsess">End session…</button>${launchCtl()}</div>` : ''}</div>` : ''}</div></div>`;
+          ${S.session ? '<button type="button" class="btn small warn" data-a="endsess">End session…</button>' : '<span class="muted small">No session running</span>'}${launchCtl()}</div>` : ''}</div>` : ''}</div></div>`;
   }
 
   // Owners only (Hospital Director, COO; the server checks too): open the Chart to everyone, or pause it.
@@ -1284,7 +1285,7 @@ ${nextBarHtml(p)}
     // every click). It slides in only when a different patient opens; otherwise only its content is swapped, and only
     // when something in it actually changed (ticking timers don't count), keeping its scroll and focus.
     if (!$('#chx-view')) app.innerHTML = '<div id="chx-view"></div><div id="chx-dhost"></div><div class="cx-toast" id="chx-toast" role="status" hidden></div>';
-    $('#chx-view').innerHTML = (isPhone() ? phone() : computer()) + (S.phone ? patientPhone() : '');
+    $('#chx-view').innerHTML = (isPhone() ? phone() : computer());
     // Supervisors on the floor plan: the record docks beside the plan and shrinks it, so the beds stay in view (audit #6).
     const dock = !isPhone() && S.role === 'super' && S.sec === 'plan' && !!S.open;
     $('#chx-view').classList.toggle('docked-view', dock); $('#chx-dhost').classList.toggle('docked', dock); document.body.classList.toggle('phone', isPhone());
