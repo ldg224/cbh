@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.2 (2026-11-19)
+
+**Changed:**
+- Departments in the side menu have their own icon on a gradient tile.
+- The CBH Chart's role card and role screen have icons: Reception, Patient Care (Room, On call, Road) and Supervisor, and each department button shows its icon.
+
+Database change: no.
+
 ## 0.39.1 (2026-11-19)
 
 **Changed:**
