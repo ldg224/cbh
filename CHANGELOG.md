@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.5 (2026-11-19)
+
+**Fixed:**
+- The CBH Chart no longer gets stuck on "Loading the Chart" when you open it directly; if it ever can't load, it says so and tries again by itself.
+- On call doctors can accept requests (the request steps stay open until you've accepted).
+
+Database change: no.
+
 ## 0.39.4 (2026-11-19)
 
 **Fixed:**
