@@ -405,7 +405,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
 
   const act = {
     add(d) {
-      call('chart_checkin', { p_patient: { name: d.name.trim(), roblox_username: d.roblox.trim() || null, age: d.age ? +d.age : null, symptoms: d.symptoms.slice() },
+      call('chart_checkin', { p_patient: { name: d.name.trim(), roblox_username: d.roblox.trim() || null, age: d.age ? +d.age : null, symptoms: d.symptoms.slice(), ...(d.pain != null ? { pain: d.pain } : {}), ...(d.onset ? { onset: d.onset } : {}), ...((d.care || '').trim() ? { care_notes: d.care.trim() } : {}) },
         p_source: S.role === 'reception' || S.role === 'super' ? 'desk' : 'walk_in', p_esi: d.urgency, p_teams: teamsArg(d.teams) },
         `${esc(d.name.trim())} checked in · send them to ${esc(D.WAITING_ROOM)}.`);
       S.draft = { name: '', roblox: '', age: '', symptoms: [], urgency: null, teams: [] }; S.npOpen = false;
@@ -566,7 +566,8 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   const urgPicker = (sel, attr) => `<div class="upick" role="radiogroup" aria-label="Colour">${[1, 2, 3, 4, 5].map((n) => `<button type="button" role="radio" aria-checked="${sel === n}" class="${sel === n ? 'on' : ''}" style="--u:${U(n).colour};--ui:${U(n).ink}" ${attr}="${n}"><b>${U(n).name}</b><span>${U(n).label}</span><small>${U(n).what} ${U(n).within}.</small></button>`).join('')}</div>
     <p class="explain">${sel ? `<b>${U(sel).name} · ${U(sel).label}:</b> ${U(sel).what} ${U(sel).within}.` : 'Tap a colour, or answer the questions below. Each colour says how soon they should be seen.'}</p>`;
   const colourQs = (attr) => `<div class="cq"><span>Not sure? Ask these, top to bottom. The first “yes” is the colour.</span>${D.COLOUR_QUESTIONS.map(([n, q]) => `<button type="button" class="cq-q" style="--u:${U(n).colour}" ${attr}="${n}"><i></i><span>${esc(q)}</span><b>${U(n).name}</b></button>`).join('')}</div>`;
-  const pnameRow = (p, extra = '') => `<div class="wl-m"><b>${esc(p.name)}${p.stage === 'checkin' ? '' : teamChips(p)}${flags(p)}</b><small>${upill(p.urgency)} ${esc(p.symptoms.join(', ') || 'No symptoms given')}${extra}</small></div>`;
+  const careTag = (p) => (p.careNotes ? `<span class="care-note" title="Care notes">${esc(p.careNotes)}</span>` : '');
+  const pnameRow = (p, extra = '') => `<div class="wl-m"><b>${esc(p.name)}${careTag(p)}${p.stage === 'checkin' ? '' : teamChips(p)}${flags(p)}</b><small>${upill(p.urgency)} ${esc(p.symptoms.join(', ') || 'No symptoms given')}${extra}</small></div>`;
   // Waiting in a room for someone to take them: their own colour stays, plus a small pulsing bell (owner, 19 Nov 2026).
   const bell = '<span class="wait-bell" role="img" aria-label="Waiting for someone to take them" title="Waiting for someone to take them"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span>';
   const handbackFlag = (p) => (p.handback && p.room ? `<div class="wir" style="--u:${U(p.urgency).colour}"><b>${bell}Waiting in ${esc(p.room || 'their room')}</b><span>Handed over by ${esc(first(p.handback.by))} ${ago(p.handback.at)} ago: “${esc(p.handback.note)}”</span></div>` : '');
@@ -637,6 +638,9 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
       <div class="row2"><label class="f"><span>Name</span><input id="d-name" value="${esc(d.name)}" placeholder="e.g. Anna S." autocomplete="off"></label>
       <label class="f"><span>Roblox username <em>optional</em></span><input id="d-roblox" value="${esc(d.roblox)}" autocomplete="off"></label></div>
       <label class="f age-f"><span>Age <em>under 18 goes to a Paediatric room</em></span><input id="d-age" type="number" inputmode="numeric" min="1" max="120" value="${esc(d.age)}" placeholder="e.g. 25"></label>
+      <div class="row2"><div class="f"><span>Pain <em>0 to 10</em></span><div class="chips pain-pick">${[0, 2, 4, 6, 8, 10].map((n) => `<button type="button" class="chip${S.draft.pain === n ? ' on' : ''}" data-dpain="${n}">${n}</button>`).join('')}</div></div>
+      <div class="f"><span>Started</span><div class="chips">${[['just_now', 'Just now'], ['today', 'Today'], ['days', 'Days ago'], ['longer', 'Longer']].map(([k, l]) => `<button type="button" class="chip${S.draft.onset === k ? ' on' : ''}" data-donset="${k}">${l}</button>`).join('')}</div></div></div>
+      <label class="f"><span>Care notes <em>optional, e.g. uses a wheelchair, hard of hearing</em></span><input id="d-care" value="${esc(S.draft.care || '')}" maxlength="200" autocomplete="off"></label>
       <div class="f"><span>Symptoms <em>type each one, Enter to add</em></span>${tagList(d.symptoms, 'data-dsymrm')}${fbox('sym', 'sym', '', 'e.g. headache, hurt left arm', 'Add')}</div>
       <div class="f"><span>Triage colour</span>${urgPicker(d.urgency, 'data-durg')}</div><details class="cq-fold"${d.urgency ? '' : ''}><summary>Not sure? Ask these questions</summary>${colourQs('data-durg')}</details>
       <div class="f"><span>Teams <em>optional; the first is their main team</em></span>${teamPick(d.teams || [], 'data-ddept')}</div>
@@ -1020,7 +1024,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     const movable = p.room && ((p.nurse === 'me' && freeBedsOf('me').length) || S.role === 'super');
     return `<div class="record">
       <header class="r-head" style="--u:${U(p.urgency).colour}"><div class="rh-main"><h3>${esc(p.name)}${p.age ? `<small>, ${p.age}</small>` : ''}</h3>
-          <div class="rh-meta">${upill(p.urgency)}<span>${esc(p.room || p.where || 'No bed')}</span><span class="rh-step" title="${steps.join(' → ')}"><i class="dots" aria-hidden="true">${steps.map((t, i) => `<i class="${i < si ? 'd' : i === si ? 'n' : ''}"></i>`).join('')}</i>${esc(status(p))}</span>${p.nurse && p.stage === 'care' && stCode(p) !== 'assigned' ? `<span>${esc(title(p.nurse))}</span>` : ''}${teamChips(p) ? `<span class="rh-teams">${teamChips(p)}</span>` : ''}${flags(p) ? `<span class="rh-flags">${flags(p)}</span>` : ''}${p.npc ? '<span class="rq-ic npc">NPC</span>' : ''}${p.room && kidsOnly(p.room) && !isChild(p) ? '<span class="tag-warn">Paediatric room</span>' : ''}</div></div>
+          ${p.careNotes ? `<div class="rh-care">${esc(p.careNotes)}</div>` : ''}<div class="rh-meta">${upill(p.urgency)}<span>${esc(p.room || p.where || 'No bed')}</span><span class="rh-step" title="${steps.join(' → ')}"><i class="dots" aria-hidden="true">${steps.map((t, i) => `<i class="${i < si ? 'd' : i === si ? 'n' : ''}"></i>`).join('')}</i>${esc(status(p))}</span>${p.nurse && p.stage === 'care' && stCode(p) !== 'assigned' ? `<span>${esc(title(p.nurse))}</span>` : ''}${teamChips(p) ? `<span class="rh-teams">${teamChips(p)}</span>` : ''}${flags(p) ? `<span class="rh-flags">${flags(p)}</span>` : ''}${p.npc ? '<span class="rq-ic npc">NPC</span>' : ''}${p.room && kidsOnly(p.room) && !isChild(p) ? '<span class="tag-warn">Paediatric room</span>' : ''}</div></div>
         <div class="rh-acts">${canReq(p) ? `<button type="button" class="btn small ghost" data-a="reqmenu" aria-expanded="${S.reqMenu}">Request</button>` : ''}${p.nurse === 'me' && p.stage === 'care' ? `<button type="button" class="btn small ghost" data-hb="${p.id}">Hand over</button>` : ''}${movable ? '<button type="button" class="btn small ghost" data-a="mvbedopen">Move bed…</button>' : ''}<button type="button" class="x" data-a="closerec" aria-label="Close the record">×</button></div>
         ${nextBarHtml(p)}</header>
       ${S.mvBed === p.id ? `<div class="pane-pad rq-pad"><div class="mv-bed"><b>Move ${esc(p.name)} to:</b><div class="chips">${(S.role === 'super' ? freeRooms().filter((b) => !dropWhy(p, b)) : freeBedsOf('me').filter((b) => !dropWhy(p, b))).map((b) => `<button type="button" class="chip" data-mvbed="${esc(b)}">${esc(b)}</button>`).join('') || '<span class="muted small">No free bed they can go to.</span>'}</div><button type="button" class="link" data-a="mvbedx">Cancel</button></div></div>` : ''}
@@ -1309,6 +1313,7 @@ ${nextBarHtml(p)}
     if (t.id === 'd-name') { S.draft.name = t.value; const b = app.querySelector('[data-a="add"], [data-needname]'); if (b) b.disabled = !(t.value.trim() && (b.dataset.needname !== undefined || S.draft.urgency)); }
     else if (t.id === 'd-roblox') S.draft.roblox = t.value;
     else if (t.id === 'd-age') S.draft.age = t.value;
+    else if (t.id === 'd-care') S.draft.care = t.value;
     else if (t.id === 'npc-name') S.npc.name = t.value;
     else if (/^i-(name|age|what|hr|bp)$/.test(t.id)) { const k = t.id.slice(2); S.inc[k] = t.value; if (k === 'name') { const b = app.querySelector('[data-a="incgo"]'); if (b) b.disabled = !(t.value.trim() && S.inc.urgency); } }
     else if (t.id === 'pd-name') { S.pdraft.name = t.value; const b = app.querySelector('[data-a="pdgo"]'); if (b) b.disabled = !(t.value.trim() && S.pdraft.said); }
@@ -1511,6 +1516,8 @@ ${nextBarHtml(p)}
     else if (ds.a === 'editx') S.editFor = null;
     else if (ds.eteam) editTeam(byId(S.editFor), ds.eteam);
     else if (ds.ecol) editColour(byId(S.editFor), +ds.ecol);
+    else if (ds.dpain !== undefined) S.draft.pain = S.draft.pain === +ds.dpain ? null : +ds.dpain;
+    else if (ds.donset) S.draft.onset = S.draft.onset === ds.donset ? null : ds.donset;
     else if (ds.ddept) S.draft.teams = toggleTeam(S.draft.teams || [], ds.ddept);
     else if (ds.cdeptp) S.cdept[+ds.cdeptp] = toggleTeam(S.cdept[+ds.cdeptp] || [], ds.v);
     else if (ds.fbadd || ds.fbpick) { const id = ds.fbadd || ds.fbpick, inp = $('#fb-' + CSS.escape(id)); const val = ds.fbpick ? ds.fbval : (inp && inp.value);
