@@ -499,6 +499,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
         Object.assign(S, { open: null, face: null, roomPanel: null, endShift: false, reqMenu: false, pick: !!res.need_room });
         S.sec = SECTIONS[r][0][0]; S.ph = [{ s: isPhone() && r === 'super' ? 'board' : S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue'; render(); });
   }
+  // Ends the site shift too (the same shift_end the top bar uses), then shows Shift Manager.
+  const endMyShift = async () => { S.endShift = false; const { error } = await sb.rpc('shift_end'); if (error) toast(`Handed over. ${esc(error.message || 'End your shift in Shift Manager.')}`); else toast('Handed over and clocked out.');
+    if (typeof window.deskRefresh === 'function') window.deskRefresh(); location.hash = '#shifts'; };
   const leaveRole = () => call('chart_role_set', { p_role: null }, '', { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); } });
   // Room picking: tap beds to choose (up to 2), then Done sends them in one go.
   function pickBed(bed) {
@@ -704,7 +707,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const nextBarHtml = (p) => { const n = nextBar(p); return n ? `<div class="nxbar"><div class="nx-txt"><span class="nx-step">${esc(n.step)}</span><span class="nx-what">${n.text}</span></div><div class="nx-btns">${n.primary || ''}${n.more || ''}</div></div>` : ''; };
   // List cards show status and open the record; they don't repeat its buttons (audit #3).
   const careCard = (p) => `<div class="care-p${S.open === p.id ? ' sel' : ''}" style="--u:${U(p.urgency).colour}">
-    <button type="button" class="cp-main" data-open="${p.id}"><b>${esc(p.name)}${p.age ? ', ' + p.age : ''}</b>${upill(p.urgency)}<span class="cp-sub">${esc(p.room || p.where || 'No bed')} · ${esc(status(p))}${teamChips(p)}</span>${flags(p) ? `<span class="cp-flags">${flags(p)}</span>` : ''}${(() => { const n = p.nurse === 'me' && nextBar(p); return n ? `<span class="cp-nx">Next: ${esc(n.step === 'Treatment' && n.primary.includes('Discharge') ? 'Discharge' : n.step)}</span>` : ''; })()}</button></div>`;
+    <button type="button" class="cp-main" data-open="${p.id}"><b>${esc(p.name)}${p.age ? ', ' + p.age : ''}</b>${upill(p.urgency)}<span class="cp-sub">${esc(p.room || p.where || 'No bed')} · ${esc(status(p))}${teamChips(p)}</span>${flags(p) ? `<span class="cp-flags">${flags(p)}</span>` : ''}${(() => { const n = p.nurse === 'me' && nextBar(p); return n ? `<span class="cp-nx">Next: ${esc((n.primary || '').replace(/<[^>]*>/g, ' ').replace(/\s*\d+:\d\d\s*$/, '').replace(/\s+/g, ' ').trim() || n.step)}</span>` : ''; })()}</button></div>`;
 
   // ---------- PATIENT CARE: ROOM ----------
   function myRoomSection() {
@@ -798,12 +801,13 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   }
   function endShiftPanel() {
     const m = mine();
-    return `<section class="card np-panel"><div class="card-head"><h3>End your shift</h3><button type="button" class="link" data-a="endx">Not yet</button></div>
+    const role = S.endShift === 'role';
+    return `<section class="card np-panel"><div class="card-head"><h3>${role ? 'Change role' : 'End your shift'}</h3><button type="button" class="link" data-a="endx">Not yet</button></div>
       ${m.length ? `<p class="muted">You still have ${m.length} patient${m.length > 1 ? 's' : ''}. Hand them over (they stay in their beds, at the top of the queue) or finish them first.</p>
         <ul class="wlist">${m.map((p) => `<li style="--u:${U(p.urgency).colour}"><span class="ubar"></span>${pnameRow(p, ' · ' + esc(p.room || p.where || ''))}<span></span><span class="row-btns"><button type="button" class="btn small ghost" data-open="${p.id}">Finish</button><button type="button" class="btn small" data-hb="${p.id}">Hand over</button></span>
           ${S.handbackFor === p.id ? handbackBox(p) : ''}</li>`).join('')}</ul>
-        <div class="sendbox"><label class="f"><span>Or hand over ${m.length > 1 ? 'both' : 'them'} and clock out. A note for whoever takes over:</span><input id="hb-all" placeholder="e.g. Waiting for results" autocomplete="off"></label><button type="button" class="btn" data-a="hball">Hand over ${m.length > 1 ? 'both ' : ''}and clock out</button></div>`
-        : '<p>You have no patients. You can end your shift.</p><button type="button" class="btn" data-a="endgo">End shift</button>'}</section>`;
+        <div class="sendbox"><label class="f"><span>Or hand ${m.length > 1 ? 'both' : 'them'} over and ${role ? 'change role' : 'clock out'}. A note for whoever takes over:</span><input id="hb-all" placeholder="e.g. Waiting for results" autocomplete="off"></label><button type="button" class="btn" data-a="hball">Hand over ${m.length > 1 ? 'both ' : ''}and ${role ? 'change role' : 'clock out'}</button></div>`
+        : role ? '<p>You have no patients now.</p><button type="button" class="btn" data-a="changerole">Change role</button>' : '<p>You have no patients. You can end your shift.</p><button type="button" class="btn" data-a="endgo">End shift</button>'}</section>`;
   }
   const handbackBox = (p) => `<div class="sendbox"><label class="f"><span>A note for whoever takes ${esc(p.name)} next (needed)</span><input id="hb-note" placeholder="e.g. Waiting for blood results" autocomplete="off"></label>
     <div class="row-btns"><button type="button" class="btn" data-hbgo="${p.id}">Hand over</button><button type="button" class="btn ghost" data-a="hbx">Cancel</button></div></div>`;
@@ -1426,7 +1430,7 @@ ${nextBarHtml(p)}
     const sure = (v, msg) => { if (String(v || '').trim()) return true; toast(msg); return false; };
     // roles and Ready
     if (ds.role) pickRole(ds.role, ds.rdept);
-    else if (ds.a === 'changerole') { if (mine().length) { S.endShift = true; if (S.role === 'room') { S.sec = 'myroom'; S.ph = [{ s: 'myroom' }]; } toast('Hand over or finish your patients before changing role.'); }
+    else if (ds.a === 'changerole') { if (mine().length) { S.endShift = 'role'; if (S.role === 'room') { S.sec = 'myroom'; S.ph = [{ s: 'myroom' }]; } toast('Hand over or finish your patients before changing role.'); }
       else { Object.assign(S, { open: null, pick: false }); leaveRole(); } }
     else if (ds.a === 'rail') S.railOpen = !S.railOpen;
     else if (ds.a === 'sndtoggle') { A.on = !A.on; saveA(); arm(); if (A.on) tone('patient'); toast(A.on ? 'Alert sounds on.' : 'Alert sounds muted.'); }
@@ -1567,8 +1571,8 @@ ${nextBarHtml(p)}
     else if (ds.a === 'leavego') { const p = cur(); act.leave(p, S.outcome); if (isPhone()) home(); }
     else if (ds.a === 'endshift') S.endShift = !S.endShift; else if (ds.a === 'endx') S.endShift = false;
     else if (ds.a === 'hball') { const note = ($('#hb-all') || {}).value; if (sure(note, 'Add a short note for whoever takes over.')) { Promise.all(mine().map((p) => rpc('chart_hand_back', { p_case: p.id, p_note: note.trim() }).catch(() => null)))
-      .then(() => rpc('chart_leave_beds', {}).catch(() => null)).then(() => { S.endShift = false; toast('Handed over. Clock out in Shift Manager.'); location.hash = '#shifts'; }); } }
-    else if (ds.a === 'endgo') { rpc('chart_leave_beds', {}).catch(() => null).then(() => { S.endShift = false; location.hash = '#shifts'; }); }
+      .then(() => { if (S.endShift === 'role') { S.endShift = false; return leaveRole().then((r) => { if (r) toast('Handed over. Pick your new role.'); }); } return rpc('chart_leave_beds', {}).catch(() => null).then(endMyShift); }); } }
+    else if (ds.a === 'endgo') { rpc('chart_leave_beds', {}).catch(() => null).then(endMyShift); }
     else if (ds.a === 'hbx') S.handbackFor = null;
     else if (ds.a === 'phone') S.phone = !S.phone; else if (ds.a === 'phonex') S.phone = false;
     else if (ds.a === 'pdgo') toast('Patients check in on the #visit page.');
