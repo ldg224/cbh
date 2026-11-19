@@ -24,7 +24,8 @@
     status: () => rpc('chart_public_status'),
     // Fields agreed with Bravo (20 Nov): roleplay name, age, symptoms, pain 1-10, and the optional details.
     checkin: (f) => rpc('chart_checkin_anon', { p_roblox_username: f.user, p_name: f.name, p_age: f.age, p_symptoms: f.symptoms, p_pain: f.pain,
-      p_onset: f.onset || null, p_allergies: f.allergies || null, p_history: f.history || null, p_notes: f.notes || null, p_client_key: clientKey() }),
+      p_onset: f.onset || null, p_allergies: f.allergies || null, p_history: f.history || null, p_notes: f.notes || null,
+      p_roblox_user_id: f.robloxId || null, p_client_key: clientKey() }),
     visit: (token) => rpc('chart_visit', { p_token: token }),
     rate: (token, rating, comment) => rpc('chart_visit_rate', { p_token: token, p_rating: rating, p_comment: comment || null }),
     cancel: (token) => rpc('chart_visit_cancel', { p_token: token }),
@@ -52,6 +53,51 @@
   const state = (title, body, extra = '', icon = '') => `<section class="vp-card vp-state">${icon.startsWith('place:') ? `<span class="vp-place" aria-hidden="true">${nth(+icon.slice(6))}</span>` : icon ? `<span class="vp-ic ${icon}" aria-hidden="true"></span>` : ''}<h1>${title}</h1>${body ? `<p>${body}</p>` : ''}${extra}</section>`;
   const errBox = (m) => (m ? `<p class="vp-err" role="alert">${e(m)}</p>` : '');
 
+  // ---- the wait board (user, 20 Nov: like a real ED wait board, "redone to look stunning") ----
+  // Two gauges, Adults and Children 0-17: a semicircle from Normal (green) through Long (orange) to Very long (red),
+  // a needle, the counts and the current wait range. Status colours always come with a word (never colour alone).
+  // Data: hospital.waits from chart_public_status (Bravo); updated IN PLACE so the needle glides between polls.
+  const LEVEL = { normal: ['Normal wait', '#16A34A'], long: ['Long wait', '#F57C00'], very_long: ['Very long wait', '#D92D20'] };
+  const fmtMin = (m) => { m = Math.round(m); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`; };
+  // CONTRACT v1.2: gauge = min(wait_max / 90, 1); level by wait_max (< 30 normal, 30-60 long, > 60 very long).
+  const gaugeOf = (w) => (!w ? 0 : w.gauge != null ? Math.max(0, Math.min(1, +w.gauge)) : Math.min(1, (+w.wait_max || 0) / 90));
+  const levelOf = (w) => (w && w.level) || ((+w.wait_max || 0) < 30 ? 'normal' : (+w.wait_max || 0) <= 60 ? 'long' : 'very_long');
+  function gauge(key, label, icon) {
+    return `<article class="vw-g" data-vw="${key}"><header><span class="vw-ic" style="--icon:url('assets/icons/${icon}.png')" aria-hidden="true"></span><h2>${label}</h2></header>
+      <svg class="vw-svg" viewBox="0 0 200 118" role="img" aria-labelledby="vw-${key}-t"><title id="vw-${key}-t">${label}: wait to see a clinician</title>
+        <defs><linearGradient id="vw-grad-${key}" gradientUnits="userSpaceOnUse" x1="18" y1="0" x2="182" y2="0">
+          <stop offset="0" stop-color="#16A34A"/><stop offset=".3" stop-color="#7CC243"/><stop offset=".5" stop-color="#F2B01E"/><stop offset=".7" stop-color="#F57C00"/><stop offset="1" stop-color="#D92D20"/></linearGradient></defs>
+        <path class="vw-track" d="M18 100 A82 82 0 0 1 182 100"/>
+        <path class="vw-arc" d="M18 100 A82 82 0 0 1 182 100" stroke="url(#vw-grad-${key})"/>
+        <path class="vw-sep" d="M59 29 L66 41 M141 29 L134 41"/>
+        <text class="vw-band" x="20" y="116" text-anchor="start">Normal</text><text class="vw-band" x="100" y="12" text-anchor="middle">Long</text><text class="vw-band" x="180" y="116" text-anchor="end">Very long</text>
+        <g class="vw-needle" style="transform:rotate(-90deg)"><path d="M100 100 L100 32" /><circle cx="100" cy="32" r="0"/></g>
+        <circle class="vw-hub" cx="100" cy="100" r="9"/><circle class="vw-hub-in" cx="100" cy="100" r="3.5"/></svg>
+      <p class="vw-level"><i></i><b>–</b></p>
+      <p class="vw-range"><small>Current wait to see a clinician</small><b>–</b></p>
+      <ul class="vw-stats"><li><span class="vw-sic" style="--icon:url('assets/icons/people.png')" aria-hidden="true"></span><b data-n="waiting">–</b> waiting</li>
+        <li><span class="vw-sic" style="--icon:url('assets/icons/stethoscope.png')" aria-hidden="true"></span><b data-n="in_care">–</b> being treated</li></ul></article>`;
+  }
+  const waitBoard = () => `<section class="vw" id="vp-wait" aria-label="Estimated wait times"><div class="vw-head"><h2>Estimated wait</h2><span class="vw-live" id="vw-live"></span></div>
+    <div class="vw-grid">${gauge('adults', 'Adults', 'user')}${gauge('children', 'Children 0–17', 'nurse')}</div>
+    <p class="vw-foot">Your treatment may start sooner. Most urgent patients are seen first.</p></section>`;
+  // Fill the board from H, in place (the needle animates between values; nothing is redrawn).
+  function syncWait() {
+    const box = $('vp-wait'); if (!box) return;
+    const open = H && H.state !== 'closed' && H.waits;
+    box.classList.toggle('calm', !open);
+    $('vw-live').textContent = open ? 'Live' : H && H.state === 'closed' ? 'No staff on shift' : '';
+    ['adults', 'children'].forEach((k) => {
+      const g = box.querySelector(`[data-vw="${k}"]`), w = open ? H.waits[k] : null;
+      const lv = w ? levelOf(w) : null, [word, col] = lv ? LEVEL[lv] : ['Closed', '#9AA9C4'];
+      g.querySelector('.vw-needle').style.transform = `rotate(${-90 + 180 * (w ? gaugeOf(w) : 0)}deg)`;
+      g.querySelector('.vw-level i').style.background = col; g.querySelector('.vw-level b').textContent = word;
+      g.querySelector('.vw-range b').textContent = !w ? '–' : w.wait_label || (w.wait_min == null || w.wait_max == null ? 'Not enough data yet' : `${fmtMin(w.wait_min)} – ${fmtMin(w.wait_max)}`);
+      g.querySelectorAll('[data-n]').forEach((n) => { n.textContent = w && w[n.dataset.n] != null ? w[n.dataset.n] : '–'; });
+      g.setAttribute('aria-label', w ? `${k === 'adults' ? 'Adults' : 'Children 0 to 17'}: ${word}. ${g.querySelector('.vw-range b').textContent}. ${w.waiting} waiting, ${w.in_care} being treated.` : '');
+    });
+  }
+
   // ---- check-in form ----
   // The form is drawn ONCE per screen. Typing never redraws it: warnings, the tag list, the Roblox card, the pain
   // scale and the button state are updated in place (user, 20 Nov: the box lost focus and took one letter at a time).
@@ -67,9 +113,9 @@
     const scr = formScreen();
     if (scr === 'soon') return state('Online check-in is launching soon', 'Soon you’ll be able to check in before you arrive, with no account: just your Roblox username. Until then, walk in and check in at reception in game.', `${joinBlock(H)}${discordBtn('Join our Discord to hear first')}`, 'soon');
     if (scr === 'loading') return `<section class="vp-card"><p class="vp-muted">Loading…</p></section>`;
-    if (scr === 'closed') return state('Online check-in is closed', `No staff are on shift right now.${H.next_session_at ? ` Next session: <b>${e(when(H.next_session_at))}</b>.` : ''}`, `${discordBtn()}<p class="vp-muted vp-sm-t">See when the next sessions are.</p>`, 'closed');
-    if (scr === 'walk') return state('Online check-in is paused', 'The front desk is busy. Please check in at reception in game.', joinBlock(H), 'paused');
-    return `<section class="vp-card vp-form"><h1>Check in</h1><p class="vp-sub" id="vp-sub">${subLine()}</p>
+    if (scr === 'closed') return waitBoard() + state('Online check-in is closed', `No staff are on shift right now.${H.next_session_at ? ` Next session: <b>${e(when(H.next_session_at))}</b>.` : ''}`, `${discordBtn()}<p class="vp-muted vp-sm-t">See when the next sessions are.</p>`, 'closed');
+    if (scr === 'walk') return waitBoard() + state('Online check-in is paused', 'The front desk is busy. Please check in at reception in game.', joinBlock(H), 'paused');
+    return `${waitBoard()}<section class="vp-card vp-form"><h1>Check in</h1><p class="vp-sub" id="vp-sub">${subLine()}</p>
       <label class="vp-f"><span>Your Roblox username</span><input id="vp-user" value="${e(F.user)}" placeholder="Exactly as it shows above your head" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20">
         <small class="vp-bad" id="vp-user-bad" hidden>3 to 20 letters or numbers, with at most one underscore in the middle.</small></label>
       <div id="vp-rbx" class="vp-rbx" aria-live="polite" hidden></div>
@@ -84,7 +130,7 @@
       <details class="vp-more"${F.onset || F.allergies || F.history || F.notes ? ' open' : ''}><summary>More details <em>optional</em></summary>
         <div class="vp-f"><span>When did it start?</span><div class="vp-chips four" role="radiogroup" aria-label="When did it start?">${ONSET.map(([k, l]) => `<button type="button" role="radio" aria-checked="false" class="vp-chip" data-vonset="${k}">${l}</button>`).join('')}</div></div>
         <label class="vp-f"><span>Allergies</span><input id="vp-allergies" value="${e(F.allergies)}" placeholder="e.g. penicillin, or none" autocomplete="off" maxlength="200"></label>
-        <label class="vp-f"><span>Any medical history</span><input id="vp-history" value="${e(F.history)}" placeholder="e.g. asthma" autocomplete="off" maxlength="300"></label>
+        <label class="vp-f"><span>Any medical history</span><input id="vp-history" value="${e(F.history)}" placeholder="e.g. asthma" autocomplete="off" maxlength="200"></label>
         <label class="vp-f"><span>Notes or care needs</span><textarea id="vp-notes" rows="2" maxlength="300" placeholder="e.g. uses a wheelchair, needs a translator, anxious about needles">${e(F.notes)}</textarea></label></details>
       <p class="vp-note">This is roleplay. Don't share real health or personal information.</p><p class="vp-err" id="vp-err" role="alert" hidden></p>
       <button type="button" class="vp-btn vp-primary vp-big" data-va="go" id="vp-go" disabled>Check in</button></section>`;
@@ -140,7 +186,8 @@
     F.busy = true; F.err = ''; syncForm();
     try {
       const r = await API.checkin({ user: F.user.trim(), name: F.name.trim(), age: +F.age, symptoms: F.tags.join(', ').slice(0, 300), pain: F.pain,
-        onset: F.onset, allergies: F.allergies.trim(), history: F.history.trim(), notes: F.notes.trim() });
+        onset: F.onset, allergies: F.allergies.trim(), history: F.history.trim(), notes: F.notes.trim(),
+        robloxId: F.rbx.ok && F.rbx.data ? F.rbx.data.id : null });
       if (r && r.hospital) H = r.hospital;
       if (!r || !r.ok || !r.token) { F.busy = false;
         if (r && (r.refused === 'closed' || r.refused === 'walk_ins_only')) { F.err = ''; formShown = ''; draw(); return; }
@@ -203,8 +250,10 @@
     const r = route(); if (!r) return;
     if (!r.token) {   // the form: drawn once per screen, then only updated in place
       const scr = formScreen();
-      if (scr === formShown && scr === 'open') { $('vp-sub') && ($('vp-sub').innerHTML = subLine()); syncForm(); return; }
-      formShown = scr; host.innerHTML = shell(formView()); syncForm(); return;
+      if (scr === formShown && ['open', 'walk', 'closed'].includes(scr)) { $('vp-sub') && ($('vp-sub').innerHTML = subLine()); syncForm(); syncWait(); return; }
+      formShown = scr; host.innerHTML = shell(formView()); syncForm();
+      requestAnimationFrame(() => requestAnimationFrame(syncWait));   // after first paint, so the needle sweeps in
+      return;
     }
     formShown = '';
     if (typing() && !force) return;   // never redraw under someone typing a rating comment

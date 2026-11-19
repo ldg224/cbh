@@ -140,3 +140,39 @@ html.visit-on .fp-head-login, html.visit-on #who { display: none; }
   .vp-pain { gap: 3px; } .vp-pain button { min-height: 44px; font-size: 14px; border-radius: 8px; }
   .vp-chips.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Wait board (20 Nov): two gauges, Adults and Children 0-17. Brand card; status colours always with a word. */
+.vw { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px 18px 14px; display: grid; gap: 12px;
+  box-shadow: 0 1px 2px rgba(11, 30, 74, .04), 0 12px 30px rgba(11, 30, 74, .07); }
+.vw-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.vw-head h2 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.01em; text-transform: none; color: var(--text); }
+.vw-live { font-size: 12px; font-weight: 700; color: var(--teal-ink); display: inline-flex; align-items: center; gap: 6px; }
+.vw:not(.calm) .vw-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #16A34A; box-shadow: 0 0 0 3px #d9f5e3; }
+.vw.calm .vw-live { color: var(--muted); }
+.vw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.vw-g { background: linear-gradient(180deg, #f7fafe, #fff); border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 14px; display: grid; gap: 6px; justify-items: center; text-align: center; }
+.vw-g header { display: flex; align-items: center; gap: 8px; justify-self: start; }
+.vw-g h2 { margin: 0; font-size: 14px; font-weight: 800; text-transform: none; letter-spacing: 0; color: var(--text); }
+.vw-ic { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, #0b1e4a, #22579f 50%, #2ec4c0); position: relative; }
+.vw-ic::after { content: ""; position: absolute; inset: 6px; background: #fff; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.vw-svg { width: 100%; max-width: 230px; height: auto; overflow: visible; }
+.vw-track { fill: none; stroke: #e6edf6; stroke-width: 20; stroke-linecap: round; }
+.vw-arc { fill: none; stroke-width: 16; stroke-linecap: round; }
+.vw-sep { stroke: #fff; stroke-width: 3; }
+.vw-band { font: 600 9.5px Montserrat, sans-serif; fill: #55688c; }
+.vw-needle { transform-box: view-box; transform-origin: 100px 100px; transition: transform 1.1s cubic-bezier(.34, 1.3, .64, 1); }
+.vw-needle path { stroke: #0b1e4a; stroke-width: 4.5; stroke-linecap: round; }
+.vw-hub { fill: #0b1e4a; } .vw-hub-in { fill: #2ed3c6; }
+.vw.calm .vw-arc { stroke: #cfd8e6 !important; opacity: .7; } .vw.calm .vw-needle path, .vw.calm .vw-hub { stroke: #9aa9c4; fill: #9aa9c4; }
+.vw-level { margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 800; color: var(--text); }
+.vw-level i { width: 10px; height: 10px; border-radius: 50%; background: #9aa9c4; }
+.vw-range { margin: 0; display: grid; gap: 1px; }
+.vw-range small { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.vw-range b { font-size: 18px; font-weight: 800; letter-spacing: -.01em; color: var(--text); font-variant-numeric: tabular-nums; }
+.vw-stats { list-style: none; margin: 4px 0 0; padding: 8px 0 0; border-top: 1px solid #eef2f8; width: 100%; display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--muted); }
+.vw-stats li { display: inline-flex; align-items: center; gap: 5px; }
+.vw-stats b { font-size: 15px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.vw-sic { width: 15px; height: 15px; background: var(--blue-deep); -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.vw-foot { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+@media (prefers-reduced-motion: reduce) { .vw-needle { transition: none; } }
+@media (max-width: 420px) { .vw-grid { grid-template-columns: minmax(0, 1fr); } .vw-svg { max-width: 220px; } }
