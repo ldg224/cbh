@@ -60,6 +60,7 @@
         <span class="wordmark" aria-hidden="true"><span class="wm-name"><span class="wm-care">Care</span><span class="wm-beyond">Beyond</span></span><span class="wm-rule"></span><span class="wm-sub">Hospital</span></span>
       </a>
     </div>
+    <a class="fp-head-login" href="#log-in" data-fp-login>Log in</a>
     <div id="who" class="who" hidden>
       <img id="avatar" class="avatar" alt="" width="30" height="30">
       <span id="name"></span>
@@ -78,116 +79,135 @@
     <!-- Public front page (0.38.0): what Google and logged-out visitors see. Static text only: no private data.
          It is visible without JavaScript; app.js hides it once someone is logged in. -->
     <section id="signed-out" class="fp">
-      <div class="fp-hero">
-        <div class="fp-intro">
-          <span class="fp-eyebrow">Maple Hospital roleplay on Roblox</span>
-          <h1>CareBeyond Hospital</h1>
-          <p class="fp-lead">A friendly Roblox hospital roleplay community. We run regular sessions in our own Maple Hospital custom server, with trained staff, real ranks and a patient journey that feels like a real hospital.</p>
-          <div class="fp-ctas">
-            <!-- PLACEHOLDER: the permanent Discord invite needs the owner's OK before it goes live. -->
-            <a class="fp-btn fp-discord" href="https://discord.gg/PLACEHOLDER" rel="noopener"><span class="fp-bico" aria-hidden="true"></span>Join our Discord</a>
-            <a class="fp-btn fp-ghost" href="#log-in" data-fp-login>Log in</a>
-          </div>
-          <!-- The join code comes from config.js (publicJoinCode); front.js fills it in. -->
-          <div class="fp-join" id="fp-join">
-            <span class="fp-join-ico" aria-hidden="true"></span>
-            <div class="fp-join-t"><b>Maple Hospital custom server</b><span>Join code <strong id="fp-code"></strong></span></div>
-            <a id="fp-join-game" class="fp-btn fp-teal" href="https://www.roblox.com/games/8704997000/Maple-Hospital" target="_blank" rel="noopener">Join game</a>
-          </div>
-        </div>
-        <div id="log-in" class="card center login fp-login" tabindex="-1">
-          <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="64" height="64">
-        <div id="login-main">
-          <h2 class="fp-login-h">Log in</h2>
-          <p>For team members and anyone joining us. Join the team: you'll need our Discord. Patients don't need an account.</p>
-          <div class="login-actions">
-            <!-- The last account on this device (name and photo kept in this browser only; no tokens). -->
-            <button id="login-again" class="discord login-again" type="button" hidden><img id="login-again-img" alt="" hidden><span>Continue as <b id="login-again-name"></b></span></button>
-            <button id="login" class="discord">Log in with Discord</button>
-            <button id="code-login" class="ghost">Log in with a code</button>
-            <button id="login-other" class="linkish login-other" type="button" hidden>Not you? Use another account</button>
-          </div>
-          <p id="login-error" class="error" hidden></p>
-          <p id="inapp-note" class="inapp-note" hidden>Stuck? Try <b>Log in with a code</b>.</p>
-        </div>
 
-        <!-- Log in with a code: type /login CODE in Discord, the bot confirms, this page logs in by itself. -->
-        <div id="login-code" hidden>
-          <h2 class="fp-login-h">Log in with a code</h2>
-          <div id="code-box" class="code-box" aria-live="polite">
-            <div id="code-text" class="code-text"></div>
-            <p class="code-how">Type <code id="code-cmd"></code> in the CareBeyond - Hospital server.</p>
-            <div class="code-row">
-              <button id="copy-cmd" class="ghost">Copy</button>
-              <span id="code-timer" class="code-timer"></span>
-            </div>
+      <!-- Hero: fills the first screen. The brand gradient (the icon's navy → blue → teal), the two big actions. -->
+      <div class="fp-hero">
+        <img class="fp-mark" src="assets/cbh-icon.svg" alt="" width="760" height="760">
+        <div class="fp-wrap fp-hero-in">
+          <img class="fp-logo fp-rise" src="assets/cbh-icon.svg" alt="" width="76" height="76">
+          <p class="fp-kicker fp-rise">Maple Hospital roleplay on Roblox</p>
+          <h1 class="fp-rise">CareBeyond Hospital</h1>
+          <p class="fp-line fp-rise">Roblox hospital roleplay where every visit is real. Check in, get called to a room, and leave with your own patient record.</p>
+          <div class="fp-big fp-rise">
+            <!-- Online check-in is part of the CBH Chart, being rebuilt: "Launching soon" until then (remove the badge at launch). -->
+            <button type="button" class="fp-mega fp-mega-ci" id="fp-checkin" aria-controls="fp-soon-note" aria-expanded="false">
+              <span class="fp-mico" style="--icon:url('assets/icons/clipboard.png')" aria-hidden="true"></span>
+              <span class="fp-mt"><b>Check in online</b><small>No account, just your Roblox username</small></span>
+              <span class="fp-soon">Launching soon</span>
+            </button>
+            <!-- PLACEHOLDER: the permanent Discord invite needs the owner's OK before it goes live (two links on this page). -->
+            <a class="fp-mega fp-mega-dc" href="https://discord.gg/PLACEHOLDER" rel="noopener">
+              <span class="fp-mico" style="--icon:url('assets/icons/chat.png')" aria-hidden="true"></span>
+              <span class="fp-mt"><b>Join our Discord</b><small>Meet the team and hear about sessions</small></span>
+            </a>
           </div>
-          <p id="code-error" class="error" hidden></p>
-          <div class="login-actions">
-            <button id="new-code" class="refresh" hidden>Get a new code</button>
-            <button id="code-back" class="linkish">Back</button>
+          <p id="fp-soon-note" class="fp-soon-note" role="status" hidden>Online check-in is launching soon. <a href="https://discord.gg/PLACEHOLDER" rel="noopener">Join our Discord</a> to hear first. Until then, walk in and check in at reception in game.</p>
+          <!-- The join code comes from config.js (publicJoinCode); front.js fills it in. -->
+          <div class="fp-join fp-rise" id="fp-join">
+            <span class="fp-join-ico" aria-hidden="true"></span>
+            <span class="fp-join-t">Maple Hospital custom server <span>Join code <strong id="fp-code"></strong></span></span>
+            <a id="fp-join-game" class="fp-join-go" href="https://www.roblox.com/games/8704997000/Maple-Hospital" target="_blank" rel="noopener">Join game</a>
           </div>
-        </div>
         </div>
       </div>
 
       <!-- The CBH Chart: check-in + patient records, our main feature. "Launching soon" while it's rebuilt:
            remove the .fp-soon badge (and this note) at launch. -->
-      <section class="fp-sect fp-visit" aria-labelledby="fp-real">
-        <div class="fp-visit-head">
-          <span class="fp-eyebrow">Maple Hospital check-in and patient charts</span>
-          <h2 id="fp-real">A real hospital, in Maple Hospital <span class="fp-soon">Launching soon</span></h2>
-          <p class="fp-visit-lead">Roblox hospital roleplay with patient records. When you arrive, you check in, staff see you on a live board, a nurse calls you to a room, everything they do for you is written in your own patient record, and you leave with discharge papers you can keep.</p>
-        </div>
-        <h3 class="fp-visit-h">How a visit works</h3>
-        <ol class="fp-journey">
-          <li><span class="fp-jico" style="--icon:url('assets/icons/home.png')" aria-hidden="true"></span><b>Arrive</b><span>Come into the hospital in our Maple Hospital custom server.</span></li>
-          <li><span class="fp-jico" style="--icon:url('assets/icons/clipboard.png')" aria-hidden="true"></span><b>Check in</b><span>At reception in game, or online before you arrive. Tell us what's wrong.</span></li>
-          <li><span class="fp-jico" style="--icon:url('assets/icons/megaphone.png')" aria-hidden="true"></span><b>Called to a room</b><span>Staff see you on a live board. A nurse calls you and takes you to your room.</span></li>
-          <li><span class="fp-jico" style="--icon:url('assets/icons/stethoscope.png')" aria-hidden="true"></span><b>Treated</b><span>Checks, tests and treatment. Everything is written in your patient record.</span></li>
-          <li><span class="fp-jico" style="--icon:url('assets/icons/resume.png')" aria-hidden="true"></span><b>Go home</b><span>Leave with discharge papers you can keep, and rate your care.</span></li>
-        </ol>
-        <div class="fp-paths">
-          <article class="fp-path">
-            <span class="fp-ico" style="--icon:url('assets/icons/controller.png')" aria-hidden="true"></span>
-            <div><h3>No account needed</h3><p>Just walk in and check in at reception in game.</p></div>
-          </article>
-          <article class="fp-path">
-            <span class="fp-ico" style="--icon:url('assets/icons/clipboard.png')" aria-hidden="true"></span>
-            <div><h3>Check in online, no account</h3><p>Just your Roblox username. Check in before you arrive and follow your visit live.</p></div>
-          </article>
-        </div>
-        <p class="fp-staffline"><span class="fp-sico" aria-hidden="true"></span><span><b>Want to work here?</b> Work the desk, run rooms, take requests: join our team.</span><a href="#fp-depts">See the departments</a></p>
-      </section>
-
-      <section class="fp-sect" aria-labelledby="fp-what">
-        <h2 id="fp-what">Roblox hospital roleplay, done properly</h2>
-        <div class="fp-cards">
-          <article class="fp-card"><span class="fp-ico" style="--icon:url('assets/icons/calendar.png')" aria-hidden="true"></span><h3>Regular sessions</h3><p>Sessions in our Maple Hospital custom server, announced in Discord. Join with the code, clock in and start treating patients.</p></article>
-          <article class="fp-card"><span class="fp-ico" style="--icon:url('assets/icons/graduation-cap.png')" aria-hidden="true"></span><h3>Staff training</h3><p>Courses and practical sign-offs teach you how CareBeyond Hospital works, from your first shift to leading a ward.</p></article>
-          <article class="fp-card"><span class="fp-ico" style="--icon:url('assets/icons/star.png')" aria-hidden="true"></span><h3>Ranks that mean something</h3><p>Move up through the years of your department as you learn and take part. Every rank has its own responsibilities.</p></article>
+      <section class="fp-band fp-visit" aria-labelledby="fp-real">
+        <div class="fp-wrap">
+          <div class="fp-head">
+            <h2 id="fp-real">A real hospital, in Maple Hospital <span class="fp-soon">Launching soon</span></h2>
+            <p>Maple Hospital check-in with real patient charts. When you arrive, you check in, staff see you on a live board, a nurse calls you to a room, everything they do for you is written in your own patient record, and you leave with discharge papers you can keep.</p>
+          </div>
+          <h3 class="fp-sub">How a visit works</h3>
+          <ol class="fp-journey">
+            <li><span class="fp-jico" style="--icon:url('assets/icons/home.png')" aria-hidden="true"></span><b>Arrive</b><span>Come into the hospital in our Maple Hospital custom server.</span></li>
+            <li><span class="fp-jico" style="--icon:url('assets/icons/clipboard.png')" aria-hidden="true"></span><b>Check in</b><span>At reception in game, or online before you arrive. Tell us what's wrong.</span></li>
+            <li><span class="fp-jico" style="--icon:url('assets/icons/megaphone.png')" aria-hidden="true"></span><b>Called to a room</b><span>Staff see you on a live board. A nurse calls you and takes you to your room.</span></li>
+            <li><span class="fp-jico" style="--icon:url('assets/icons/stethoscope.png')" aria-hidden="true"></span><b>Treated</b><span>Checks, tests and treatment. Everything is written in your patient record.</span></li>
+            <li><span class="fp-jico" style="--icon:url('assets/icons/resume.png')" aria-hidden="true"></span><b>Go home</b><span>Leave with discharge papers you can keep, and rate your care.</span></li>
+          </ol>
+          <div class="fp-paths">
+            <div class="fp-path"><span class="fp-pico" style="--icon:url('assets/icons/controller.png')" aria-hidden="true"></span><p><b>No account needed.</b> Just walk in and check in at reception in game.</p></div>
+            <div class="fp-path"><span class="fp-pico" style="--icon:url('assets/icons/clipboard.png')" aria-hidden="true"></span><p><b>Check in online, no account.</b> Just your Roblox username. Check in before you arrive and follow your visit live.</p></div>
+          </div>
         </div>
       </section>
 
-      <section class="fp-sect" aria-labelledby="fp-depts">
-        <h2 id="fp-depts">Our departments</h2>
-        <div class="fp-depts">
-          <article class="fp-dept" style="--c:#ff3d7e"><span class="fp-ico" style="--icon:url('assets/icons/nurse.png')" aria-hidden="true"></span><div><h3>Nursing</h3><p>The heart of the ward: assessing patients, vitals and care from arrival to discharge.</p></div></article>
-          <article class="fp-dept" style="--c:#2f7af2"><span class="fp-ico" style="--icon:url('assets/icons/stethoscope.png')" aria-hidden="true"></span><div><h3>Medical</h3><p>Doctors who review patients, order tests and decide on a diagnosis.</p></div></article>
-          <article class="fp-dept" style="--c:#229147"><span class="fp-ico" style="--icon:url('assets/icons/scalpel.png')" aria-hidden="true"></span><div><h3>Surgical</h3><p>Surgeons who take patients from Pre-Op through to theatre and recovery.</p></div></article>
-          <article class="fp-dept" style="--c:#ff5533"><span class="fp-ico" style="--icon:url('assets/icons/ambulance.png')" aria-hidden="true"></span><div><h3>Paramedicine</h3><p>Paramedics who answer emergency calls and bring patients into the hospital.</p></div></article>
-          <article class="fp-dept" style="--c:#5c72ff"><span class="fp-ico" style="--icon:url('assets/icons/clipboard.png')" aria-hidden="true"></span><div><h3>Administration</h3><p>The team that keeps the hospital running: sessions, moderation and support.</p></div></article>
-          <article class="fp-dept" style="--c:#ffaa00"><span class="fp-ico" style="--icon:url('assets/icons/handshake.png')" aria-hidden="true"></span><div><h3>Community Engagement</h3><p>Events, news and a warm welcome for new members.</p></div></article>
+      <section class="fp-band fp-band-depts" aria-labelledby="fp-depts">
+        <div class="fp-wrap">
+          <div class="fp-head">
+            <h2 id="fp-depts">Our departments</h2>
+            <p>Six teams run the hospital, each with its own ranks, training and leaders.</p>
+          </div>
+          <div class="fp-depts">
+            <article class="fp-dept" style="--c:#ff3d7e; --icon:url('assets/icons/nurse.png')"><h3>Nursing</h3><p>The heart of the ward: assessing patients, vitals and care from arrival to discharge.</p></article>
+            <article class="fp-dept" style="--c:#2f7af2; --icon:url('assets/icons/stethoscope.png')"><h3>Medical</h3><p>Doctors who review patients, order tests and decide on a diagnosis.</p></article>
+            <article class="fp-dept" style="--c:#229147; --icon:url('assets/icons/scalpel.png')"><h3>Surgical</h3><p>Surgeons who take patients from Pre-Op through to theatre and recovery.</p></article>
+            <article class="fp-dept" style="--c:#ff5533; --icon:url('assets/icons/ambulance.png')"><h3>Paramedicine</h3><p>Paramedics who answer emergency calls and bring patients into the hospital.</p></article>
+            <article class="fp-dept" style="--c:#5c72ff; --icon:url('assets/icons/clipboard.png')"><h3>Administration</h3><p>The team that keeps the hospital running: sessions, moderation and support.</p></article>
+            <article class="fp-dept" style="--c:#ffaa00; --icon:url('assets/icons/handshake.png')"><h3>Community Engagement</h3><p>Events, news and a warm welcome for new members.</p></article>
+          </div>
         </div>
       </section>
 
-      <section class="fp-sect" aria-labelledby="fp-how">
-        <h2 id="fp-how">How to join</h2>
-        <ol class="fp-steps">
-          <li><b>Join our Discord</b><span>Say hello and see when the next session is.</span></li>
-          <li><b>Play Maple Hospital</b><span>Open Maple Hospital on Roblox and join our custom server with the code.</span></li>
-          <li><b>Visit as a patient or apply as staff</b><span>Anyone can come in as a patient, no account needed. To work in a department, join our Discord, log in here and apply.</span></li>
-        </ol>
+      <section class="fp-band" aria-labelledby="fp-what">
+        <div class="fp-wrap">
+          <div class="fp-head"><h2 id="fp-what">Roblox hospital roleplay, done properly</h2></div>
+          <div class="fp-why">
+            <div><span class="fp-wico" style="--icon:url('assets/icons/calendar.png')" aria-hidden="true"></span><h3>Regular sessions</h3><p>Sessions in our Maple Hospital custom server, announced in Discord. Join with the code, clock in and start treating patients.</p></div>
+            <div><span class="fp-wico" style="--icon:url('assets/icons/graduation-cap.png')" aria-hidden="true"></span><h3>Staff training</h3><p>Courses and practical sign-offs teach you how CareBeyond Hospital works, from your first shift to leading a ward.</p></div>
+            <div><span class="fp-wico" style="--icon:url('assets/icons/star.png')" aria-hidden="true"></span><h3>Ranks that mean something</h3><p>Move up through the years of your department as you learn and take part. Every rank has its own responsibilities.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="fp-band fp-band-team" aria-labelledby="fp-team">
+        <div class="fp-wrap fp-team">
+          <div class="fp-team-t">
+            <h2 id="fp-team">Join the team</h2>
+            <p class="fp-team-lead">Work the desk, run rooms, take requests. Start as a Year 1 and learn as you go.</p>
+            <ol class="fp-steps" aria-label="How to join">
+              <li><b>Join our Discord</b><span>Say hello and see when the next session is.</span></li>
+              <li><b>Play Maple Hospital</b><span>Open Maple Hospital on Roblox and join our custom server with the code.</span></li>
+              <li><b>Apply to a department</b><span>Log in here with Discord and apply. Anyone can come in as a patient, no account needed.</span></li>
+            </ol>
+          </div>
+          <div id="log-in" class="card center login fp-login" tabindex="-1">
+            <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="56" height="56">
+            <div id="login-main">
+              <h2 class="fp-login-h">Log in</h2>
+              <p>For team members and anyone joining us. Join the team: you'll need our Discord. Patients don't need an account.</p>
+              <div class="login-actions">
+                <!-- The last account on this device (name and photo kept in this browser only; no tokens). -->
+                <button id="login-again" class="discord login-again" type="button" hidden><img id="login-again-img" alt="" hidden><span>Continue as <b id="login-again-name"></b></span></button>
+                <button id="login" class="discord">Log in with Discord</button>
+                <button id="code-login" class="ghost">Log in with a code</button>
+                <button id="login-other" class="linkish login-other" type="button" hidden>Not you? Use another account</button>
+              </div>
+              <p id="login-error" class="error" hidden></p>
+              <p id="inapp-note" class="inapp-note" hidden>Stuck? Try <b>Log in with a code</b>.</p>
+            </div>
+
+            <!-- Log in with a code: type /login CODE in Discord, the bot confirms, this page logs in by itself. -->
+            <div id="login-code" hidden>
+              <h2 class="fp-login-h">Log in with a code</h2>
+              <div id="code-box" class="code-box" aria-live="polite">
+                <div id="code-text" class="code-text"></div>
+                <p class="code-how">Type <code id="code-cmd"></code> in the CareBeyond - Hospital server.</p>
+                <div class="code-row">
+                  <button id="copy-cmd" class="ghost">Copy</button>
+                  <span id="code-timer" class="code-timer"></span>
+                </div>
+              </div>
+              <p id="code-error" class="error" hidden></p>
+              <div class="login-actions">
+                <button id="new-code" class="refresh" hidden>Get a new code</button>
+                <button id="code-back" class="linkish">Back</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
     </section>
 

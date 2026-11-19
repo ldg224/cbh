@@ -9,7 +9,14 @@
     if (slot) slot.textContent = code;
     if (game && typeof robloxJoinUrl === 'function') game.href = robloxJoinUrl(code);
   }
-  // "Log in" brings the login card into view (it sits below the intro on phones) and highlights it.
+  // "Check in online" is launching soon: the big button opens a short note (Discord to hear first, walk in meanwhile).
+  const ci = document.getElementById('fp-checkin'), note = document.getElementById('fp-soon-note');
+  ci?.addEventListener('click', () => {
+    if (!note) return;
+    note.hidden = !note.hidden;
+    ci.setAttribute('aria-expanded', String(!note.hidden));
+  });
+  // "Log in" brings the login card into view and highlights it.
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-fp-login]'); if (!a) return;
     e.preventDefault();
