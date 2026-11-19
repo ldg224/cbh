@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.38.1 (2026-11-19)
+
+**Changed:**
+- The front page shows what the site does for members: department pages, Shift Manager, leaderboards, sessions and events, courses, applications, and the CBH Chart (launching soon).
+- Members can log in right from the top of the front page (one click with Discord, or "Continue as" on a device you've used before), and the login opens in place instead of scrolling to the bottom.
+
+Database change: no.
+
 ## 0.38.0 (2026-11-19)
 
 **Added:**
