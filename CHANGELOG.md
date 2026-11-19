@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.6 (2026-11-19)
+
+**Added:**
+- CBH Chart: add symptoms when logging an NPC patient, and "+ Add symptoms" on any patient's record (phones too).
+
+Database change: no.
+
 ## 0.39.5 (2026-11-19)
 
 **Fixed:**
