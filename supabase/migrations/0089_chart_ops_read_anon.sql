@@ -102,7 +102,7 @@ $$;
 
 create or replace function public.chart_hospital() returns jsonb
 language sql stable security definer set search_path = '' as $$
-  with st as (select case when not public.chart_anyone_on() then 'closed'
+  with st as (select case when not (select launched from public.chart_ops where id = 1) or not public.chart_anyone_on() then 'closed'
                           when (select online_mode from public.chart_ops where id = 1) = 'walk_ins_only' then 'walk_ins_only' else 'open' end s),
        live as (select s.join_code from public.sessions s where s.status = 'live' order by s.started_at desc nulls last limit 1)
   select jsonb_build_object(
@@ -136,7 +136,7 @@ begin
   out := jsonb_build_object('rev', rv, 'server_now', now(),
     'ops', jsonb_build_object('session', case when public.chart_session_live() is not null then 'live' else 'none' end,
        'supervisors', coalesce((select jsonb_agg(jsonb_build_object('discord_id', s.discord_id, 'name', public.chart_pname(s.discord_id))) from public.chart_staff s where s.role = 'supervisor'), '[]'),
-       'auto_mode', not public.chart_supervised()) || (select jsonb_build_object('reception_open', o.reception_open, 'online_mode', o.online_mode) from public.chart_ops o where o.id = 1),
+       'auto_mode', not public.chart_supervised()) || (select jsonb_build_object('reception_open', o.reception_open, 'online_mode', o.online_mode, 'launched', o.launched) from public.chart_ops o where o.id = 1),
     'rooms', coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'beds', r.beds, 'area', r.area, 'department', r.department, 'who', r.who, 'closed', r.closed,
        'closed_reason', r.closed_reason, 'problem', case when r.problem_at is not null then jsonb_build_object('note', r.problem_note, 'by_name', public.chart_short(r.problem_by), 'at', r.problem_at) end)
        order by r.sort) from public.chart_rooms r where r.active), '[]'));
@@ -300,6 +300,7 @@ begin
   perform public.chart_lock();
   perform public.chart_tick();
   h := public.chart_hospital();
+  if not (select launched from public.chart_ops where id = 1) then return public.chart_refused('closed', 'Online check-in isn''t open yet.'); end if;
   if h->>'state' = 'closed' then return public.chart_refused('closed', 'Online check-in is closed: nobody is on shift.'); end if;
   if h->>'state' = 'walk_ins_only' then return public.chart_refused('walk_ins_only', 'The online check-in desk is closed, but you can still come to the front desk in game.'); end if;
   -- size caps first (cheap), then limits

@@ -113,6 +113,9 @@ create table if not exists public.chart_ops (
   last_tick_at   timestamptz not null default '-infinity',
   reception_open boolean not null default true,
   online_mode    text not null default 'open' check (online_mode in ('open', 'walk_ins_only')),
+  launched       boolean not null default false,   -- dark ship: until an owner launches, patients can't check in and only owners/supervisors can pick roles
+  launched_by    text,
+  launched_at    timestamptz,
   ip_salt        text not null default encode(extensions.gen_random_bytes(16), 'hex'),
   ip_salt_day    date not null default current_date,
   updated_by     text,

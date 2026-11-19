@@ -3,6 +3,7 @@ drop trigger if exists chart_bed_guard on public.chart_cases;
 drop trigger if exists chart_owner_guard on public.chart_beds;
 drop trigger if exists chart_room_guard on public.chart_rooms;
 drop function if exists
+  public.chart_launch(boolean),
   public.chart_case_update(bigint, jsonb),
   public.chart_session_end(boolean),
   public.chart_case_void(bigint, text),

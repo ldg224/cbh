@@ -435,6 +435,9 @@ language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); depts text[] := public.chart_person_depts(me.discord_id); d text;
 begin
   if p_role is not null and p_role not in ('reception', 'room', 'on_call', 'road', 'supervisor') then perform public.chart_err('bad_input', 'Pick a role.'); end if;
+  if p_role is not null and not (select launched from public.chart_ops where id = 1) and not (public.is_exec() or public.has_hperm('hosp.supervise')) then
+    perform public.chart_err('not_launched', 'The Chart isn''t open yet.');
+  end if;
   if public.chart_load(me.discord_id) > 0 and p_role is distinct from me.role then perform public.chart_err('hold_patients', 'Hand your patients back first.'); end if;
   d := coalesce(p_department, me.department);
   if p_role in ('room', 'on_call', 'road') and not d = any (depts) then d := depts[1]; end if;
@@ -1140,6 +1143,17 @@ begin
   return public.chart_done();
 end $$;
 
+-- The launch switch (dark ship): only the owners (Hospital Director, COO) can flip it.
+create or replace function public.chart_launch(p_on boolean) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+  perform public.chart_lock();
+  if not public.is_exec() then perform public.chart_err('not_supervisor', 'Only the Hospital Director or the COO can launch the Chart.'); end if;
+  update public.chart_ops set launched = p_on, launched_by = public.my_discord_id(), launched_at = now() where id = 1;
+  insert into public.chart_log (actor, actor_name, action, detail) values (public.my_discord_id(), public.chart_short(public.my_discord_id()), 'launch', jsonb_build_object('on', p_on));
+  return jsonb_build_object('ok', true, 'rev', public.chart_bump(), 'launched', p_on);
+end $$;
+
 -- ---------- grants: internal helpers for nobody; RPCs for logged-in users ----------
 do $$
 declare f record;
@@ -1156,7 +1170,7 @@ begin
              'chart_checkin', 'chart_confirm_online', 'chart_reject_online', 'chart_colour', 'chart_set_team', 'chart_handover', 'chart_assign', 'chart_got_it',
              'chart_with_patient', 'chart_called_out', 'chart_prioritise', 'chart_no_show', 'chart_hand_back', 'chart_move', 'chart_swap', 'chart_transfer',
              'chart_off_ward', 'chart_code', 'chart_code_clear', 'chart_discharge', 'chart_left', 'chart_aftercare', 'chart_case_void', 'chart_session_end',
-             'chart_case_update') loop
+             'chart_case_update', 'chart_launch') loop
     execute format('revoke execute on function %s from public, anon, authenticated', f.sig);
     execute format('grant execute on function %s to service_role', f.sig);
     if f.proname in ('chart_role_set', 'chart_ready', 'chart_stay_ready', 'chart_take_beds', 'chart_leave_beds', 'chart_offer_take', 'chart_room_set', 'chart_bed_set',
@@ -1164,7 +1178,7 @@ begin
              'chart_checkin', 'chart_confirm_online', 'chart_reject_online', 'chart_colour', 'chart_set_team', 'chart_handover', 'chart_assign', 'chart_got_it',
              'chart_with_patient', 'chart_called_out', 'chart_prioritise', 'chart_no_show', 'chart_hand_back', 'chart_move', 'chart_swap', 'chart_transfer',
              'chart_off_ward', 'chart_code', 'chart_code_clear', 'chart_discharge', 'chart_left', 'chart_aftercare', 'chart_case_void', 'chart_session_end',
-             'chart_case_update') then
+             'chart_case_update', 'chart_launch') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
