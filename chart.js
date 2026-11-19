@@ -3,10 +3,11 @@
 // Roles: Reception (front desk), Patient Care as Room / On call / Road, and Supervisor (the floor plan). One next-step
 // bar in the record drives every flow; rooms and beds go through one check (bedUsable); alerts by sound, tab title and
 // desktop notifications. The back end is Bravo's chart_* RPCs (BACKEND-PLAN.md / CONTRACT.md).
-// CBH_CHART_OFF: the Chart stays switched off on the live site until launch. On a developer's machine
-// (localhost) it can be switched on with localStorage 'cbh.chart.preview' = 'on'.
+// Who sees the Chart is decided by the DATABASE launch switch (chart_ops.launched, read from chart_poll):
+// before launch only owners and Supervise-sessions holders see it (for their test); after launch every staff member.
+// CBH_CHART_OFF is only the emergency kill: set chartKill: true in config.js to hide the Chart from everyone.
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cbh.chart.preview') === 'on'; } catch { return false; } })());
+window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === true);
 (() => {
   if (window.CBH_CHART_OFF) {
     // Old #chart / #checkin links go Home while it's off. The page is never registered, so search and menus don't list it.
@@ -1057,7 +1058,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   const holdScreen = (h, t, btn) => `<div class="role-screen"><div class="rs-in"><span class="lab">CBH Chart</span><h1>${h}</h1>${t ? `<p class="muted">${t}</p>` : ''}${btn || ''}</div></div>`;
   const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} Try again in a moment.` : '')
     : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, '<a class="btn" href="#shifts">Go to Shift Manager</a>')
-    : S.role ? '' : !S.launched && !S.canSuper ? holdScreen('The CBH Chart opens soon', 'It isn’t open to staff yet. You’ll be able to pick your role here once it launches.')
+    : S.role ? '' : !S.launched && !S.canSuper && !window.execReal ? holdScreen('The CBH Chart opens soon', 'It isn’t open to staff yet. You’ll be able to pick your role here once it launches.')
     : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
   const openReqCount = () => S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && (S.role === 'super' || canAccept(r))).length;
@@ -1630,7 +1631,13 @@ ${nextBarHtml(p)}
   // ---------- the site page (#chart) ----------
   PAGES.push({ id: 'chart', aud: 'chart', title: 'CBH Chart', icon: 'stethoscope', layout: 'chart' });
   if (typeof TOOL_FOLDER === 'object') TOOL_FOLDER.chart = 'operations';
-  const openAccess = () => { access.chart = true; };
+  // Shown in menus, search and Home only once the server says this person may use it. Until the first poll a
+  // direct #chart link stays reachable (it shows Loading, then the Chart or "opens soon").
+  const visible = () => !!SNAP && (S.launched || S.canSuper || !!window.execReal);
+  window.CBHChart.visible = visible;
+  const openAccess = () => { access.chart = SNAP ? visible() : location.hash.startsWith('#chart'); };
+  let wasVisible = null;
+  document.addEventListener('cbh-chart-poll', () => { const v = visible(); if (v !== wasVisible) { wasVisible = v; openAccess(); if (typeof window.deskRefresh === 'function') window.deskRefresh(); } });
   const deskDraw = window.deskDraw;
   if (deskDraw) window.deskDraw = (d) => { const done = deskDraw(d); openAccess(); if (!pollT && !polling) poll(true); if (location.hash.startsWith('#chart') && $('#page').hidden) route(); return done; };
   openAccess();
