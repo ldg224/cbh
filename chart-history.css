@@ -103,3 +103,39 @@
   .ph.with-rec .ph-main { display: none; }
   .ph.with-rec .ph-rec { position: static; max-height: none; }
 }
+
+/* Editing (0.39.8): holders of "Edit chart history" correct a record; every correction carries a reason and shows. */
+.ph-editb { height: 30px; padding: 0 12px; font-size: 12.5px; margin-left: auto; }
+.ph-ro.edit { color: #8a4b00; border-color: #f3d38a; background: #fff8e6; }
+.ph-rec.editing { box-shadow: 0 0 0 2px #f3d38a; }
+.ph-editnote { margin: 0; padding: 10px 16px; background: #fff8e6; border-bottom: 1px solid #f3e2b8; font-size: 13px; color: #6b4a00; }
+.ph-flash { margin: 0; padding: 10px 16px; background: var(--teal-wash); color: var(--teal-ink); font-weight: 700; font-size: 13.5px; border-bottom: 1px solid #b8ece6; }
+.ph-fields { display: grid; gap: 2px; }
+.ph-field { padding: 4px 0; border-bottom: 1px dashed #eef2f8; }
+.ph-field .ph-kv { grid-template-columns: 130px minmax(0, 1fr) auto; align-items: center; }
+.ph-none { font-style: normal; color: #a3b1c6; font-weight: 500; }
+.ph-btn.link { height: auto; padding: 2px 6px; font-size: 12.5px; text-decoration: underline; text-underline-offset: 2px; }
+.ph-btn.link.warn { color: #9f1d13; }
+.ph-btn.danger { background: #D92D20; color: #fff; }
+.ph-btn.danger.ghost { background: #fff; color: #9f1d13; border: 1px solid #f3b5ae; }
+.ph-form { display: grid; gap: 8px; margin: 8px 0 4px; padding: 12px; border-radius: 10px; background: #f7f9fc; border: 1px solid var(--line); }
+.ph-form label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.ph-form label em { font-style: normal; font-weight: 500; }
+.ph-form input, .ph-form textarea, .ph-form select { width: 100%; box-sizing: border-box; min-height: 38px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); font: inherit; font-size: 14px; color: var(--text); background: #fff; }
+.ph-form input:focus, .ph-form textarea:focus, .ph-form select:focus { outline: 2px solid var(--blue); outline-offset: 0; }
+.ph-fbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.ph-err { margin: 0; color: #9f1d13; font-weight: 600; font-size: 13px; }
+.ph-ul li { display: grid; gap: 2px; } .ph-ul li .ph-li { display: flex; justify-content: space-between; gap: 10px; }
+.ph-amd { font-size: 11.5px; color: #8a4b00; font-weight: 600; }
+.ph-amd.struck-why { color: #9f1d13; text-decoration: none; }
+.ph-eacts { display: flex; gap: 4px; }
+.ph-small { font-size: 12px; margin-top: 4px; }
+.ph-fixes li span b { font-weight: 700; color: var(--text); }
+.ph-danger { border-top: 1px solid #f3d0cc; margin-top: 8px; } .ph-danger h4 { color: #9f1d13; } .ph-danger p { font-size: 13.5px; margin: 0 0 8px; }
+.ph-voided { margin: 0; padding: 12px 16px; display: grid; gap: 6px; background: #fdecea; border-bottom: 1px solid #f3c9c4; font-size: 13.5px; color: #7a1a12; }
+.ph-voided b { font-size: 14px; }
+.ph-rec.voided .ph-body { opacity: .75; }
+.ph-row.deleted { opacity: .6; border-style: dashed; }
+.ph-tag.del { background: #fdecea; color: #9f1d13; } .ph-tag.amd { background: #fff1dd; color: #8a4b00; }
+.ph-del-t { display: inline-flex !important; grid-auto-flow: column; align-items: center; gap: 6px; font-size: 12.5px !important; font-weight: 600 !important; color: var(--text) !important; }
+@media (max-width: 760px) { .ph-field .ph-kv { grid-template-columns: 100px minmax(0, 1fr) auto; } .ph-fbtns .ph-btn { flex: 1; } }

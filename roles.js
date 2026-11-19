@@ -29,6 +29,7 @@ const RO_DEPT = [
   ['applications.settings', 'Edit applications', 'Forms, settings, stages'],
   ['courses.manage', 'Edit courses', 'Create and edit courses'],
   ['courses.assess', 'Assess courses', 'Practical evaluations'],
+  ['chart.history_edit', 'Edit chart history', 'Correct or delete Chart records'],
 ];
 const RO_CMDS = [
   ['warn', '/warn', 'Give someone a warning'], ['timeout', '/timeout', 'Time someone out'],

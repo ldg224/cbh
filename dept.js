@@ -826,6 +826,7 @@ async function renderDept(body, tool) {
       ['applications.settings', 'Edit application forms', 'Questions, stages and who reviews.']]],
     ['Courses', [['courses.manage', 'Edit courses', 'Create courses and change their lessons.'],
       ['courses.assess', 'Assess courses', 'Run the practical evaluations.']]],
+    ['CBH Chart', [['chart.history_edit', 'Edit chart history', 'Correct or delete past Chart records. Every change needs a reason and is shown on the record.']]],
   ];
   const PKEYS = PGROUPS.flatMap(([, ps]) => ps.map(([k]) => k));
   const rk = { sel: null, open: false, extra: null };   // chosen rank id ('dept' = Department), phone drill-in, loaded extras

@@ -45,7 +45,7 @@ window.execReal = false;   // really an owner, whatever the toggle says
 window.execViewOn = () => execViewPref;
 window.execViewOff = () => window.execReal && !execViewPref;
 const PERMS_ALL = ['dept.view', 'activity.view', 'members.edit', 'history.view', 'meetings.manage', 'meetings.attendance',
-  'applications.review', 'applications.settings', 'courses.manage', 'courses.assess'];   // what my_perms() gives a Director
+  'applications.review', 'applications.settings', 'courses.manage', 'courses.assess', 'posts.manage', 'chart.history_edit'];   // what my_perms() gives a Director
 // my_access(), my_perms() and my_hperms() as they would be without the owner role (the same rules as the database:
 // is_admin, can_run_sessions, directs, has_perm), from the person's own roles. Owners may read both permission tables.
 async function asSelf(roles, acc) {
