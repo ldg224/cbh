@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.37.1 (2026-11-19)
+
+**Fixed:**
+- Security: tightened which database functions signed-in users can call. Nothing changes on screen.
+
+Database change: yes (0083, function permissions).
+
 ## 0.37.0 (2026-11-19)
 
 **Changed:**
