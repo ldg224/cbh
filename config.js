@@ -4,4 +4,9 @@ window.CBH_CONFIG = {
   supabaseKey: "sb_publishable_DckvrwNf5t38g-04vOr4DQ__gytvaQP",
   // The Maple Hospital custom server code shown on the public front page (and the logged-in fallback). Change it here.
   publicJoinCode: "4920-4087",
+  // The permanent Discord invite (front page and patient pages).
+  discordInvite: "https://discord.gg/xxqTP4shRA",
+  // Online check-in and the patient pages follow the DATABASE launch switch (chart_public_status hospital.launched),
+  // so an owner's Launch turns them on with no release. This is only an emergency kill: false forces "Launching soon".
+  patientCheckinLive: true,
 };

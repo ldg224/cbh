@@ -12,7 +12,18 @@
   }
   // "Check in online" is launching soon: the big button opens a short note (Discord to hear first, walk in meanwhile).
   const ci = $('fp-checkin'), note = $('fp-soon-note');
+  // Launched? The DATABASE switch decides (chart_public_status → hospital.launched, anon-safe), so an owner's Launch
+  // turns the patient side on with no release. config.patientCheckinLive = false is an emergency kill. Until the answer
+  // arrives (or if the call fails) the page keeps "Launching soon".
+  let launched = false;
+  if (window.CBH_CONFIG?.patientCheckinLive !== false && typeof sb !== 'undefined') {
+    sb.rpc('chart_public_status').then(({ data }) => {
+      const h = data && (data.hospital || data);
+      if (h && h.launched) { launched = true; document.querySelectorAll('#signed-out .fp-soon').forEach((b) => b.remove()); if (note) note.hidden = true; }
+    }, () => { /* not deployed yet: stay "Launching soon" */ });
+  }
   ci?.addEventListener('click', () => {
+    if (launched) { location.hash = '#visit'; return; }   // launched: the check-in page (visit.js)
     if (!note) return;
     note.hidden = !note.hidden;
     ci.setAttribute('aria-expanded', String(!note.hidden));

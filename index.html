@@ -52,6 +52,7 @@
   <link rel="stylesheet" href="chart.css?v=0.38.1">
   <link rel="stylesheet" href="chart-plan.css?v=0.38.1">
   <link rel="stylesheet" href="front.css?v=0.38.1">
+  <link rel="stylesheet" href="visit.css?v=0.38.1">
 </head>
 <body>
   <header class="bar">
@@ -236,6 +237,8 @@
         </div>
       </section>
     </section>
+    <!-- Patient pages (#visit, #visit/<token>): online check-in and the private visit page, no account. visit.js. -->
+    <section id="visit-page" class="visit-page" aria-live="polite" hidden></section>
     <dialog id="fp-login-dlg" class="fp-dlg" aria-label="Log in"><button type="button" class="fp-dlg-x" data-fp-close aria-label="Close">×</button><div id="fp-dlg-slot"></div></dialog>
 
     <!-- One fixed-size card: name, one line of badges (extra ones behind "+N"), and the Discord photo. -->
@@ -309,5 +312,6 @@
   <script src="chart-entry.js?v=0.38.1"></script>
   <script src="pageviews.js?v=0.38.1"></script>
   <script src="front.js?v=0.38.1"></script>
+  <script src="visit.js?v=0.38.1"></script>
 </body>
 </html>

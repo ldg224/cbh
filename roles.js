@@ -15,6 +15,7 @@ const RO_HOSP = [
   ['hosp.logs', 'Discord logs', 'Joins, leaves, edits and deletes'],
   ['hosp.incidents', 'Incidents', 'Write up and read incident reports'],
   ['hosp.sessions', 'Run sessions', 'Start, schedule and end game sessions'],
+  ['hosp.supervise', 'Supervise sessions', 'Run the Chart floor plan: assign patients, give rooms, end the session'],
 ];
 const RO_DEPT = [
   ['dept.view', 'See this page', 'Overview and members'],
