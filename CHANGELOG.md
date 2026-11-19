@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.7 (2026-11-19)
+
+**Added:**
+- **Chart History** in each clinical department: every closed patient record, newest first, with search and filters (dates, outcome, who treated them). Open one to read the full record: symptoms, vitals, care given, orders and results, diagnosis, discharge papers, colour history and timeline. Directors and owners see the whole department; staff see the patients they treated.
+
+Database change: yes (0092).
+
 ## 0.39.6 (2026-11-19)
 
 **Added:**
