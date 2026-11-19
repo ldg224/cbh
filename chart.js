@@ -271,17 +271,17 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   async function chartIt(p, kind, data, ok) { try { await touch(p); await entry(p, kind, data); if (ok) toast(ok); } catch (e) { toast(esc(e.message)); } await poll(true); }
 
   async function poll(now) {
-    if (!app.isConnected) { clearTimeout(pollT); return; }
+    const onPage = app.isConnected;
     if (polling) { if (now) dirty = true; return; }
     polling = true; clearTimeout(pollT);
     try {
       const s = await rpc('chart_poll', { p_since_rev: now ? 0 : REV });
-      if (s && !s.unchanged) { ingest(s); if (drag) dirty = true; else render(); }
+      if (s && !s.unchanged) { ingest(s); if (onPage) { if (drag) dirty = true; else render(); } document.dispatchEvent(new Event('cbh-chart-poll')); }
       S.pollErr = null;
     } catch (e) { S.pollErr = e.message; }
     polling = false;
-    if (S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
-    pollT = setTimeout(() => poll(), document.hidden ? 15000 : 3000);
+    if (onPage && S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
+    pollT = setTimeout(() => poll(), onPage && !document.hidden ? 3000 : 15000);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && app.isConnected) poll(); });
   document.addEventListener('focusout', () => { if (dirty && !drag && app.isConnected) { dirty = false; setTimeout(render, 0); } });
@@ -710,7 +710,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     const gotIt = isPhone() ? '' : asg.map((p) => `<div class="gotit${isPhone() ? ' sticky' : ''}" style="--u:${U(p.urgency).colour}"><span class="lab">${p.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(p.name)}${p.age ? ', ' + p.age : ''}${teamChips(p)}</b>${upill(p.urgency)}
       <span>${esc(p.room)} · ${esc(p.symptoms.join(', ') || 'no symptoms given')}${p.handback ? ` · handed over: “${esc(p.handback.note)}”` : ''}${p.lost ? ' · <b>Needs a new nurse</b>' : ''}</span>
       ${isPhone() ? `<button type="button" class="btn big" data-gotit="${p.id}">Accept patient <small class="gi-t">${countdown(p.assignedAt, 60)}</small></button>` : `<button type="button" class="btn ghost" data-open="${p.id}">Open their record · accept within ${countdown(p.assignedAt, 60)}</button>`}</div>`).join('');
-    const offers = m.length < D.LIMIT && beds.length < D.LIMIT ? upNext().filter((p) => p.room && !ownerOf(p.room) && teamOk(p, 'me') && !bedUsable(p.room, p)) : [];
+    const offers = [];   // the server offers open rooms (me.offer)
     const free = `${cap} bed${cap === 1 ? '' : 's'} free`;
     const card = m.length >= D.LIMIT ? `<div class="ready-line"><b>You have ${D.LIMIT} patients</b><span>That's the most at once. Finish or hand over one to get another.</span></div>`
       : cap <= 0 ? `<div class="ready-line"><b>Your bed${beds.length > 1 ? 's are' : ' is'} in use</b><span>${beds.length < D.LIMIT ? 'One bed means one patient at a time.' : 'Ready comes back when a bed frees.'}</span>${beds.length < D.LIMIT ? '<button type="button" class="btn small ghost" data-a="pick">Add a room</button>' : ''}</div>`
@@ -721,7 +721,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
       ${movePanel()}${gotIt}
       ${rest.length ? `<h3 class="care-h">Your patient${rest.length === 1 ? '' : 's'}</h3><div class="care-list">${rest.map(careCard).join('')}</div>` : ''}
       ${card}
-      ${offers.map((p) => `<div class="offer-card" style="--u:${U(p.urgency).colour}"><div><b>${bell}${esc(p.name)} is waiting in ${esc(p.room)}</b><span>Nobody has that bed${p.handback ? ` · “${esc(p.handback.note)}”` : ''}</span></div><button type="button" class="btn small ghost" data-takeover="${p.id}">Take over ${esc(p.room)}</button></div>`).join('')}
+      ${S.offer ? `<div class="offer-card" style="--u:#f0a530"><div><b>${bell}Nobody has room ${esc(S.offer.room)}${S.offer.waiting ? `: ${S.offer.waiting} waiting` : ''}</b><span>Take it over to look after ${S.offer.waiting > 1 ? 'them' : 'them'}.</span></div><button type="button" class="btn small ghost" data-takeover="1">Take over ${esc(S.offer.room)}</button></div>` : ''}
       ${!S.session ? (S.npc ? npcForm() : `<div class="npc-row"><button type="button" class="btn ghost" data-a="npc"${cap > 0 ? '' : ' disabled'}>+ NPC patient</button><span class="muted small">No session is running, so NPC patients can be charted. They count towards your ${D.LIMIT}.</span></div>`) : ''}
       ${!S.deskBy && S.session ? (S.npOpen ? newPatient() : '<div class="npc-row"><button type="button" class="btn ghost" data-a="npopen">+ Walk-in patient</button><span class="muted small">Nobody is on Reception. A walk-in goes through the queue like anyone else.</span></div>') : ''}
       <button type="button" class="btn ghost end-btn" data-a="endshift">End my shift</button>${S.endShift ? endShiftPanel() : ''}</div>`;
@@ -1097,6 +1097,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     const now = { mine: new Set(mineA.map((p) => p.id)), req: new Set(reqs.map((r) => `${r.id}:${r.chase || 0}`)), code: new Set(S.codes.map((c) => c.pid + '@' + +new Date(c.at))), q: new Set(S.role === 'super' ? upNext().map((p) => p.id) : []) };
     if (W.ready) {
       S.codes.filter((c) => !W.code.has(c.pid + '@' + +new Date(c.at))).forEach((c) => { const p = byId(c.pid); alertMe('code', 'CODE BLUE', `Room ${roomIdOf(p.room) || '?'} · ${p.name}`, p.id); });
+      mineA.filter((p) => !W.mine.has(p.id)).forEach((p) => { if (!isPhone() && !S.open) { S.open = p.id; S.tab = 'chart'; setTimeout(render, 0); } });
       mineA.filter((p) => !W.mine.has(p.id)).forEach((p) => alertMe(p.handback ? 'handback' : 'patient', p.handback ? 'Handed over to you' : 'New patient', `${p.name} · ${U(p.urgency).name} · ${p.room || ''}. Accept within a minute.`, p.id));
       reqs.filter((r) => !W.req.has(`${r.id}:${r.chase || 0}`)).forEach((r) => { const p = byId(r.pid); alertMe('req', `${REQ[r.type][0]} request`, `Room ${roomIdOf(p.room) || '?'} · ${p.name} · from ${title(r.by)}`, p.id); });
       upNext().filter((p) => S.role === 'super' && !W.q.has(p.id)).forEach((p) => alertMe('arrival', 'New in Up next', `${p.name} · ${U(p.urgency).name}`, p.id));
@@ -1593,12 +1594,23 @@ ${nextBarHtml(p)}
   if (window.ResizeObserver) new ResizeObserver(() => { if (!isPhone()) sizeBoard(); }).observe(app);
   // Test hook (prototype only): the room-rule self-test in the console uses these.
   if (LOCAL) window.__cbh = { S, D, A, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
+  // ---------- hooks for the entry points outside chart.js (sidebar badge, shift card, phone tab) ----------
+  window.CBHChart = Object.assign(window.CBHChart || {}, {
+    summary: () => (!SNAP ? null : {
+      on_shift: !!S.onShift, role: ROLE_OUT[S.role] || null, department: S.rdept,
+      assigned: mine().filter((p) => p.phase === 'assigned').map((p) => ({ id: p.id, short_name: p.name, expires_at: p.assignExp })),
+      to_confirm: S.role === 'reception' || S.role === 'super' ? toConfirm().length : 0,
+      open_requests_for_me: S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && canAccept(r)).length,
+      queue: upNext().length, codes: S.codes.length }),
+    open: (id) => { S.open = +id; S.tab = 'chart'; if (location.hash !== '#chart') location.hash = '#chart'; else render(); },
+    URG: D.URGENCY, COLOUR_QUESTIONS: D.COLOUR_QUESTIONS,
+  });
   // ---------- the site page (#chart) ----------
   PAGES.push({ id: 'chart', aud: 'chart', title: 'CBH Chart', icon: 'stethoscope', layout: 'chart' });
   if (typeof TOOL_FOLDER === 'object') TOOL_FOLDER.chart = 'operations';
   const openAccess = () => { access.chart = true; };
   const deskDraw = window.deskDraw;
-  if (deskDraw) window.deskDraw = (d) => { const done = deskDraw(d); openAccess(); if (location.hash.startsWith('#chart') && $('#page').hidden) route(); return done; };
+  if (deskDraw) window.deskDraw = (d) => { const done = deskDraw(d); openAccess(); if (!pollT && !polling) poll(true); if (location.hash.startsWith('#chart') && $('#page').hidden) route(); return done; };
   openAccess();
   LIVE.chart = (body) => {
     document.body.classList.add('in-chart'); setPageTitle('stethoscope', 'CBH Chart', 'staff');
