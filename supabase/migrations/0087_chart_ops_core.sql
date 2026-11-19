@@ -476,7 +476,7 @@ create or replace function public.chart_take_beds(p_beds text[]) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); e text;
 begin
-  if me.role not in ('room', 'on_call') or me.role is null then perform public.chart_err('wrong_role', 'Pick Patient Care: Room first.'); end if;
+  if coalesce(me.role, '') not in ('room', 'on_call') or me.role is null then perform public.chart_err('wrong_role', 'Pick Patient Care: Room first.'); end if;
   if public.chart_load(me.discord_id) > 0 then perform public.chart_err('hold_patients', 'Hand your patients back first.'); end if;
   update public.chart_beds set owner_id = null, owner_since = null where owner_id = me.discord_id and not id = any (p_beds);
   e := public.chart_own_ok(me.discord_id, p_beds);
@@ -689,11 +689,11 @@ language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); t text[]; nm text; rb text; age int; sym text[]; c_id bigint; st text; prev bigint; bd text; pain int; ons text;
 begin
   if p_source not in ('desk', 'walk_in', 'npc', 'incoming') then perform public.chart_err('bad_input', 'Unknown check-in source.'); end if;
-  if p_source = 'desk' and me.role not in ('reception', 'supervisor') then perform public.chart_err('wrong_role', 'The front desk checks patients in.'); end if;
-  if p_source = 'walk_in' and (me.role is null or me.role = 'reception') then perform public.chart_err('wrong_role', 'Walk-ins are for Patient Care.'); end if;
+  if p_source = 'desk' and coalesce(me.role, '') not in ('reception', 'supervisor') then perform public.chart_err('wrong_role', 'The front desk checks patients in.'); end if;
+  if p_source = 'walk_in' and (me.role is null or coalesce(me.role, '') = 'reception') then perform public.chart_err('wrong_role', 'Walk-ins are for Patient Care.'); end if;
   if p_source = 'npc' and me.role is distinct from 'room' then perform public.chart_err('wrong_role', 'NPC patients are logged by Patient Care: Room.'); end if;
   if p_source = 'npc' and public.chart_session_live() is not null then perform public.chart_err('npc_in_session', 'No NPC patients during a session.'); end if;
-  if p_source = 'incoming' and me.role not in ('road', 'supervisor') then perform public.chart_err('wrong_role', 'Incoming cases come from the Road role.'); end if;
+  if p_source = 'incoming' and coalesce(me.role, '') not in ('road', 'supervisor') then perform public.chart_err('wrong_role', 'Incoming cases come from the Road role.'); end if;
   if p_esi is not null and (p_esi < 1 or p_esi > 5) then perform public.chart_err('bad_input', 'The colour is 1 to 5.'); end if;
   nm := nullif(btrim(coalesce(p_patient->>'name', p_patient->>'roblox_username', '')), '');
   rb := nullif(btrim(coalesce(p_patient->>'roblox_username', '')), '');
@@ -746,8 +746,8 @@ end $$;
 -- Who may run the front desk for this action: Reception, a Supervisor, or anyone in Patient Care when no Reception is on.
 create or replace function public.chart_is_desk(me public.chart_staff) returns boolean
 language sql stable security definer set search_path = '' as $$
-  select me.role in ('reception', 'supervisor')
-      or (me.role is not null and not exists (select 1 from public.chart_staff x where x.role = 'reception'))
+  select coalesce(coalesce(me.role, '') in ('reception', 'supervisor')
+      or (me.role is not null and not exists (select 1 from public.chart_staff x where x.role = 'reception')), false)
 $$;
 
 create or replace function public.chart_confirm_online(p_case bigint, p_esi int, p_teams text[], p_child boolean) returns jsonb
@@ -783,7 +783,7 @@ language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); c public.chart_cases := public.chart_case_row(p_case);
 begin
   if c.status <> 'open' then perform public.chart_err('bad_state', 'That visit has ended.'); end if;
-  if not (public.chart_is_desk(me) or c.owner_id = me.discord_id) then perform public.chart_err('wrong_role', 'Only the desk, the patient''s nurse or the Supervisor can change the colour.'); end if;
+  if not (public.chart_is_desk(me) or c.owner_id is not distinct from me.discord_id) then perform public.chart_err('wrong_role', 'Only the desk, the patient''s nurse or the Supervisor can change the colour.'); end if;
   if p_esi is null or p_esi < 1 or p_esi > 5 then perform public.chart_err('bad_input', 'Pick a colour.'); end if;
   update public.chart_cases set esi = p_esi, esi_by = me.discord_id, esi_by_name = public.chart_short(me.discord_id),
          colour_confirmed = colour_confirmed or p_confirm,
@@ -808,7 +808,7 @@ create or replace function public.chart_handover(p_case bigint, p_note text, p_v
 language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); c public.chart_cases := public.chart_case_row(p_case);
 begin
-  if me.role not in ('road', 'supervisor') then perform public.chart_err('wrong_role', 'Handover is for the Road role.'); end if;
+  if coalesce(me.role, '') not in ('road', 'supervisor') then perform public.chart_err('wrong_role', 'Handover is for the Road role.'); end if;
   if c.state <> 'incoming' then perform public.chart_err('bad_state', 'Already handed over.'); end if;
   update public.chart_cases set state = case when esi is null then 'checked_in' else 'waiting' end, queued_at = now(), last_at = now() where id = c.id;
   if nullif(btrim(coalesce(p_note, '')), '') is not null then
@@ -876,7 +876,7 @@ create or replace function public.chart_called_out(p_case bigint, p_undo boolean
 language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); c public.chart_cases := public.chart_case_row(p_case);
 begin
-  if not (public.chart_is_desk(me) or c.owner_id = me.discord_id) then perform public.chart_err('wrong_role', 'The front desk calls patients in.'); end if;
+  if not (public.chart_is_desk(me) or c.owner_id is not distinct from me.discord_id) then perform public.chart_err('wrong_role', 'The front desk calls patients in.'); end if;
   if c.state not in ('assigned', 'called') then perform public.chart_err('bad_state', 'That patient isn''t being called.'); end if;
   update public.chart_cases set called_out_at = case when p_undo then null else now() end where id = c.id;
   perform public.chart_act(case when p_undo then 'called_out_undo' else 'called_out' end, c.id);
@@ -887,7 +887,7 @@ create or replace function public.chart_prioritise(p_case bigint, p_on boolean) 
 language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); c public.chart_cases := public.chart_case_row(p_case);
 begin
-  if me.role not in ('reception', 'supervisor') then perform public.chart_err('wrong_role', 'Only the desk or the Supervisor can prioritise.'); end if;
+  if coalesce(me.role, '') not in ('reception', 'supervisor') then perform public.chart_err('wrong_role', 'Only the desk or the Supervisor can prioritise.'); end if;
   update public.chart_cases set prioritised = p_on where id = c.id;
   perform public.chart_act('prioritise', c.id, jsonb_build_object('on', p_on));
   return public.chart_done();
@@ -897,7 +897,7 @@ create or replace function public.chart_no_show(p_case bigint) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); c public.chart_cases := public.chart_case_row(p_case);
 begin
-  if not (public.chart_is_desk(me) or c.owner_id = me.discord_id) then perform public.chart_err('wrong_role', 'Only the desk, the nurse or the Supervisor can mark a no show.'); end if;
+  if not (public.chart_is_desk(me) or c.owner_id is not distinct from me.discord_id) then perform public.chart_err('wrong_role', 'Only the desk, the nurse or the Supervisor can mark a no show.'); end if;
   if c.state <> 'called' then perform public.chart_err('bad_state', 'They aren''t being called.'); end if;
   if c.called_at > now() - interval '5 minutes' then perform public.chart_err('too_soon', 'Give them 5 minutes to arrive.'); end if;
   if c.no_show_count >= 1 then
@@ -973,7 +973,7 @@ create or replace function public.chart_transfer(p_case bigint, p_to text, p_off
 language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); c public.chart_cases := public.chart_case_row(p_case);
 begin
-  if me.role not in ('on_call', 'supervisor') then perform public.chart_err('wrong_role', 'Transfers are for On call or the Supervisor.'); end if;
+  if coalesce(me.role, '') not in ('on_call', 'supervisor') then perform public.chart_err('wrong_role', 'Transfers are for On call or the Supervisor.'); end if;
   if c.status <> 'open' or c.state <> 'in_care' then perform public.chart_err('bad_state', 'Only a patient being treated can be transferred.'); end if;
   if (public.chart_shift_of(p_to)).id is null then perform public.chart_err('not_on_shift', format('%s isn''t on shift.', public.chart_pname(p_to))); end if;
   update public.chart_cases set owner_id = p_to, bed_id = null, off_ward = left(coalesce(p_off_ward, 'Pre-Op'), 40), last_at = now(),
@@ -1046,7 +1046,7 @@ begin
   if c.status <> 'open' then perform public.chart_err('bad_state', 'That visit has ended.'); end if;
   if p_kind not in ('left_before_seen', 'left_during_care', 'died') then perform public.chart_err('bad_input', 'Pick how they left.'); end if;
   if p_kind = 'died' and c.owner_id is distinct from me.discord_id and not public.chart_is_sup() then perform public.chart_err('no_access', 'Only the patient''s nurse or the Supervisor can record a death.'); end if;
-  if p_kind <> 'died' and not (public.chart_is_desk(me) or c.owner_id = me.discord_id) then perform public.chart_err('no_access', 'Only the desk, the nurse or the Supervisor can do that.'); end if;
+  if p_kind <> 'died' and not (public.chart_is_desk(me) or c.owner_id is not distinct from me.discord_id) then perform public.chart_err('no_access', 'Only the desk, the nurse or the Supervisor can do that.'); end if;
   if p_kind in ('left_during_care', 'died') and note is null then perform public.chart_err('bad_input', 'Add a note.'); end if;
   if p_kind = 'died' and (p_time_of_death is null or nullif(btrim(coalesce(p_confirmed_by, '')), '') is null) then
     perform public.chart_err('bad_input', 'Add the time of death and who confirmed it.');
@@ -1116,7 +1116,7 @@ language plpgsql volatile security definer set search_path = '' as $$
 declare me public.chart_staff := public.chart_begin(); c public.chart_cases := public.chart_case_row(p_case); k text;
 begin
   if c.status <> 'open' then perform public.chart_err('bad_state', 'That visit has ended.'); end if;
-  if not (public.chart_is_desk(me) or c.owner_id = me.discord_id or me.discord_id = any (c.worked_by)) then perform public.chart_err('no_access', 'That isn''t your patient.'); end if;
+  if not (public.chart_is_desk(me) or c.owner_id is not distinct from me.discord_id or me.discord_id = any (c.worked_by)) then perform public.chart_err('no_access', 'That isn''t your patient.'); end if;
   if p_changes is null or jsonb_typeof(p_changes) <> 'object' then perform public.chart_err('bad_input', 'Nothing to change.'); end if;
   for k in select jsonb_object_keys(p_changes) loop
     if k not in ('name', 'roblox_username', 'age', 'allergies', 'nkda', 'past_history', 'last_intake', 'onset', 'symptoms') then
