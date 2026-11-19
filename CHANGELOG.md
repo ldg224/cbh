@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.1 (2026-11-19)
+
+**Changed:**
+- The top-bar shift button shows your time on shift as it ticks ("1:12:04 | End shift", or "On break").
+
+**Fixed:**
+- The CBH Chart's End session only shows while a session is running.
+- Removed test-only buttons from the Chart's front desk.
+
+Database change: no.
+
 ## 0.39.0 (2026-11-19)
 
 **Added (ready to launch; switched on by an owner):**
