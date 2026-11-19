@@ -1,0 +1,50 @@
+/* CBH Chart: floor plan styling (Alpha). Loaded AFTER chart.css; owns the look of the Supervisor floor plan and the
+   room picker (Delta keeps the markup and logic in chart.js). Ported from the prototype's v25 polish, approved by the
+   user on 20 Nov 2026: calm surfaces and thin lines, room number → department → beds, bed chips readable at a glance. */
+.chx .floor-wrap { background: linear-gradient(180deg, #fbfcfe, #f4f7fb); border-color: #e1e8f1; }
+.chx .floor { background: #e9eef5; border-radius: 6px; box-shadow: inset 0 0 0 1px #d8e0ea; }
+.chx .fp-wall { background: #8796ad; }
+.chx .fp-wall.fw-h { height: 3px; } .chx .fp-wall.fw-v { width: 3px; }
+.chx .fp-block { background: repeating-linear-gradient(135deg, #dde3ec 0 5px, #e6ebf2 5px 10px); border: 0; }
+.chx .fp-hub polygon { fill: #f7f9fc; stroke: #cdd7e4; stroke-width: 1.5; }
+.chx .fp-hub-label { color: var(--text); } .chx .fp-hub-label b { font-size: 13px; font-weight: 800; letter-spacing: -.01em; }
+.chx .fp-hub-label small { font-size: 10px; } .chx .fp-hub-label.front b { font-size: 12px; color: var(--teal-ink); }
+.chx .fp-rest { background: #f7f9fc; border: 1px solid #cdd7e4; } .chx .fp-rest b { font-size: 9.5px; font-weight: 700; color: #6b7a94; }
+.chx .fp-exit { font-size: 10px; font-weight: 700; color: #55688c; letter-spacing: .01em; }
+/* rooms: white cards, a thin border and a 4px department strip on top; open rooms get a dashed grey edge, not a coloured one */
+.chx .fp-room, .chx .fp-room:not(.ped) { background: #fff; border: 1px solid #d3dce8; border-radius: 9px; box-shadow: inset 0 4px 0 var(--dc), 0 1px 2px rgba(11, 30, 74, .06); padding: 9px 7px 7px; gap: 6px; }
+.chx .fp-room.ped { background: #fff; border-color: #d3dce8; --dc: #16A34A; }
+.chx .fp-room.open { border-style: dashed; border-color: #b8c5d6; }
+.chx .fp-room.closed { background: repeating-linear-gradient(45deg, #f6f8fb 0 6px, #eaeef4 6px 12px); border-style: solid; }
+.chx .fp-room.hl { box-shadow: inset 0 4px 0 var(--dc), 0 0 0 3px color-mix(in srgb, var(--blue) 45%, transparent); }
+.chx .fp-rh { gap: 4px 6px; min-height: 20px; }
+.chx .fp-rh > b { font-size: 15px; font-weight: 800; letter-spacing: -.02em; color: var(--text); }
+.chx .rd-tag { font-size: 10px; font-weight: 700; color: color-mix(in srgb, var(--dc) 70%, var(--text)); display: inline-flex; align-items: center; gap: 4px; }
+.chx .rd-tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dc); }
+.chx .ped-tag { font-size: 9.5px; font-weight: 700; color: #166534; background: #e3f6e9; }
+.chx .fp-rh .face { width: 20px; height: 20px; font-size: 10px; box-shadow: 0 0 0 2px #fff; }
+.chx .rh-edit { opacity: .55; } .chx .fp-room:hover .rh-edit, .chx .rh-edit:focus-visible { opacity: 1; }
+.chx .cl-why { font-size: 10.5px; color: #6b7a94; } .chx .cl-why b { color: var(--text); }
+/* beds */
+.chx .fp-beds { gap: 6px; }
+.chx .bed { border-radius: 7px; border: 1px dashed #cfd9e6; background: #fbfcfe; padding: 5px 8px; gap: 1px; }
+.chx .bed-n { font-size: 9px; font-weight: 700; letter-spacing: .06em; color: #8191aa; }
+.chx .bed .free-l { font-size: 10.5px; font-weight: 600; color: #a3b1c6; }
+.chx .bed.used, .chx .bed.hb { border: 1px solid #dbe3ee; border-left: 5px solid var(--u); background: #fff; box-shadow: 0 1px 2px rgba(11, 30, 74, .07); }
+.chx .bed.used b, .chx .bed.hb b { font-size: 13px; font-weight: 800; color: var(--text); letter-spacing: -.01em; }
+.chx .bed .bed-st { font-size: 10px; font-weight: 600; color: #55688c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chx .bed.hb { background: color-mix(in srgb, var(--u) 7%, #fff); }
+.chx .bed-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.chx .bed .rq-ic { font-size: 9px; font-weight: 700; padding: 1px 6px; margin: 0; letter-spacing: .01em; }
+.chx .bed .rq-ic.rt-wait { background: #fff1dd; color: #8a4b00; } .chx .bed .rq-ic.rt-ok { background: #e1f7f3; color: #0d6b63; }
+.chx .bed .rq-ic.late { background: #fde2df; color: #9f1d13; } .chx .bed .rq-ic.code { background: #D92D20; color: #fff; }
+.chx .bed.used:hover, .chx .bed.used:focus-visible { box-shadow: 0 0 0 2px var(--blue), 0 2px 6px rgba(11, 30, 74, .1); }
+.chx .fp-room.stack .bed .bed-st { display: none; }
+@media (max-width: 1300px) { .chx .fp-rh > b { font-size: 13.5px; } .chx .bed.used b, .chx .bed.hb b { font-size: 12px; } }
+.chx .fp-room.short .bed-n, .chx .fp-room.short .bed-st { display: none; }   /* 102/103 are shallow: name + tags only */
+.chx .fp-room.short .bed { padding: 4px 8px; align-content: center; }
+.chx .fp-rh { padding-right: 24px; position: relative; }
+.chx .fp-rh .rh-edit { position: absolute; top: -3px; right: -2px; }
+.chx .fp-room.ped { --dc: #16A34A !important; }   /* Paediatric Emergency is green, like the user's map (inline --dc is the room's department) */
+.chx .bed .bed-st { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }   /* never cut words off */
+.chx .cl-why { inset: 34px 6px 6px; }   /* the Closed note sits below the room header (my taller header), never over the number */
