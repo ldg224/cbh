@@ -48,3 +48,6 @@
 .chx .fp-room.ped { --dc: #16A34A !important; }   /* Paediatric Emergency is green, like the user's map (inline --dc is the room's department) */
 .chx .bed .bed-st { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }   /* never cut words off */
 .chx .cl-why { inset: 34px 6px 6px; }   /* the Closed note sits below the room header (my taller header), never over the number */
+/* The name never collapses: a bed's rows keep their content height (the name's overflow:hidden made its row's
+   automatic minimum 0, so a full bed squashed it to ~7px; Delta, 20 Nov). Overflow is clipped at the bed's bottom. */
+.chx .bed { grid-auto-rows: max-content; }
