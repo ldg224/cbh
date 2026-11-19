@@ -12,7 +12,7 @@ alter table public.chart_cases
   drop column if exists online_confirmed_at, drop column if exists online_confirmed_by, drop column if exists owner_id, drop column if exists bed_id,
   drop column if exists pair_id, drop column if exists said, drop column if exists colour_confirmed, drop column if exists priority,
   drop column if exists queued_at, drop column if exists assigned_at, drop column if exists assign_expires_at, drop column if exists assign_from, drop column if exists called_at,
-  drop column if exists with_patient_at, drop column if exists no_show_count, drop column if exists handback_count, drop column if exists handback_note,
+  drop column if exists with_patient_at, drop column if exists no_show_count, drop column if exists handback_count, drop column if exists handback_note, drop column if exists handed_back_by,
   drop column if exists lost_nurse, drop column if exists off_ward, drop column if exists code_at, drop column if exists code_by,
   drop column if exists outcome, drop column if exists advice, drop column if exists discharged_at, drop column if exists discharged_by,
   drop column if exists aftercare_at, drop column if exists aftercare_by, drop column if exists papers, drop column if exists rating,

@@ -30,6 +30,7 @@ alter table public.chart_cases
   add column if not exists no_show_count       smallint not null default 0,
   add column if not exists handback_count      smallint not null default 0,
   add column if not exists handback_note       text check (handback_note is null or char_length(handback_note) <= 300),
+  add column if not exists handed_back_by      text,                     -- auto-assign never gives the case back to them
   add column if not exists lost_nurse          boolean not null default false,
   add column if not exists off_ward            text check (off_ward is null or char_length(off_ward) <= 40),
   add column if not exists code_at             timestamptz,
