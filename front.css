@@ -86,3 +86,50 @@ main:has(> #signed-out:not([hidden])) { max-width: 1080px; }
   .fp-depts { grid-template-columns: minmax(0, 1fr); }
   .fp-login { padding: 22px 18px; }
 }
+
+/* The visit (our main feature): check-in, live board, patient record, discharge papers. */
+.fp-visit { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 30px 30px 26px; position: relative; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(11, 30, 74, .04), 0 10px 30px rgba(11, 30, 74, .06); display: grid; gap: 22px; }
+.fp-visit::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 5px; background: linear-gradient(90deg, var(--blue-deep), var(--blue) 45%, var(--teal)); }
+.fp-visit-head { display: grid; gap: 10px; }
+.fp-visit h2 { margin: 0; font-size: clamp(24px, 3.4vw, 32px); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.fp-soon { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--teal-ink); background: var(--teal-wash);
+  border: 1px solid #9be5de; border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
+.fp-visit-lead { font-size: 16px; line-height: 1.65; color: var(--muted); max-width: 70ch; }
+.fp-visit .fp-visit-h { font-size: 11.5px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--teal-ink); margin: 0 0 -6px; }
+
+.fp-journey { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; position: relative; }
+.fp-journey::before { content: ""; position: absolute; left: 10%; right: 10%; top: 28px; height: 2px; background: repeating-linear-gradient(90deg, #b9e9e4 0 8px, transparent 8px 14px); }
+.fp-journey li { position: relative; display: grid; justify-items: center; text-align: center; gap: 6px; align-content: start; }
+.fp-jico { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-deep), var(--blue) 55%, var(--teal)); position: relative;
+  box-shadow: 0 0 0 5px #fff, 0 6px 16px rgba(34, 87, 159, .25); margin-bottom: 6px; }
+.fp-jico::after { content: ""; position: absolute; inset: 15px; background: #fff; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.fp-journey b { font-size: 15px; }
+.fp-journey span:not(.fp-jico) { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+.fp-paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fp-path { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: flex-start; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.fp-path > div { display: grid; gap: 4px; flex: 1; min-width: 180px; }
+.fp-path p { font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+.fp-path .fp-ico { background: #fff; }
+.fp-path-btn { min-height: 40px; padding: 0 18px; font-size: 14px; align-self: center; }
+
+.fp-staffline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; color: var(--muted); padding-top: 4px; border-top: 1px solid var(--raised); padding-top: 16px; }
+.fp-staffline b { color: var(--text); }
+.fp-staffline > span:nth-child(2) { flex: 1; min-width: 200px; }
+.fp-staffline a { font-weight: 700; color: var(--blue-deep); text-decoration: none; white-space: nowrap; }
+.fp-staffline a:hover { text-decoration: underline; }
+.fp-sico { width: 20px; height: 20px; flex: none; background: var(--teal-ink); -webkit-mask: url('assets/icons/people.png') center / contain no-repeat; mask: url('assets/icons/people.png') center / contain no-repeat; }
+
+@media (max-width: 900px) {
+  .fp-journey { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .fp-journey::before { left: 27px; right: auto; top: 28px; bottom: 28px; width: 2px; height: auto; background: repeating-linear-gradient(180deg, #b9e9e4 0 8px, transparent 8px 14px); }
+  .fp-journey li { grid-template-columns: 56px minmax(0, 1fr); justify-items: start; text-align: left; column-gap: 14px; row-gap: 2px; padding-bottom: 16px; }
+  .fp-journey li .fp-jico { grid-row: span 2; margin: 0; }
+  .fp-journey b { align-self: end; }
+  .fp-paths { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .fp-visit { padding: 24px 16px 20px; border-radius: 16px; }
+  .fp-path-btn { flex: 1 1 100%; }
+}
