@@ -106,6 +106,7 @@ language sql stable security definer set search_path = '' as $$
                           when (select online_mode from public.chart_ops where id = 1) = 'walk_ins_only' then 'walk_ins_only' else 'open' end s),
        live as (select s.join_code from public.sessions s where s.status = 'live' order by s.started_at desc nulls last limit 1)
   select jsonb_build_object(
+    'launched', (select launched from public.chart_ops where id = 1),   -- v1.3: false = the Chart isn't open yet (state is then 'closed')
     'state', (select s from st),
     'session', case when exists (select 1 from live) then 'live' else 'none' end,
     'join_code', coalesce((select nullif(join_code, '') from live), (select x.value #>> '{}' from public.settings x where x.key = 'join_code')),
