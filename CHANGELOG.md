@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.0 (2026-11-19)
+
+**Added (ready to launch; switched on by an owner):**
+- **The new CBH Chart.** Pick your role for the session (Reception, Patient Care: Room / On call / Road, or Supervisor). Reception checks patients in and calls them; nurses take their rooms, press Ready and are given patients; doctors and surgeons answer requests; paramedics bring in incoming cases; supervisors run the session from a live floor plan of the hospital. Every patient gets a proper record (triage colour, vitals, care given, orders, results, discharge papers), with sounds and alerts so nobody has to keep checking.
+- **Online check-in with no account:** patients enter their Roblox username and symptoms, see live wait times for adults and children, and follow their visit on a private page.
+- A new "Supervise sessions" permission in the Rank Editor.
+- Owners launch (and can pause) the Chart from the Session menu; until then only owners and supervisors can open it.
+
+Database change: yes (0084-0090). Function: roblox-lookup.
+
 ## 0.38.1 (2026-11-19)
 
 **Changed:**
