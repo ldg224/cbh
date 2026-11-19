@@ -2,11 +2,14 @@
 //   window.chartNav(link)    the "CBH Chart" link in the side menu, with a red count of what's waiting on me
 //   window.chartLogBtn('ds') the item in the top-right "you" menu while on shift: Open the CBH Chart, or Accept <patient>
 //   window.checkinNav(link)  retired: patients check in with no account (#visit), so the staff menu shows nothing
-// The Home tile and search come from chart.js's PAGES entry. Everything is off while CBH_CHART_OFF.
+// The Home tile and search come from chart.js's PAGES entry. Everything follows CBHChart.visible() (launch).
 // Data: window.CBHChart.summary() (Delta, chart.js) from the Chart's own poll; no second poll here. The menu is only
 // redrawn when a count actually changes (the poll runs every few seconds).
 (() => {
-  const off = () => !!window.CBH_CHART_OFF || !window.CBHChart || typeof window.CBHChart.summary !== 'function';
+  // Visible = Delta's CBHChart.visible(): false until the first poll, then owners + Supervise holders before launch and
+  // all staff after the DATABASE launch (ops.launched). CBH_CHART_OFF is only the emergency kill now.
+  const off = () => !!window.CBH_CHART_OFF || !window.CBHChart || typeof window.CBHChart.summary !== 'function'
+    || (typeof window.CBHChart.visible === 'function' && !window.CBHChart.visible());
   const sum = () => { try { return off() ? null : window.CBHChart.summary(); } catch { return null; } };
   const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // What's waiting on me: a patient to accept, requests I can take, online check-ins to confirm (desk), and for a
@@ -43,7 +46,7 @@
   // Redraw the menus only when what they show changes.
   let last = '';
   document.addEventListener('cbh-chart-poll', () => {
-    const s = sum(), sig = s ? JSON.stringify([waiting(s), (s.assigned || []).map((x) => x.id), s.on_shift]) : '';
+    const s = sum(), sig = s ? JSON.stringify([waiting(s), (s.assigned || []).map((x) => x.id), s.on_shift]) : off() ? 'off' : '';
     if (sig === last) return;
     last = sig;
     if (typeof window.deskRefresh === 'function') window.deskRefresh();
