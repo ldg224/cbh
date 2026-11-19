@@ -6,6 +6,7 @@ window.CBH_CONFIG = {
   publicJoinCode: "4920-4087",
   // The permanent Discord invite (front page and patient pages).
   discordInvite: "https://discord.gg/xxqTP4shRA",
-  // Online check-in and the patient visit page (CBH Chart). false = "Launching soon". Turn on at the Chart launch.
-  patientCheckinLive: false,
+  // Online check-in and the patient pages follow the DATABASE launch switch (chart_public_status hospital.launched),
+  // so an owner's Launch turns them on with no release. This is only an emergency kill: false forces "Launching soon".
+  patientCheckinLive: true,
 };

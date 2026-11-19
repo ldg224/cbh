@@ -5,7 +5,8 @@
 // can come back. Everything goes through Bravo's five anon RPCs (BACKEND-PLAN §4.7): chart_public_status,
 // chart_checkin_anon, chart_visit, chart_visit_rate, chart_visit_cancel (shapes: chart/CONTRACT.md §6). Refusals come
 // back as {ok:false, refused, message, hospital}, not as errors. The page shows over everything, logged in or
-// out, and never touches app.js routing. Launch flag: CBH_CONFIG.patientCheckinLive (false = "Launching soon").
+// out, and never touches app.js routing. Launch: the DATABASE switch (hospital.launched); CBH_CONFIG.patientCheckinLive
+// is only an emergency kill (false = "Launching soon" whatever the database says).
 (() => {
   const CFG = window.CBH_CONFIG || {};
   const $ = (id) => document.getElementById(id);
@@ -108,7 +109,8 @@
   const PAIN_HUE = [140, 118, 96, 72, 52, 42, 32, 22, 10, 0];   // 1 green → yellow → orange → 10 red
   const painCol = (n) => `hsl(${PAIN_HUE[n - 1]} 78% ${n >= 4 && n <= 6 ? 46 : 44}%)`;
   const painWord = (n) => (n <= 3 ? 'Mild' : n <= 6 ? 'Moderate' : 'Severe');
-  const formScreen = () => (!CFG.patientCheckinLive ? 'soon' : !H ? 'loading' : H.state === 'closed' ? 'closed' : H.state === 'walk_ins_only' ? 'walk' : 'open');
+  const killed = () => CFG.patientCheckinLive === false;
+  const formScreen = () => (killed() ? 'soon' : !H ? 'loading' : H.launched === false ? 'soon' : H.state === 'closed' ? 'closed' : H.state === 'walk_ins_only' ? 'walk' : 'open');
   function formView() {
     const scr = formScreen();
     if (scr === 'soon') return state('Online check-in is launching soon', 'Soon you’ll be able to check in before you arrive, with no account: just your Roblox username. Until then, walk in and check in at reception in game.', `${joinBlock(H)}${discordBtn('Join our Discord to hear first')}`, 'soon');
@@ -281,8 +283,8 @@
     } else {
       // Already have a visit on this device? Go back to it.
       const saved = store.get(KEY);
-      if (CFG.patientCheckinLive && saved && saved.token && Date.now() - saved.at < 36 * 3600e3) { location.replace('#visit/' + saved.token); return; }
-      mode = 'form'; draw(); if (CFG.patientCheckinLive) { loadStatus(); poll = setInterval(() => { if (!document.hidden) loadStatus(); }, 30000); }
+      if (!killed() && saved && saved.token && Date.now() - saved.at < 36 * 3600e3) { location.replace('#visit/' + saved.token); return; }
+      mode = 'form'; draw(); if (!killed()) { loadStatus(); poll = setInterval(() => { if (!document.hidden) loadStatus(); }, 30000); }
     }
   }
   host.addEventListener('click', async (ev) => {
@@ -315,5 +317,5 @@
   window.addEventListener('hashchange', enter);
   enter();
   // For the front page's "Check in online" button.
-  window.cbhVisitLive = () => !!CFG.patientCheckinLive;
+  window.cbhVisitLive = () => !killed() && !!(H && H.launched);
 })();
