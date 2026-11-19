@@ -24,6 +24,7 @@ alter table public.chart_cases
   add column if not exists queued_at           timestamptz,
   add column if not exists assigned_at         timestamptz,
   add column if not exists assign_expires_at   timestamptz,
+  add column if not exists assign_from         text,                     -- the state to go back to if Got it times out
   add column if not exists called_at           timestamptz,
   add column if not exists with_patient_at     timestamptz,
   add column if not exists no_show_count       smallint not null default 0,
@@ -56,7 +57,10 @@ alter table public.chart_cases
   add column if not exists admitted_to         text check (admitted_to is null or char_length(admitted_to) <= 80),
   add column if not exists left_note           text check (left_note is null or char_length(left_note) <= 500),
   add column if not exists time_of_death       timestamptz,
-  add column if not exists death_confirmed_by  text check (death_confirmed_by is null or char_length(death_confirmed_by) <= 80);
+  add column if not exists death_confirmed_by  text check (death_confirmed_by is null or char_length(death_confirmed_by) <= 80),
+  add column if not exists pain                smallint check (pain between 1 and 10),         -- check-in pain 1-10 (CONTRACT v1.2; replaces how bad)
+  add column if not exists care_notes          text check (care_notes is null or char_length(care_notes) <= 300),  -- care requirements, shown prominently
+  add column if not exists roblox_user_id      bigint;                                          -- confirmed via "Is this you?" (avatar for staff)
 
 alter table public.chart_cases alter column complaint drop not null;
 alter table public.chart_cases alter column department drop not null;

@@ -125,7 +125,8 @@ create table if not exists public.chart_checkin_attempts (
   at          timestamptz not null default now(),
   ip_hash     text,
   client_hash text,
-  ok          boolean not null default false
+  ok          boolean not null default false,
+  kind        text not null default 'checkin' check (kind in ('checkin', 'lookup'))   -- lookup = the roblox-lookup Edge Function
 );
 create index if not exists chart_checkin_attempts_at on public.chart_checkin_attempts (at);
 
