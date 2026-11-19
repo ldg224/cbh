@@ -9,11 +9,11 @@
     if (slot) slot.textContent = code;
     if (game && typeof robloxJoinUrl === 'function') game.href = robloxJoinUrl(code);
   }
-  // "Staff login" brings the login card into view (it sits below the intro on phones) and highlights it.
+  // "Log in" brings the login card into view (it sits below the intro on phones) and highlights it.
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-fp-login]'); if (!a) return;
     e.preventDefault();
-    const box = document.getElementById('staff-login'); if (!box) return;
+    const box = document.getElementById('log-in'); if (!box) return;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     box.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
     box.focus({ preventScroll: true });

@@ -86,7 +86,7 @@
           <div class="fp-ctas">
             <!-- PLACEHOLDER: the permanent Discord invite needs the owner's OK before it goes live. -->
             <a class="fp-btn fp-discord" href="https://discord.gg/PLACEHOLDER" rel="noopener"><span class="fp-bico" aria-hidden="true"></span>Join our Discord</a>
-            <a class="fp-btn fp-ghost" href="#staff-login" data-fp-login>Staff login</a>
+            <a class="fp-btn fp-ghost" href="#log-in" data-fp-login>Log in</a>
           </div>
           <!-- The join code comes from config.js (publicJoinCode); front.js fills it in. -->
           <div class="fp-join" id="fp-join">
@@ -95,15 +95,16 @@
             <a id="fp-join-game" class="fp-btn fp-teal" href="https://www.roblox.com/games/8704997000/Maple-Hospital" target="_blank" rel="noopener">Join game</a>
           </div>
         </div>
-        <div id="staff-login" class="card center login fp-login" tabindex="-1">
+        <div id="log-in" class="card center login fp-login" tabindex="-1">
           <img class="hero-icon" src="assets/cbh-icon.svg" alt="" width="64" height="64">
         <div id="login-main">
-          <h2 class="fp-login-h">Staff login</h2>
-          <p>Log in with the Discord account you use in the CareBeyond - Hospital server.</p>
+          <h2 class="fp-login-h">Log in</h2>
+          <p>For everyone: patients, staff and visitors. Use the Discord account you joined our server with.</p>
           <div class="login-actions">
             <!-- The last account on this device (name and photo kept in this browser only; no tokens). -->
             <button id="login-again" class="discord login-again" type="button" hidden><img id="login-again-img" alt="" hidden><span>Continue as <b id="login-again-name"></b></span></button>
             <button id="login" class="discord">Log in with Discord</button>
+            <!-- Room for a second way in (e.g. "Log in with Roblox", being researched by Bravo): add it here, same size. -->
             <button id="code-login" class="ghost">Log in with a code</button>
             <button id="login-other" class="linkish login-other" type="button" hidden>Not you? Use another account</button>
           </div>
