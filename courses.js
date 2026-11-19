@@ -93,7 +93,7 @@ async function crGrid(el, dept) {
     </div>
     ${mine.length ? `<section class="cr-sec"><h2 class="ma-day">Your Courses</h2><div class="cr-grid">${mine.map(crBlock).join('')}</div></section>` : ''}
     ${others.length ? `<section class="cr-sec"><h2 class="ma-day">${mine.length ? 'Other' : 'All'} ${esc(dept)} courses</h2><div class="cr-grid">${others.map(crBlock).join('')}</div></section>` : ''}
-    ${!list.length ? `<div class="card ma-empty"><strong>No courses yet.</strong>${crCanEdit(dept) ? '<span>Create one with New course.</span>' : ''}</div>` : ''}`;
+    ${!list.length ? `<div class="card ma-empty"><strong>No courses yet.</strong></div>` : ''}`;
   el.onclick = async (e) => {
     const g = e.target.closest('[data-go]');
     if (g) {

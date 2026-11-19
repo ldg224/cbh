@@ -3,6 +3,15 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.41.2 (2026-11-20)
+
+**Fixed:**
+- Phones: Records' Recently Actioned and Most Warnings show the whole name, with the tag and date underneath (names were cut to "Jor…").
+- Sessions: the Join game button is its normal size instead of a bar across the card, and centred wherever it is stretched.
+- Courses: the empty list just says "No courses yet." (no extra explanation line).
+
+Database change: no.
+
 ## 0.41.1 (2026-11-20)
 
 **Fixed:**

@@ -99,3 +99,10 @@
 .rc-ilinks .warnish { color: #8a1c1c; }
 .rc-evid a { color: var(--blue-deep); text-decoration: none; background: var(--raised); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
 .rc-evid a:hover { border-color: var(--blue); }
+
+/* 0.41.2 (Charlie): phones: the name gets its own line in Recently Actioned / Most Warnings, with the tag and date under it */
+@media (max-width: 560px) {
+  .rc-row { flex-wrap: wrap; row-gap: 4px; }
+  .rc-row strong { flex: 1 1 calc(100% - 44px); }
+  .rc-row .rc-right { margin-left: 42px; flex-wrap: wrap; }
+}

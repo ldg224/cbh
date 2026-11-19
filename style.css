@@ -1168,3 +1168,7 @@ a.refresh, a.ghost { display: inline-flex; align-items: center; border-radius: 8
 
 /* 0.41.1 (Charlie): a section label straight after a card gets the same breathing room as the others (Shift Manager) */
 .card + h2.menu-label { margin-top: 28px; }
+/* 0.41.2: when a Join game button is stretched to full width (Sessions on phones), its label sits in the middle */
+.join-game { justify-content: center; }
+/* 0.41.2: Sessions: Join game is a normal-sized button under the next-session line, not a bar across the card */
+.pg-sess .ss-idle > div:first-child > .join-game { justify-self: start; margin-top: 4px; }
