@@ -103,3 +103,40 @@ html.visit-on .fp-head-login, html.visit-on #who { display: none; }
   .vp-stars button { width: 100%; }
   .vp-stars { display: grid; grid-template-columns: repeat(5, 1fr); }
 }
+
+/* Check-in form v2 (20 Nov): roleplay name + age, pain 1-10, more details, "Is this you?" */
+.vp-row2 { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 10px; }
+.vp-hint { margin-top: -8px; font-size: 12.5px; color: var(--teal-ink); font-weight: 600; }
+.vp-pain { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.vp-pain button { min-height: 46px; padding: 0; border-radius: 9px; border: 2px solid transparent; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer;
+  background: color-mix(in srgb, var(--pc) 45%, #fff); color: color-mix(in srgb, var(--pc) 45%, #0b1e4a); }
+.vp-pain button:hover { background: color-mix(in srgb, var(--pc) 65%, #fff); }
+.vp-pain button.on { background: var(--pc); color: #fff; border-color: #0b1e4a; transform: translateY(-1px); box-shadow: 0 4px 10px color-mix(in srgb, var(--pc) 40%, transparent); }
+.vp-pain button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.vp-pain-ends { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--muted); }
+.vp-more { border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; }
+.vp-more[open] { padding-bottom: 14px; }
+.vp-more summary { cursor: pointer; padding: 13px 0; font-size: 14px; font-weight: 700; color: var(--text); list-style: none; }
+.vp-more summary::-webkit-details-marker { display: none; }
+.vp-more summary::before { content: "+"; display: inline-block; width: 18px; font-weight: 800; color: var(--teal-ink); }
+.vp-more[open] summary::before { content: "−"; }
+.vp-more summary em { font-style: normal; font-weight: 500; color: var(--muted); font-size: 12.5px; margin-left: 4px; }
+.vp-more > .vp-f + .vp-f { margin-top: 12px; }
+.vp-more textarea { width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: 11px; border: 1px solid var(--line); font: inherit; font-size: 16px; resize: vertical; }
+.vp-chips.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.vp-chips.four .vp-chip { min-height: 42px; font-size: 13px; }
+.vp-rbx { margin-top: -6px; }
+.vp-rbx-ask { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 12px; align-items: center; background: var(--teal-wash); border: 1px solid #9be5de; border-radius: 12px; padding: 12px; }
+.vp-rbx-ask img, .vp-rbx-ph { width: 56px; height: 56px; border-radius: 50%; background: #fff; border: 2px solid #fff; box-shadow: 0 0 0 2px var(--teal); grid-row: span 1; }
+.vp-rbx-ask b { display: block; font-size: 15px; }
+.vp-rbx-ask span { font-size: 13.5px; color: var(--muted); }
+.vp-rbx-btns { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 6px; }
+.vp-rbx-btns .vp-btn { flex: 1; }
+.vp-rbx-ok { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); }
+.vp-rbx-ok img { width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 0 0 2px var(--teal); }
+.vp-rbx-ok b { color: var(--text); }
+.vp-rbx-ok b::before { content: "✓ "; color: var(--teal-ink); }
+@media (max-width: 560px) {
+  .vp-pain { gap: 3px; } .vp-pain button { min-height: 44px; font-size: 14px; border-radius: 8px; }
+  .vp-chips.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

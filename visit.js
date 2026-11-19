@@ -22,14 +22,15 @@
   const rpc = async (fn, args) => { const { data, error } = await sb.rpc(fn, args || {}); if (error) throw new Error(error.message || 'Something went wrong. Try again.'); return data; };
   const API = {
     status: () => rpc('chart_public_status'),
-    checkin: (name, symptoms, said) => rpc('chart_checkin_anon', { p_roblox_username: name, p_symptoms: symptoms, p_said: said, p_client_key: clientKey() }),
+    // Fields agreed with Bravo (20 Nov): roleplay name, age, symptoms, pain 1-10, and the optional details.
+    checkin: (f) => rpc('chart_checkin_anon', { p_roblox_username: f.user, p_name: f.name, p_age: f.age, p_symptoms: f.symptoms, p_pain: f.pain,
+      p_onset: f.onset || null, p_allergies: f.allergies || null, p_history: f.history || null, p_notes: f.notes || null, p_client_key: clientKey() }),
     visit: (token) => rpc('chart_visit', { p_token: token }),
     rate: (token, rating, comment) => rpc('chart_visit_rate', { p_token: token, p_rating: rating, p_comment: comment || null }),
     cancel: (token) => rpc('chart_visit_cancel', { p_token: token }),
   };
 
   // ---- words (patient view; professional but plain, FLOW-AUDIT §4) ----
-  const SAID = [['a_little', 'A little'], ['quite_bad', 'Quite bad'], ['very_bad', 'Very bad']];
   const OUTCOME = { home: 'Discharged home', follow_up: 'Discharged with follow-up', admitted: 'Admitted', transferred: 'Transferred',
     lbbs: 'Left before being seen', left_before_seen: 'Left before being seen', ama: 'Left against medical advice', left: 'Left against medical advice',
     deceased: 'Your visit has ended', died: 'Your visit has ended', session_ended: 'Closed at the end of the session', ended: 'Closed at the end of the session' };
@@ -52,38 +53,102 @@
   const errBox = (m) => (m ? `<p class="vp-err" role="alert">${e(m)}</p>` : '');
 
   // ---- check-in form ----
-  const F = { name: '', tags: [], said: null, busy: false, err: '' };
-  let H = null;   // the latest hospital block
+  // The form is drawn ONCE per screen. Typing never redraws it: warnings, the tag list, the Roblox card, the pain
+  // scale and the button state are updated in place (user, 20 Nov: the box lost focus and took one letter at a time).
+  const F = { user: '', name: '', age: '', tags: [], pain: null, onset: null, allergies: '', history: '', notes: '', busy: false, err: '',
+    rbx: { state: 'idle', for: '', data: null, ok: false } };   // idle | looking | found | missing | off ; ok = they said "Yes, that's me"
+  let H = null, formShown = '';   // the latest hospital block; which form screen is on the page
+  const ONSET = [['just_now', 'Just now'], ['today', 'Today'], ['days', 'A few days'], ['longer', 'Longer']];
+  const PAIN_HUE = [140, 118, 96, 72, 52, 42, 32, 22, 10, 0];   // 1 green → yellow → orange → 10 red
+  const painCol = (n) => `hsl(${PAIN_HUE[n - 1]} 78% ${n >= 4 && n <= 6 ? 46 : 44}%)`;
+  const painWord = (n) => (n <= 3 ? 'Mild' : n <= 6 ? 'Moderate' : 'Severe');
+  const formScreen = () => (!CFG.patientCheckinLive ? 'soon' : !H ? 'loading' : H.state === 'closed' ? 'closed' : H.state === 'walk_ins_only' ? 'walk' : 'open');
   function formView() {
-    if (!CFG.patientCheckinLive) return state('Online check-in is launching soon', 'Soon you’ll be able to check in before you arrive, with no account: just your Roblox username. Until then, walk in and check in at reception in game.', `${joinBlock(H)}${discordBtn('Join our Discord to hear first')}`, 'soon');
-    if (!H) return `<section class="vp-card"><p class="vp-muted">Loading…</p></section>`;
-    if (H.state === 'closed') return state('Online check-in is closed', `No staff are on shift right now.${H.next_session_at ? ` Next session: <b>${e(when(H.next_session_at))}</b>.` : ''}`, `${discordBtn()}<p class="vp-muted vp-sm-t">See when the next sessions are.</p>`, 'closed');
-    if (H.state === 'walk_ins_only') return state('Online check-in is paused', 'The front desk is busy. Please check in at reception in game.', joinBlock(H), 'paused');
-    const ok = ROBLOX.test(F.name.trim()) && F.tags.length && F.said && !F.busy;
-    return `<section class="vp-card vp-form"><h1>Check in</h1><p class="vp-sub">CareBeyond Hospital · staff are on shift · no account needed${H.wait_hint != null ? ` · about ${e(H.wait_hint)} min wait` : ''}</p>
-      <label class="vp-f"><span>Your Roblox username</span><input id="vp-name" value="${e(F.name)}" placeholder="Exactly as it shows above your head" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20" inputmode="text">
-        ${F.name && !ROBLOX.test(F.name.trim()) ? '<small class="vp-bad">3 to 20 letters or numbers, with at most one underscore in the middle.</small>' : ''}</label>
-      <div class="vp-f"><span>What's wrong? <em>Type each thing, then Add</em></span>
-        ${F.tags.length ? `<div class="vp-tags">${F.tags.map((t, i) => `<span class="vp-tag">${e(t)}<button type="button" data-vtagrm="${i}" aria-label="Remove ${e(t)}">×</button></span>`).join('')}</div>` : ''}
-        <div class="vp-row"><input id="vp-sym" placeholder="e.g. my arm hurts" autocomplete="off" maxlength="80" enterkeyhint="done"><button type="button" class="vp-btn vp-ghost" data-va="symadd">Add</button></div></div>
-      <div class="vp-f"><span>How bad is it?</span><div class="vp-chips" role="radiogroup" aria-label="How bad is it?">${SAID.map(([k, l]) => `<button type="button" role="radio" aria-checked="${F.said === k}" class="vp-chip${F.said === k ? ' on' : ''}" data-vsaid="${k}">${l}</button>`).join('')}</div></div>
-      <p class="vp-note">This is roleplay. Don't share real health or personal information.</p>${errBox(F.err)}
-      <button type="button" class="vp-btn vp-primary vp-big" data-va="go"${ok ? '' : ' disabled'}>${F.busy ? 'Checking in…' : 'Check in'}</button></section>`;
+    const scr = formScreen();
+    if (scr === 'soon') return state('Online check-in is launching soon', 'Soon you’ll be able to check in before you arrive, with no account: just your Roblox username. Until then, walk in and check in at reception in game.', `${joinBlock(H)}${discordBtn('Join our Discord to hear first')}`, 'soon');
+    if (scr === 'loading') return `<section class="vp-card"><p class="vp-muted">Loading…</p></section>`;
+    if (scr === 'closed') return state('Online check-in is closed', `No staff are on shift right now.${H.next_session_at ? ` Next session: <b>${e(when(H.next_session_at))}</b>.` : ''}`, `${discordBtn()}<p class="vp-muted vp-sm-t">See when the next sessions are.</p>`, 'closed');
+    if (scr === 'walk') return state('Online check-in is paused', 'The front desk is busy. Please check in at reception in game.', joinBlock(H), 'paused');
+    return `<section class="vp-card vp-form"><h1>Check in</h1><p class="vp-sub" id="vp-sub">${subLine()}</p>
+      <label class="vp-f"><span>Your Roblox username</span><input id="vp-user" value="${e(F.user)}" placeholder="Exactly as it shows above your head" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20">
+        <small class="vp-bad" id="vp-user-bad" hidden>3 to 20 letters or numbers, with at most one underscore in the middle.</small></label>
+      <div id="vp-rbx" class="vp-rbx" aria-live="polite" hidden></div>
+      <div class="vp-row2"><label class="vp-f"><span>Roleplay name</span><input id="vp-name" value="${e(F.name)}" placeholder="Your character, e.g. Anna Smith" autocomplete="off" maxlength="40"></label>
+        <label class="vp-f vp-age"><span>Age</span><input id="vp-age" type="number" inputmode="numeric" min="1" max="120" value="${e(F.age)}" placeholder="e.g. 25"></label></div>
+      <small class="vp-hint" id="vp-age-hint" hidden>Under 18: you'll be seen in our Paediatric rooms.</small>
+      <div class="vp-f"><span>Symptoms <em>type each one, then Add</em></span><div class="vp-tags" id="vp-tags"></div>
+        <div class="vp-row"><input id="vp-sym" placeholder="e.g. headache" autocomplete="off" maxlength="80" enterkeyhint="done"><button type="button" class="vp-btn vp-ghost" data-va="symadd">Add</button></div></div>
+      <div class="vp-f"><span id="vp-pain-l">Pain <em id="vp-pain-w"></em></span>
+        <div class="vp-pain" role="radiogroup" aria-labelledby="vp-pain-l">${Array.from({ length: 10 }, (_, i) => i + 1).map((n) => `<button type="button" role="radio" aria-checked="false" aria-label="Pain ${n} of 10${n === 1 ? ', no pain' : n === 10 ? ', worst pain' : ''}" data-vpain="${n}" style="--pc:${painCol(n)}">${n}</button>`).join('')}</div>
+        <div class="vp-pain-ends"><span>1 No pain</span><span>10 Worst pain</span></div></div>
+      <details class="vp-more"${F.onset || F.allergies || F.history || F.notes ? ' open' : ''}><summary>More details <em>optional</em></summary>
+        <div class="vp-f"><span>When did it start?</span><div class="vp-chips four" role="radiogroup" aria-label="When did it start?">${ONSET.map(([k, l]) => `<button type="button" role="radio" aria-checked="false" class="vp-chip" data-vonset="${k}">${l}</button>`).join('')}</div></div>
+        <label class="vp-f"><span>Allergies</span><input id="vp-allergies" value="${e(F.allergies)}" placeholder="e.g. penicillin, or none" autocomplete="off" maxlength="200"></label>
+        <label class="vp-f"><span>Any medical history</span><input id="vp-history" value="${e(F.history)}" placeholder="e.g. asthma" autocomplete="off" maxlength="300"></label>
+        <label class="vp-f"><span>Notes or care needs</span><textarea id="vp-notes" rows="2" maxlength="300" placeholder="e.g. uses a wheelchair, needs a translator, anxious about needles">${e(F.notes)}</textarea></label></details>
+      <p class="vp-note">This is roleplay. Don't share real health or personal information.</p><p class="vp-err" id="vp-err" role="alert" hidden></p>
+      <button type="button" class="vp-btn vp-primary vp-big" data-va="go" id="vp-go" disabled>Check in</button></section>`;
+  }
+  const subLine = () => `CareBeyond Hospital · staff are on shift · no account needed${H && H.wait_hint != null ? ` · about ${e(H.wait_hint)} min wait` : ''}`;
+  const ageOk = () => { const a = +F.age; return F.age !== '' && Number.isInteger(a) && a >= 1 && a <= 120; };
+  const formOk = () => ROBLOX.test(F.user.trim()) && F.name.trim().length >= 2 && ageOk() && F.tags.length && F.pain && !F.busy;
+  // Update everything that changes while someone types, in place.
+  function syncForm() {
+    if (!$('vp-go')) return;
+    const u = F.user.trim();
+    $('vp-user-bad').hidden = !u || ROBLOX.test(u) || document.activeElement === $('vp-user');   // warn after they leave the box
+    $('vp-age-hint').hidden = !(ageOk() && +F.age < 18);
+    $('vp-tags').innerHTML = F.tags.map((t, i) => `<span class="vp-tag">${e(t)}<button type="button" data-vtagrm="${i}" aria-label="Remove ${e(t)}">×</button></span>`).join('');
+    host.querySelectorAll('[data-vpain]').forEach((b) => { const on = +b.dataset.vpain === F.pain; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+    $('vp-pain-w').textContent = F.pain ? `${F.pain} of 10 · ${painWord(F.pain)}` : 'tap a number';
+    host.querySelectorAll('[data-vonset]').forEach((b) => { const on = b.dataset.vonset === F.onset; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+    $('vp-err').hidden = !F.err; $('vp-err').textContent = F.err;
+    $('vp-go').disabled = !formOk(); $('vp-go').textContent = F.busy ? 'Checking in…' : 'Check in';
+    rbxCard();
+  }
+  // "Is this you?": the Roblox avatar for the username, so a typo is caught before staff look for the wrong person.
+  // An anon-safe lookup (Bravo's roblox-lookup Edge Function). If it's missing or down, the form just carries on.
+  let rbxT = null;
+  const lookupSoon = (now) => { clearTimeout(rbxT); const u = F.user.trim();
+    if (!ROBLOX.test(u) || F.rbx.state === 'off') { if (F.rbx.for !== u) F.rbx = { ...F.rbx, state: F.rbx.state === 'off' ? 'off' : 'idle', for: '', data: null, ok: false }; rbxCard(); return; }
+    if (F.rbx.for.toLowerCase() === u.toLowerCase() && F.rbx.state !== 'idle') return;
+    rbxT = setTimeout(lookup, now ? 0 : 700); };
+  async function lookup() {
+    const u = F.user.trim(); F.rbx = { state: 'looking', for: u, data: null, ok: false }; rbxCard();
+    try {
+      const r = await fetch(`${CFG.supabaseUrl}/functions/v1/roblox-lookup`, { method: 'POST', headers: { 'content-type': 'application/json', apikey: CFG.supabaseKey }, body: JSON.stringify({ username: u }) });
+      if (F.user.trim() !== u) return;   // they kept typing
+      if (!r.ok) { F.rbx = { state: r.status === 404 || r.status >= 500 ? 'off' : 'idle', for: u, data: null, ok: false }; rbxCard(); return; }
+      const j = await r.json();
+      F.rbx = j && j.found ? { state: 'found', for: u, data: j, ok: false } : { state: 'missing', for: u, data: null, ok: false };
+    } catch { F.rbx = { state: 'off', for: u, data: null, ok: false }; }
+    rbxCard();
+  }
+  function rbxCard() {
+    const box = $('vp-rbx'); if (!box) return; const x = F.rbx, d = x.data;
+    const html = x.state === 'looking' ? '<span class="vp-muted">Looking you up on Roblox…</span>'
+      : x.state === 'missing' ? '<span class="vp-bad">We couldn’t find that Roblox user. Check the spelling.</span>'
+      : x.state === 'found' && x.ok ? `<span class="vp-rbx-ok">${d.headshot_url ? `<img src="${e(d.headshot_url)}" alt="" width="28" height="28">` : ''}<b>${e(d.display_name || d.name)}</b><span>@${e(d.name)}</span><button type="button" class="vp-link-btn" data-va="rbxno">Change</button></span>`
+      : x.state === 'found' ? `<div class="vp-rbx-ask">${d.headshot_url ? `<img src="${e(d.headshot_url)}" alt="" width="56" height="56">` : '<span class="vp-rbx-ph" aria-hidden="true"></span>'}<div><b>Is this you?</b><span>${e(d.display_name || d.name)} · @${e(d.name)}</span></div>
+          <div class="vp-rbx-btns"><button type="button" class="vp-btn vp-primary vp-sm" data-va="rbxyes">Yes, that's me</button><button type="button" class="vp-btn vp-ghost vp-sm" data-va="rbxno">No, change it</button></div></div>` : '';
+    if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+    box.hidden = !html;
   }
   async function submit() {
-    const sym = $('vp-sym'); if (sym && sym.value.trim()) addTag(sym.value);
-    const name = F.name.trim(), text = F.tags.join(', ').slice(0, 300);
-    if (!ROBLOX.test(name) || !text || !F.said) return;
-    F.busy = true; F.err = ''; draw();
+    const sym = $('vp-sym'); if (sym && sym.value.trim()) { addTag(sym.value); sym.value = ''; }
+    if (!formOk()) { syncForm(); return; }
+    F.busy = true; F.err = ''; syncForm();
     try {
-      const r = await API.checkin(name, text, F.said);
+      const r = await API.checkin({ user: F.user.trim(), name: F.name.trim(), age: +F.age, symptoms: F.tags.join(', ').slice(0, 300), pain: F.pain,
+        onset: F.onset, allergies: F.allergies.trim(), history: F.history.trim(), notes: F.notes.trim() });
       if (r && r.hospital) H = r.hospital;
-      if (!r || !r.ok || !r.token) { F.busy = false; F.err = (r && r.message) || 'Online check-in isn’t available right now. Please check in at reception in game.';
-        if (r && (r.refused === 'closed' || r.refused === 'walk_ins_only')) F.err = ''; draw(); return; }
+      if (!r || !r.ok || !r.token) { F.busy = false;
+        if (r && (r.refused === 'closed' || r.refused === 'walk_ins_only')) { F.err = ''; formShown = ''; draw(); return; }
+        F.err = (r && r.message) || 'Online check-in isn’t available right now. Please check in at reception in game.'; syncForm(); return; }
       store.set(KEY, { token: r.token, at: Date.now() });
-      F.name = ''; F.tags = []; F.said = null; F.busy = false;
+      Object.assign(F, { user: '', name: '', age: '', tags: [], pain: null, onset: null, allergies: '', history: '', notes: '', busy: false, rbx: { state: 'idle', for: '', data: null, ok: false } });
       location.hash = '#visit/' + r.token;
-    } catch (err) { F.busy = false; F.err = err.message; draw(); }
+    } catch (err) { F.busy = false; F.err = err.message; syncForm(); }
   }
   const addTag = (v) => { v = String(v || '').replace(/[\u0000-\u001f]/g, '').trim(); if (!v || F.tags.length >= 8) return;
     if (/https?:|www\.|discord\.gg/i.test(v)) { F.err = 'Please don’t add links.'; return; } F.err = ''; F.tags.push(v.slice(0, 80)); };
@@ -133,11 +198,17 @@
   // ---- routing, drawing and polling ----
   let poll = null, mode = null;
   const route = () => { const m = location.hash.match(/^#visit(?:\/([A-Za-z0-9_-]{3,100}))?$/); return m ? { token: m[1] || null } : null; };
-  function draw() {
+  const typing = () => host.contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
+  function draw(force) {
     const r = route(); if (!r) return;
-    const keep = document.activeElement && document.activeElement.id, pos = keep && document.activeElement.selectionStart;
-    host.innerHTML = shell(r.token ? visitView() : formView());
-    if (keep && $(keep)) { const el = $(keep); el.focus(); try { el.setSelectionRange(pos, pos); } catch { /* fine */ } }
+    if (!r.token) {   // the form: drawn once per screen, then only updated in place
+      const scr = formScreen();
+      if (scr === formShown && scr === 'open') { $('vp-sub') && ($('vp-sub').innerHTML = subLine()); syncForm(); return; }
+      formShown = scr; host.innerHTML = shell(formView()); syncForm(); return;
+    }
+    formShown = '';
+    if (typing() && !force) return;   // never redraw under someone typing a rating comment
+    host.innerHTML = shell(visitView());
   }
   async function loadStatus() { try { const r = await API.status(); H = (r && r.hospital) || r; } catch { H = H || { state: 'closed' }; } draw(); }
   async function loadVisit() {
@@ -168,24 +239,30 @@
   host.addEventListener('click', async (ev) => {
     const b = ev.target.closest('button, [data-vstar]'); if (!b) return;
     const d = b.dataset;
-    if (d.vsaid) { F.said = d.vsaid; draw(); return; }
-    if (d.vtagrm) { F.tags.splice(+d.vtagrm, 1); draw(); return; }
-    if (d.vstar) { rate.stars = +d.vstar; rate.comment = ($('vp-comment') || {}).value || rate.comment; draw(); return; }
+    if (d.vpain) { F.pain = +d.vpain; syncForm(); return; }
+    if (d.vonset) { F.onset = F.onset === d.vonset ? null : d.vonset; syncForm(); return; }
+    if (d.vtagrm) { F.tags.splice(+d.vtagrm, 1); syncForm(); return; }
+    if (d.vstar) { rate.stars = +d.vstar; rate.comment = ($('vp-comment') || {}).value || rate.comment; draw(true); return; }
     if (d.vcopy) { try { await navigator.clipboard.writeText(d.vcopy); b.textContent = 'Copied'; } catch { /* the code is on screen */ } return; }
     const a = d.va;
-    if (a === 'symadd') { addTag(($('vp-sym') || {}).value); draw(); $('vp-sym')?.focus(); }
+    if (a === 'symadd') { const s2 = $('vp-sym'); addTag(s2.value); s2.value = ''; syncForm(); s2.focus(); }
+    if (a === 'rbxyes') { F.rbx.ok = true; rbxCard(); $('vp-name')?.focus(); }
+    if (a === 'rbxno') { F.user = ''; F.rbx = { state: 'idle', for: '', data: null, ok: false }; const u = $('vp-user'); u.value = ''; syncForm(); u.focus(); }
     if (a === 'go') submit();
     if (a === 'retry') loadVisit();
     if (a === 'again') { store.del(KEY); location.hash = '#visit'; }
-    if (a === 'copylink') { try { await navigator.clipboard.writeText(location.href); copied = true; draw(); setTimeout(() => { copied = false; draw(); }, 2500); } catch { /* the link is in the address bar */ } }
+    if (a === 'copylink') { try { await navigator.clipboard.writeText(location.href); copied = true; draw(true); setTimeout(() => { copied = false; draw(true); }, 2500); } catch { /* the link is in the address bar */ } }
     if (a === 'cancel') { if (!window.confirm('Leave the queue? Your place will be lost.')) return; try { const r = await API.cancel(vTok); if (r && r.ok === false && r.message) window.alert(r.message); } catch (err) { vErr = err.message; } loadVisit(); }
-    if (a === 'rate') { rate.comment = ($('vp-comment') || {}).value || ''; rate.busy = true; draw();
+    if (a === 'rate') { rate.comment = ($('vp-comment') || {}).value || ''; rate.busy = true; draw(true);
       try { const r = await API.rate(vTok, rate.stars, rate.comment.trim()); if (r && r.ok === false && r.message) window.alert(r.message); } catch (err) { window.alert(err.message); }
       rate.busy = false; loadVisit(); }
   });
-  host.addEventListener('input', (ev) => { if (ev.target.id === 'vp-name') { const was = ROBLOX.test(F.name.trim()); F.name = ev.target.value; if (was !== ROBLOX.test(F.name.trim()) || !F.name) draw(); } });
-  host.addEventListener('change', (ev) => { if (ev.target.id === 'vp-name') draw(); });
-  host.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.id === 'vp-sym') { ev.preventDefault(); addTag(ev.target.value); draw(); $('vp-sym')?.focus(); } });
+  // Typing only updates F and the bits around the box (syncForm); the box itself is never replaced.
+  const FIELD = { 'vp-user': 'user', 'vp-name': 'name', 'vp-age': 'age', 'vp-allergies': 'allergies', 'vp-history': 'history', 'vp-notes': 'notes' };
+  host.addEventListener('input', (ev) => { const k = FIELD[ev.target.id]; if (!k) return; F[k] = ev.target.value; if (F.err) F.err = '';
+    if (k === 'user') { if (F.rbx.state !== 'off') F.rbx = { state: 'idle', for: '', data: null, ok: false }; lookupSoon(); } syncForm(); });
+  host.addEventListener('focusout', (ev) => { if (ev.target.id === 'vp-user') { setTimeout(syncForm, 0); lookupSoon(true); } });
+  host.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.id === 'vp-sym') { ev.preventDefault(); addTag(ev.target.value); ev.target.value = ''; syncForm(); } });
   window.addEventListener('hashchange', enter);
   enter();
   // For the front page's "Check in online" button.
