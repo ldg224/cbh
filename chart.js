@@ -466,7 +466,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       call('chart_aftercare', { p_case: p.id, p_follow_up: (c.follow || '').trim() || null, p_papers: true, ...(!p.rating && c.rating ? { p_rating: c.rating } : {}) }, `Done: ${esc(p.name)}'s visit is complete.`)
         .then((r) => { if (r) p.deskDone = true; render(); }); },
     lbbs(p) { call('chart_left', { p_case: p.id, p_kind: 'left_before_seen' }, `${esc(p.name)}: left before being seen.`); },
-    npc(name, bed) { S.npc = null; call('chart_checkin', { p_patient: { name: (name || '').trim() || 'NPC patient', symptoms: [], bed: bedId(bed) }, p_source: 'npc', p_esi: 4, p_teams: ['Any'] }, `NPC logged in ${esc(bed)}. It counts towards your ${D.LIMIT}.`); },
+    npc(name, bed) { const syms = ((S.npc || {}).symptoms || []).slice(); S.npc = null; call('chart_checkin', { p_patient: { name: (name || '').trim() || 'NPC patient', symptoms: syms, bed: bedId(bed) }, p_source: 'npc', p_esi: 4, p_teams: ['Any'] }, `NPC logged in ${esc(bed)}. It counts towards your ${D.LIMIT}.`); },
   };
 
   // ---------- requests (OPERATIONS.md §4) ----------
@@ -756,6 +756,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   }
   const npcForm = () => `<section class="card np-panel"><div class="card-head"><h3>NPC patient</h3><button type="button" class="link" data-a="npcx">Cancel</button></div>
     <label class="f"><span>Name on the wait-list board</span><input id="npc-name" value="${esc(S.npc.name)}" placeholder="e.g. Felipe B." autocomplete="off"></label>
+    <div class="f"><span>Symptoms <em>optional, type each one and press Enter</em></span>${tagList(S.npc.symptoms || [], 'data-npcsymrm')}${fbox('npcsym', 'sym', '', 'e.g. chest pain, hurt left arm', 'Add')}</div>
     <div class="f"><span>Which bed? Tap one to log them</span><div class="chips">${freeBedsOf('me').map((b) => `<button type="button" class="chip" data-npcbed="${esc(b)}">${esc(b)}</button>`).join('')}</div></div></section>`;
   function pickSection() {
     const n = pickSelNow().length;
@@ -992,6 +993,14 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     return list.length ? `<span class="sg-l">Suggestions</span>${list.map(([w, n]) => `<button type="button" class="chip sug" data-fbpick="${id}" data-fbval="${esc(w)}">${esc(w)}${n > 1 ? ` <i>×${n}</i>` : ''}</button>`).join('')}` : (t ? '' : '<span class="sg-l">Nothing typed before yet. What you add here will show up as a suggestion next time.</span>'); };
   const fbox = (id, kind, key, placeholder, btn) => `<div class="fbox"><div class="fb-row"><input id="fb-${id}" data-fb="${id}" data-fbkind="${kind}" data-fbkey="${esc(key || '')}" value="${esc((S.fb || {})[id] || '')}" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="done"><button type="button" class="btn" data-fbadd="${id}">${btn}</button></div>
     <div class="fb-sugg" id="sg-${id}">${suggChips(id, kind, key, (S.fb || {})[id])}</div></div>`;
+  // Symptoms in the record. Anyone working the case can add them (the server allows the desk, the owner and anyone who
+  // worked it); NPCs and desk check-ins often start with none.
+  const canAddSym = (p) => p && ['queue', 'care'].includes(p.stage) && !(RECS[p.id] || {}).limited && (p.nurse === 'me' || ['reception', 'super'].includes(S.role) || S.reqs.some((r) => r.pid === p.id && r.acceptedBy === 'me'));
+  const symBlock = (p) => { const add = canAddSym(p), editing = add && S.symEdit === p.id;
+    if (!p.symptoms.length && !p.diagnosis && !add) return '';
+    return `<section class="rs sym-sec"><h4>Symptoms</h4>${p.symptoms.length ? `<div class="tags ro">${p.symptoms.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : ''}
+      ${editing ? `${fbox('rsym', 'sym', '', 'e.g. headache, hurt left arm', 'Add')}<button type="button" class="link" data-symx="1">Done</button>` : add ? `<button type="button" class="link sym-add" data-symadd="${p.id}">+ Add symptoms</button>` : ''}
+      ${p.diagnosis ? `<p class="rs-dx">Diagnosis: <b>${esc(p.diagnosis)}</b></p>` : ''}</section>`; };
   const tagList = (list, rmAttr) => (list.length ? `<div class="tags">${list.map((x, i) => `<span class="tag">${esc(x)}<button type="button" ${rmAttr}="${i}" aria-label="Remove ${esc(x)}">×</button></span>`).join('')}</div>` : '');
   const didList = (p) => (p.did.length ? `<ul class="didlist">${p.did.map((d, i) => `<li><time>${clock(d.at)}</time><span>${esc(d.what)}</span><small>${esc(first(d.by))}</small>${d.by === 'me' ? `<button type="button" class="x-mini" data-didrm="${i}" aria-label="Remove ${esc(d.what)}">×</button>` : ''}</li>`).join('')}</ul>` : '');
   const WHO = ['Anyone', 'Nurse', 'Doctor', 'Radiology'];
@@ -1038,7 +1047,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (S.tab === 'chart') body = `
       <section class="rs"><h4>Triage colour</h4>${urgBlock}</section>
       ${p.vitals.length || S.vopen ? `<section class="rs"><div class="rs-h"><h4>Vitals</h4>${S.vopen || consult ? '' : '<button type="button" class="link" data-a="vopen">+ Add vitals</button>'}</div>${S.vopen ? vitalForm() : vitalCards(p)}</section>` : consult ? '' : '<button type="button" class="link add-l" data-a="vopen">+ Add vitals</button>'}
-      ${p.symptoms.length || p.diagnosis ? `<section class="rs"><h4>Symptoms</h4>${p.symptoms.length ? `<div class="tags ro">${p.symptoms.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : ''}${p.diagnosis ? `<p class="rs-dx">Diagnosis: <b>${esc(p.diagnosis)}</b></p>` : ''}</section>` : ''}
+      ${symBlock(p)}
       <section class="rs"><h4>Care given</h4>${didList(p)}${consult ? (p.did.length ? '' : '<p class="muted small">Nothing recorded yet.</p>') : fbox('did', 'did', '', 'e.g. bandaged left arm, gave fluids', 'Add')}</section>
       ${(p.consults || []).length ? `<section class="rs"><h4>Consults</h4><ul class="didlist">${p.consults.map((c) => `<li><time>${clock(c.at)}</time><span>${esc(c.text || 'No note')}</span><small>${esc(REQ[c.type][0])} · ${esc(first(c.by))}</small></li>`).join('')}</ul></section>` : ''}
       <section class="rs"><h4>Notes</h4><textarea id="p-notes" rows="2" placeholder="Anything worth knowing"${consult ? ' readonly' : ''}>${esc(p.notes)}</textarea></section>
@@ -1253,7 +1262,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (t.s === 'patient' && p && p.stage === 'care') { const l = latest(p), un = p.orders.filter((o) => !o.done).length, mineP = p.nurse === 'me';
       h = `${phHead(esc(p.name) + (p.age ? `<small>, ${p.age}</small>` : ''), `${upill(p.urgency)} ${esc(p.room || p.where || '')} · ${esc(status(p))}`)}
 ${nextBarHtml(p)}
-        ${canReq(p) ? `<button type="button" class="btn ghost r-req2" data-pgo="p-req" data-pid="${p.id}">Request</button>` : ''}${reqBlock(p)}<div class="ph-tiles">
+        ${canReq(p) ? `<button type="button" class="btn ghost r-req2" data-pgo="p-req" data-pid="${p.id}">Request</button>` : ''}${reqBlock(p)}${symBlock(p)}<div class="ph-tiles">
         <button type="button" class="cx-tile" data-pgo="p-urg" data-pid="${p.id}" style="--u:${U(p.urgency).colour}"><b>Triage colour ${p.colourConfirmed ? '' : '<i>Confirm</i>'}</b><span><span class="udot"></span>${U(p.urgency).name} · ${U(p.urgency).label}</span></button>
         <button type="button" class="cx-tile" data-pgo="p-num" data-pid="${p.id}"><b>Vitals</b><span>${p.vitals.length ? `HR ${l.hr ?? '–'} · BP ${l.sys ?? '–'}/${l.dia ?? '–'} · ${l.temp ?? '–'}°F` : 'None yet'}</span></button>
         <button type="button" class="cx-tile" data-pgo="p-did" data-pid="${p.id}"><b>Care given</b><span>${p.did.length ? p.did.length + ' recorded' : 'Nothing recorded yet'}</span></button>
@@ -1366,6 +1375,9 @@ ${nextBarHtml(p)}
     const v = String(val || '').trim(); if (!v) return false;
     kind = kind || ({ did: 'did', ord: 'order', dx: 'dx', sym: 'sym', psym: 'sym', adv: 'advice' }[id] || (id.startsWith('res') ? 'result' : id.startsWith('fu') ? 'follow' : ''));
     if (id === 'sym') { if (!S.draft.symptoms.includes(v)) S.draft.symptoms.push(v); return true; }
+    if (id === 'npcsym') { if (S.npc && !S.npc.symptoms.includes(v)) S.npc.symptoms.push(v); return true; }
+    if (id === 'rsym') { const p = byId(S.symEdit); if (!p) return false; const next = [...new Set([...(p.symptoms || []), v])];
+      p.symptoms = next; p.symKnown = true; call('chart_case_update', { p_case: p.id, p_changes: { symptoms: next } }, `Added: ${esc(v)}.`); return true; }
     if (id === 'psym') { if (!S.pdraft.symptoms.includes(v)) S.pdraft.symptoms.push(v); return true; }
     if (kind === 'follow') { const pid = +id.slice(2); S.checkout[pid].follow = v; byId(pid).follow = v; return true; }
     if (/^rq\d+$/.test(id)) { req.done(reqById(id.slice(2)), v); return true; }
@@ -1481,7 +1493,7 @@ ${nextBarHtml(p)}
     else if (ds.a === 'pick') { S.pick = true; S.pickSel = bedsOf('me').slice(); }
     else if (ds.a === 'pickdone') pickDone();
     else if (ds.pickbed) pickBed(ds.pickbed);
-    else if (ds.a === 'npc') S.npc = { name: '' }; else if (ds.a === 'npcx') S.npc = null;
+    else if (ds.a === 'npc') S.npc = { name: '', symptoms: [] }; else if (ds.a === 'npcx') S.npc = null;
     else if (ds.npcbed) act.npc(S.npc.name, ds.npcbed);
     // requests
     else if (ds.a === 'reqmenu') { S.reqMenu = !S.reqMenu; S.rq = null; }
@@ -1552,6 +1564,9 @@ ${nextBarHtml(p)}
     else if (ds.fbadd || ds.fbpick) { const id = ds.fbadd || ds.fbpick, inp = $('#fb-' + CSS.escape(id)); const val = ds.fbpick ? ds.fbval : (inp && inp.value);
       if (fbSave(id, inp ? inp.dataset.fbkind : '', val)) { (S.fb || (S.fb = {}))[id] = ''; if (isPhone() && (id === 'ord' || id === 'dx')) back(); } }
     else if (ds.dsymrm) S.draft.symptoms.splice(+ds.dsymrm, 1);
+    else if (ds.npcsymrm && S.npc) S.npc.symptoms.splice(+ds.npcsymrm, 1);
+    else if (ds.symadd) { S.symEdit = +ds.symadd; }
+    else if (ds.symx) S.symEdit = null;
     else if (ds.pdsymrm) S.pdraft.symptoms.splice(+ds.pdsymrm, 1);
     else if (ds.furm) { S.checkout[+ds.furm].follow = ''; byId(+ds.furm).follow = ''; }
     else if (ds.advrm !== undefined) delete cur().advice;
