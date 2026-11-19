@@ -185,3 +185,26 @@ body:has(#signed-out[hidden]) .fp-head-login, html.has-session .fp-head-login { 
   .fp-login { justify-self: stretch; max-width: none; padding: 24px 18px; }
   .fp-head-login { padding: 7px 12px; font-size: 13px; }
 }
+
+/* Built from scratch (0.38.1): a quiet grid of what the dashboard and bot do. Icon + name + a few words each. */
+.fp-built { background: var(--panel); }
+.fp-feats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.fp-feats li { position: relative; display: grid; gap: 4px; align-content: start; padding: 64px 16px 18px; border-radius: 14px;
+  background: var(--bg); border: 1px solid transparent; transition: border-color .18s ease, background .18s ease; }
+.fp-feats li::before { content: ""; position: absolute; left: 16px; top: 16px; width: 36px; height: 36px; border-radius: 10px; background: var(--fp-grad); }
+.fp-feats li::after { content: ""; position: absolute; left: 25px; top: 25px; width: 18px; height: 18px; background: #fff;
+  -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.fp-feats li:hover { border-color: var(--line); background: #fff; }
+.fp-feats b { font-size: 15px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.fp-feats li > span { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+.fp-feats .fp-soon { font-size: 10.5px; padding: 2px 8px; }
+@media (prefers-reduced-motion: reduce) { .fp-feats li { transition: none; } }
+@media (max-width: 1000px) { .fp-feats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .fp-feats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .fp-feats li { padding: 58px 14px 16px; }
+  .fp-feats li::before { left: 14px; top: 14px; }
+  .fp-feats li::after { left: 23px; top: 23px; }
+  .fp-feats b { font-size: 14px; }
+  .fp-feats li > span { font-size: 13px; }
+}
