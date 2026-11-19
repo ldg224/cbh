@@ -494,7 +494,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   function pickRole(r, dept) {
     call('chart_role_set', { p_role: ROLE_OUT[r] || null, p_department: dept || null },
       { reception: 'You’re on Reception.', room: `You’re on Room · ${esc(dept || '')}.`, oncall: `You’re On call · ${esc(dept || '')}.`, road: 'You’re on Road.', super: 'You’re supervising from the floor plan.' }[r] || '',
-      { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); }, not_launched: (e) => { S.launched = false; toast(esc(e.message)); render(); } })
+      { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); }, })
       .then((res) => { if (!res) return;
         Object.assign(S, { open: null, face: null, roomPanel: null, endShift: false, reqMenu: false, pick: !!res.need_room });
         S.sec = SECTIONS[r][0][0]; S.ph = [{ s: isPhone() && r === 'super' ? 'board' : S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue'; render(); });
@@ -504,6 +504,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (typeof window.deskRefresh === 'function') window.deskRefresh(); location.hash = '#shifts'; };
   const leaveRole = () => call('chart_role_set', { p_role: null }, '', { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); } });
   // Room picking: tap beds to choose (up to 2), then Done sends them in one go.
+  const pickSelNow = () => S.pickSel || bedsOf('me');
   function pickBed(bed) {
     const sel = S.pickSel || (S.pickSel = bedsOf('me').slice()), o = ownerOf(bed);
     if (sel.includes(bed)) { const p = roomsInUse()[bed]; if (p && p.nurse === 'me') { toast('You have a patient in that bed.'); return; } S.pickSel = sel.filter((b) => b !== bed); return; }
@@ -742,7 +743,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     <label class="f"><span>Name on the wait-list board</span><input id="npc-name" value="${esc(S.npc.name)}" placeholder="e.g. Felipe B." autocomplete="off"></label>
     <div class="f"><span>Which bed? Tap one to log them</span><div class="chips">${freeBedsOf('me').map((b) => `<button type="button" class="chip" data-npcbed="${esc(b)}">${esc(b)}</button>`).join('')}</div></div></section>`;
   function pickSection() {
-    const n = bedsOf('me').length;
+    const n = pickSelNow().length;
     return `<div class="pane-pad rooms-pad"><div class="pane-head"><div><h2>${n ? 'Your room' : 'Pick your room'}</h2><p class="muted">Tap beds to take them, up to ${D.LIMIT}: a 2-bed room, any two 1-bed rooms, or one bed in a shared room. ${esc(S.rdept || '')} rooms are outlined. You stay in it for the shift.</p></div>${n ? `<button type="button" class="btn" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>
       ${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${r.id} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? 'Bed ' + b.slice(-1) : 'Bed', 'pick')).join('')}</div>`).join('')
         : `<div class="floor-wrap"><div class="floor pick" aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
@@ -902,7 +903,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const cls = `bed${bedOff(bed) ? ' off' : ''}${p ? ' used' : ''}${p && p.stage === 'queue' ? ' hb' : ''}${p && codeFor(p) ? ' code' : ''}${o === 'me' ? ' mine' : ''}${S.moveFor && !p ? ' target' : ''}`;
     const placing = mode === 'super' && S.placeFor && !p ? (dropWhy(byId(S.placeFor), bed) ? ' no-drop' : ' fit') : '';
     if (placing === ' fit') return `<button type="button" class="${cls} fit" data-placebed="${esc(bed)}" aria-label="Place ${esc(byId(S.placeFor).name)} in ${esc(bed)}"><span class="bed-n">${esc(short)}</span><small class="free-l">Place</small></button>`;
-    if (mode === 'pick') return `<button type="button" class="${cls} pickable" data-pickbed="${esc(bed)}" aria-pressed="${o === 'me'}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}><span class="bed-n">${esc(short)}</span>${o ? `${face(o)}<b>${o === 'me' ? 'Yours' : esc(first(o))}</b>` : `<small class="free-l">${p ? `${esc(p.name)} waiting · nobody's` : bedOff(bed) ? 'Unavailable' : closedBed(bed) ? `Closed${S.roomCfg[roomIdOf(bed)].why ? ': ' + esc(S.roomCfg[roomIdOf(bed)].why) : ''}` : 'Free'}</small>`}</button>`;
+    if (mode === 'pick') { const on = pickSelNow().includes(bed), other = o && o !== 'me' ? o : null; return `<button type="button" class="${cls.replace(' mine', '')}${on ? ' mine picked' : ''} pickable" data-pickbed="${esc(bed)}" aria-pressed="${on}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}><span class="bed-n">${esc(short)}</span>${on ? `${face('me')}<b>Yours</b>` : other ? `${face(other)}<b>${esc(first(other))}</b>` : `<small class="free-l">${p ? `${esc(p.name)} waiting · nobody's` : bedOff(bed) ? 'Unavailable' : closedBed(bed) ? `Closed${S.roomCfg[roomIdOf(bed)].why ? ': ' + esc(S.roomCfg[roomIdOf(bed)].why) : ''}` : 'Free'}</small>`}</button>`; }
     return `<div class="${cls}${placing}" data-bed="${esc(bed)}"${p ? ` style="--u:${U(p.urgency).colour}" data-open="${p.id}"${mode === 'super' ? ` data-drag="${p.id}"` : ''} role="button" tabindex="0" aria-label="${esc(p.name)} in ${esc(bed)}${o ? ', ' + esc(nm(o)) + '\u2019s bed' : ''}. Enter opens the record${mode === 'super' ? ', M moves them' : ''}."` : ''}>
       ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}">${esc(narrow ? p.name.split(' ')[0] : p.name)}</b>${narrow ? '' : `<small class="bed-st">${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}</small>`}<span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l">${bedOff(bed) ? 'Off' : narrow ? '' : 'Free'}</small>`}</div>`; };
   const roomBox = (r, mode) => { const beds = D.BEDS.filter((b) => D.roomOfBed(b) === r), g = FLOOR.rooms[r.id]; if (!g) return '';
@@ -1065,8 +1066,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const holdScreen = (h, t, btn) => `<div class="role-screen"><div class="rs-in"><span class="lab">CBH Chart</span><h1>${h}</h1>${t ? `<p class="muted">${t}</p>` : ''}${btn || ''}</div></div>`;
   const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} Try again in a moment.` : '')
     : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, '<a class="btn" href="#shifts">Go to Shift Manager</a>')
-    : S.role ? '' : !S.launched && !S.canSuper && !window.execReal ? holdScreen('The CBH Chart opens soon', 'It isn’t open to staff yet. You’ll be able to pick your role here once it launches.')
-    : roleScreen());
+    : S.role ? '' : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
   const openReqCount = () => S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && (S.role === 'super' || canAccept(r))).length;
   const codeBar = () => (S.codes.length ? `<div class="code-bar" role="alert">${S.codes.map((c) => { const p = byId(c.pid); return `<div><b>CODE BLUE</b><span>Room ${esc(roomIdOf(p.room) || '?')} · ${esc(p.name)} · ${elapsed(c.at)}</span>${p.nurse === 'me' || S.role === 'super' ? `<button type="button" class="btn small" data-codeclear="${p.id}">Clear</button>` : ''}</div>`; }).join('')}</div>` : '');
@@ -1169,17 +1169,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
           <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Reception open</button>
           <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
           <span class="muted small">${S.superOther ? 'Supervising: you and 1 other' : 'Supervising: you'}</span>
-          ${S.session ? '<button type="button" class="btn small warn" data-a="endsess">End session…</button>' : '<span class="muted small">No session running</span>'}${launchCtl()}</div>` : ''}</div>` : ''}</div></div>`;
+          ${S.session ? '<button type="button" class="btn small warn" data-a="endsess">End session…</button>' : '<span class="muted small">No session running</span>'}</div>` : ''}</div>` : ''}</div></div>`;
   }
 
-  // Owners only (Hospital Director, COO; the server checks too): open the Chart to everyone, or pause it.
-  const launchCtl = () => {
-    if (!window.execReal) return '';
-    const on = S.launched;
-    if (!S.launchAsk) return `<button type="button" class="btn small ${on ? 'ghost' : ''}" data-a="launchask">${on ? 'Pause the CBH Chart…' : 'Launch the CBH Chart…'}</button>`;
-    return `<div class="launch-ask"><b>${on ? 'Pause the CBH Chart?' : 'Launch the CBH Chart?'}</b><span class="muted small">${on ? 'Only owners and Supervisors can pick a role until you launch it again.' : 'This opens the Chart to all staff and online check-in to patients.'}</span>
-      <div class="row-btns"><button type="button" class="btn small${on ? ' warn' : ''}" data-a="launchgo">${on ? 'Pause' : 'Launch'}</button><button type="button" class="btn small ghost" data-a="launchx">Cancel</button></div></div>`;
-  };
 
   // ---------- PATIENT'S PHONE (what someone who checked in online sees, live) ----------
   const joinUrl = () => `https://www.roblox.com/games/start?launchData=${encodeURIComponent(JSON.stringify({ serverCode: String(D.JOIN_CODE) }))}&placeId=${D.ROBLOX_PLACE}`;
@@ -1519,9 +1511,6 @@ ${nextBarHtml(p)}
     else if (ds.a === 'prno') S.pendRoom = null;
     else if (ds.a === 'recopen') { S.sessMenu = false; call('chart_switches', { p_reception_open: !S.recOpen, p_online_mode: S.online ? 'open' : 'walk_ins_only' }, S.recOpen ? 'Reception closed: everyone is Patient Care.' : 'Reception is open.'); }
     else if (ds.a === 'online') { S.sessMenu = false; call('chart_switches', { p_reception_open: S.recOpen, p_online_mode: S.online ? 'walk_ins_only' : 'open' }, S.online ? 'Walk-ins only: online check-in is paused.' : 'Online check-in is open again.'); }
-    else if (ds.a === 'launchask') S.launchAsk = true;
-    else if (ds.a === 'launchx') S.launchAsk = false;
-    else if (ds.a === 'launchgo') { const on = !S.launched; S.launchAsk = false; S.sessMenu = false; call('chart_launch', { p_on: on }, on ? 'The CBH Chart is open to all staff.' : 'The CBH Chart is paused.'); }
     else if (ds.a === 'endsess') { S.endSess = !S.endSess; S.sessMenu = false; } else if (ds.a === 'endsessx') S.endSess = false;
     else if (ds.endcase) toast('Use Close all at the bottom, or Finish now for this one.');
     else if (ds.finish) { S.open = +ds.finish; S.tab = 'leave'; S.outcome = null; }
