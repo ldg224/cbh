@@ -53,7 +53,8 @@ language sql stable security definer set search_path = '' as $$
     'code', c.code_at is not null, 'online_unconfirmed', c.source = 'online' and c.state = 'checked_in', 'flag_supervisor', c.flag_supervisor,
     'eta_at', c.eta_at, 'tags', public.chart_tags(c.id))
   || case when p_full then jsonb_build_object('roblox_username', c.roblox_username, 'roblox_user_id', c.roblox_user_id::text, 'handback_note', c.handback_note,
-       'said', c.said, 'age', c.age, 'pain', c.pain, 'suggested_esi', public.chart_suggested_esi(c.pain), 'care_notes', c.care_notes) else '{}'::jsonb end
+       'said', c.said, 'age', c.age, 'pain', c.pain, 'suggested_esi', public.chart_suggested_esi(c.pain), 'care_notes', c.care_notes,
+       'symptoms', to_jsonb(c.symptoms)) else '{}'::jsonb end
 $$;
 
 create or replace function public.chart_req_view(q public.chart_requests) returns jsonb
