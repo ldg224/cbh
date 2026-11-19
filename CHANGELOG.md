@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.39.4 (2026-11-19)
+
+**Fixed:**
+- The CBH Chart got stuck on "Loading the chart" after 0.39.3 (its stylesheet was accidentally emptied). Restored.
+
+Database change: no.
+
 ## 0.39.3 (2026-11-19)
 
 **Fixed:**
