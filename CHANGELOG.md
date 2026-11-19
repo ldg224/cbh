@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.37.0 (2026-11-19)
+
+**Changed:**
+- The CBH Chart and Check In are switched off while they're rebuilt from scratch. Their pages, buttons and badges are hidden, and old links go Home. Nothing is deleted.
+- Bot: check-in is removed from Discord (the check-in panel, staff desk, patient DMs and rating DMs, and the Check in button on session posts).
+
+Database change: no.
+
 ## 0.36.1 (2026-11-19)
 
 **Fixed:**
