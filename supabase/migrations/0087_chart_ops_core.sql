@@ -349,7 +349,7 @@ begin
     b := null;
     for c in select y.* from public.chart_cases y
              where y.status = 'open' and y.state in ('waiting', 'waiting_in_room') and y.colour_confirmed and y.team is not null
-               and (y.team = 'Any' or y.team = s.department)
+               and (y.team = 'Any' or y.team = s.department) and y.handed_back_by is distinct from s.discord_id
              order by y.esi nulls last, y.prioritised desc, y.priority desc, y.queued_at loop
       if c.state = 'waiting_in_room' then
         if (select bb.owner_id from public.chart_beds bb where bb.id = c.bed_id) = s.discord_id
@@ -371,7 +371,8 @@ begin
       select r.id into room_off from public.chart_rooms r
       where not r.closed and r.active and not exists (select 1 from public.chart_beds bb where bb.room_id = r.id and bb.owner_id is not null)
         and exists (select 1 from public.chart_cases y join public.chart_beds bb on bb.id = y.bed_id
-                    where bb.room_id = r.id and y.status = 'open' and y.state = 'waiting_in_room' and (y.team = 'Any' or y.team = s.department))
+                    where bb.room_id = r.id and y.status = 'open' and y.state = 'waiting_in_room' and (y.team = 'Any' or y.team = s.department)
+                      and y.handed_back_by is distinct from s.discord_id)
         and exists (select 1 from public.chart_beds bb where bb.room_id = r.id and bb.available)
       order by r.sort limit 1;
       update public.chart_staff set offer_room_id = room_off where discord_id = s.discord_id and offer_room_id is distinct from room_off;
@@ -621,7 +622,7 @@ declare c record; n int := 0;
 begin
   for c in select x.* from public.chart_cases x where x.status = 'open' and x.owner_id = p_person and x.state in ('assigned', 'called', 'in_care') loop
     update public.chart_cases set state = case when bed_id is not null then 'waiting_in_room' else 'waiting' end, owner_id = null, priority = 1,
-           lost_nurse = lost_nurse or p_lost, handback_note = left(p_note, 300), handback_count = handback_count + 1,
+           lost_nurse = lost_nurse or p_lost, handback_note = left(p_note, 300), handback_count = handback_count + 1, handed_back_by = p_person,
            assign_expires_at = null, assign_from = null, last_at = now()
     where id = c.id;
     insert into public.chart_log (case_id, subject_id, actor, actor_name, action, detail)
@@ -921,9 +922,13 @@ begin
   if note is null then perform public.chart_err('bad_input', 'Add a hand-back note.'); end if;
   update public.chart_cases set state = case when bed_id is not null then 'waiting_in_room' else 'waiting' end, owner_id = null, priority = 1,
          handback_note = left(note, 300), handback_count = handback_count + 1, assign_expires_at = null, assign_from = null, last_at = now(),
+         handed_back_by = me.discord_id,
          flag_supervisor = flag_supervisor or handback_count + 1 >= 3,
          prioritised = prioritised or (handback_count + 1 >= 3 and not public.chart_supervised())
   where id = c.id;
+  -- The nurse steps away: Not ready, and that bed goes Open so someone else can take the patient over (QA, 19 Nov).
+  update public.chart_beds set owner_id = null, owner_since = null where id = c.bed_id and owner_id = me.discord_id;
+  update public.chart_staff set ready = false, ready_since = null where discord_id = me.discord_id;
   perform public.chart_act('hand_back', c.id, jsonb_build_object('note', note, 'count', c.handback_count + 1));
   return public.chart_done();
 end $$;
