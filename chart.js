@@ -393,9 +393,14 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
         arrived: c.opened_at || c.queued_at } };
       const p = byId(id); if (p) Object.assign(p, RECS[id].p);
       render();
-    } catch (e) { if (e.hint === 'no_access') { (S.noRec || (S.noRec = new Set())).add(id); if (S.open === id) { S.open = null; if (S.ph.length > 1 && (S.ph[S.ph.length - 1] || {}).id === id) S.ph.pop(); const p = byId(id); toast(p ? boardLine(p) : esc(e.message)); render(); } } }
+    } catch (e) {
+      // On call opening a request they can accept (or have accepted): the server only opens the full record once they're on
+      // the case, so keep the drawer with the request steps from the poll; it reloads after Accept.
+      if (e.hint === 'no_access' && reqFor(id)) { RECS[id] = { rev: REV, can: {}, limited: true, p: {} }; loadingRec = null; render(); return; }
+      if (e.hint === 'no_access') { (S.noRec || (S.noRec = new Set())).add(id); if (S.open === id) { S.open = null; if (S.ph.length > 1 && (S.ph[S.ph.length - 1] || {}).id === id) S.ph.pop(); const p = byId(id); toast(p ? boardLine(p) : esc(e.message)); render(); } } }
     loadingRec = null;
   }
+  const reqFor = (id) => S.reqs.some((r) => r.pid === id && isOpenReq(r) && (r.acceptedBy === 'me' || (!r.acceptedBy && r.type !== 'imaging' && canAccept(r))));
   const boardLine = (p) => `${esc(p.name)}${p.room ? `, ${esc(p.room)}` : ''}: ${esc(status(p).toLowerCase())}${p.nurse && p.nurse !== 'me' ? ` · with ${esc(first(p.nurse))}` : ''}. You can't open their record.`;
   const canDo = (p, k) => { const r = RECS[p.id]; return r ? r.can[k] !== false : true; };
 
@@ -1598,7 +1603,7 @@ ${nextBarHtml(p)}
     else if (ds.tab) { S.tab = ds.tab; S.vopen = false; }
     else if (ds.dtab) { S.deskTab = ds.dtab; S.confirmFor = null; S.recheckFor = null; }
     else if (ds.sec) S.sec = ds.sec;
-    else if (ds.open) { const p = byId(+ds.open); if (p && S.noRec && S.noRec.has(p.id) && p.nurse !== 'me') toast(boardLine(p)); else if (p && (p.stage === 'care' || (p.stage === 'queue' && S.role === 'super' && !isPhone()))) openP(p.id); else if (p) toast(`${esc(p.name)}: ${esc(status(p).toLowerCase())}.`); }
+    else if (ds.open) { const p = byId(+ds.open); if (p && S.noRec && S.noRec.has(p.id) && p.nurse !== 'me' && !reqFor(p.id)) toast(boardLine(p)); else if (p && (p.stage === 'care' || (p.stage === 'queue' && S.role === 'super' && !isPhone()))) openP(p.id); else if (p) toast(`${esc(p.name)}: ${esc(status(p).toLowerCase())}.`); }
     else if (ds.popen) { go('patient', { id: +ds.popen }); S.outcome = null; }
     else if (ds.pgo) { if (ds.pgo === 'p-num') S.vdraft = {}; go(ds.pgo, { id: ds.pid ? +ds.pid : top().id }); }
     else if (ds.proot) S.ph = [{ s: ds.proot }];
