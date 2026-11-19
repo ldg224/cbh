@@ -115,7 +115,8 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   const D = FX, $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const staff = (id) => D.STAFF.find((x) => x.id === id);
-  const first = (id) => { const x = staff(id); if (!x) return id === 'desk' ? 'Front desk' : ''; if (x.you) return 'You'; return x.name.startsWith('Dr.') ? x.name.split(' ').slice(0, 2).join(' ') : x.name.split(' ')[0]; };
+  const nm = (sid) => (staff(sid) || {}).name || (sid === 'tag' ? 'Someone' : String(sid || 'Someone'));
+  const first = (id) => { const x = staff(id); if (!x) return id === 'desk' ? 'Front desk' : id === 'tag' ? 'Someone' : String(id || ''); if (x.you) return 'You'; return x.name.startsWith('Dr.') ? x.name.split(' ').slice(0, 2).join(' ') : x.name.split(' ')[0]; };
   const title = (id) => { const x = staff(id); if (!x) return ''; return x.doctor ? first(id) : `${x.dept === 'Paramedicine' ? 'Paramedic' : 'Nurse'} ${x.you ? 'Turtle' : first(id)}`; };
   const mins = (d) => Math.max(0, Math.round((Date.now() - new Date(d)) / 60000));
   const ago = (d) => { const m = mins(d); return m < 1 ? 'just now' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
@@ -132,26 +133,26 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     ph: [{ s: 'board' }], phone: false, pid: null, pdraft: { name: '', symptoms: [], said: null }, cdept: {},
     // OPERATIONS.md (Alpha, 19 Nov 2026): everyone picks a Chart role. reception | room | oncall | road | super
     // Demo: who you are. Default = a normal nurse (Nursing only, no Supervise sessions).
-    myDepts: ['Nursing'], canSuper: false,
+    myDepts: [], canSuper: false, canPick: [], onShift: true, queueIds: [], staffStatus: {}, staffReq: {}, offer: null, pickSel: null,
     session: true, role: null, rdept: null, ready: false, readyAt: null, readyGone: false, lastAct: Date.now(),
     superOther: false, recOpen: true, online: true, fast: false,
-    roomDept: { ...D.ROOM_DEPT }, roomCfg: Object.fromEntries(D.ROOMS.map((r) => [r.id, { kids: !!r.ped, adults: false, closed: false, why: '', off: {}, log: [] }])),
-    bedOwner: { ...D.BED_OWNER }, staffRole: { ava: 'room', sam: 'room', mia: 'oncall', kai: 'oncall', liam: 'road', nina: 'off' }, staffReady: {},
+    roomDept: {}, roomCfg: {}, bedOwner: {}, staffRole: {}, staffReady: {},
     reqs: [], codes: [], incoming: [], reqMenu: false, rq: null, rqMode: 'down', pick: false, npc: null, inc: null, incDone: false,
     lv: {}, dth: {}, skipVit: {}, rqf: {}, finishAsk: null, forceAsk: false, mvBed: null, placeFor: null, deathFor: null,
     face: null, roleAsk: null, roomPanel: null, who: null, pendRoom: null, sendFor: null, endSess: false,
   };
   const minsAgo = (m) => new Date(Date.now() - m * 60000);
-  S.reqs.push({ id: 1, type: 'doctor', pid: 2, by: 'ava', at: minsAgo(4), note: 'Hand might be broken' },
-    { id: 2, type: 'surgery', mode: 'down', pid: 1, by: 'sam', at: minsAgo(3), acceptedBy: 'kai', acceptedAt: minsAgo(2), note: 'Pain low on the right: appendix?' });
-  let reqId = 10;
+  // The demo data's shapes stay (colours, vitals ranges, outcomes); the people, rooms and patients come from the server.
+  D.patients = []; D.ROOMS = []; D.BEDS = []; D.STAFF = [{ id: 'me', name: 'You', dept: '', depts: [], you: true }];
+  D.roomOfBed = (bed) => D.ROOMS.find((r) => String(bed || '').split(' ')[0] === r.id) || null;
+  D.isPed = (bed) => !!(S.roomCfg[(D.roomOfBed(bed) || {}).id] || {}).kids;
   let nextId = 100;
   const P = () => D.patients;
   const byId = (id) => P().find((p) => p.id === id);
   const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
   // ----- derived lists -----
   const qOrder = (a, b) => (!!b.bumped - !!a.bumped) || (a.urgency - b.urgency) || (new Date(a.queuedAt) - new Date(b.queuedAt));
-  const upNext = () => P().filter((p) => p.stage === 'queue').sort(qOrder);
+  const upNext = () => (S.queueIds || []).map((id) => byId(id)).filter((p) => p && p.stage === 'queue');
   const toConfirm = () => P().filter((p) => p.stage === 'checkin').sort((a, b) => new Date(a.arrived) - new Date(b.arrived));
   const callOuts = () => P().filter((p) => p.stage === 'care' && p.phase === 'called' && !p.calledOut);
   // Discharged cases are closed; the desk can still do optional after-care if the patient comes back (papers, follow-up, rating).
@@ -160,7 +161,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   const mine = (sid = 'me') => P().filter((p) => p.stage === 'care' && p.nurse === sid);
   const roomsInUse = () => Object.fromEntries(P().filter((p) => p.room && (p.stage === 'care' || p.stage === 'queue')).map((p) => [p.room, p]));
   const freeRooms = () => D.BEDS.filter((b) => !roomsInUse()[b]);   // free beds
-  const isChild = (p) => p.age != null && p.age < 18;
+  const isChild = (p) => !!p.child || (p.age != null && p.age < 18);
   // ----- roles, rooms and beds (OPERATIONS.md §1 and §3) -----
   const ROLE_NAME = { reception: 'Reception', room: 'Room', oncall: 'On call', road: 'Road', super: 'Supervisor', off: 'Off the Chart', break: 'On a break' };
   const roleOf = (sid) => (sid === 'me' ? S.role : S.staffRole[sid]);
@@ -207,7 +208,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
   // Timers: Got it 60 s, No show 5 min, requests 3 and 8 min, Ready 10 min. "Fast timers" in the demo runs them 10 times faster.
   const K = () => (S.fast ? 10 : 1);
   const SEC = (s) => (s * 1000) / K();
-  const since = (d) => Date.now() - new Date(d).getTime();
+  const since = (d) => Date.now() + SKEW - new Date(d).getTime();
   const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const countdown = (from, secs) => `<span class="cd" data-cd="${new Date(from).toISOString()}" data-secs="${secs}">${mmss((SEC(secs) - since(from)) * K())}</span>`;
   const elapsed = (from) => `<span class="cd" data-up="${new Date(from).toISOString()}">${mmss(since(from) * K())}</span>`;
@@ -235,112 +236,224 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, ms || 4000); };
   const fromSaid = { 'A little': 4, 'Quite bad': 3, 'Very bad': 2 };
 
-  // ---------- actions ----------
-  const setColour = (p, to, by, note) => { const from = p.urgency; p.urgency = to; p.colourLog.push({ from, to, by, at: new Date(), note }); if (by !== 'desk' && by !== 'self') p.colourConfirmed = true; };
+  // ================= THE SERVER (Bravo's chart_* RPCs, CONTRACT.md v1) =================
+  // chart_poll(since_rev) feeds every screen; an adapter turns the snapshot into the view model the approved prototype
+  // draws (patients with stage/phase, bed owners, roles, requests). Every button calls its RPC; the server enforces every
+  // rule and a refusal shows its plain-words message. The client's greying is only a hint.
+  let REV = 0, SNAP = null, SKEW = 0, ME_ID = null, pollT = null, polling = false, dirty = false, loadingRec = null;
+  const RECS = {}, BED_LABEL = {}, BED_ID = {};
+  const sidOf = (id) => (!id ? null : String(id) === String(ME_ID) ? 'me' : String(id));
+  const idOf = (sid) => (sid === 'me' ? ME_ID : sid);
+  const ROLE_IN = { reception: 'reception', room: 'room', on_call: 'oncall', road: 'road', supervisor: 'super' };
+  const ROLE_OUT = { reception: 'reception', room: 'room', oncall: 'on_call', road: 'road', super: 'supervisor' };
+  const OUT_IN = { home: 'home', follow_up: 'follow', admitted: 'admit', transferred: 'transferred', left_before_seen: 'lbbs', left_during_care: 'left', died: 'died', session_ended: 'ended' };
+  const SAID = { a_little: 'A little', quite_bad: 'Quite bad', very_bad: 'Very bad' };
+  const bedId = (label) => BED_ID[label] || label;
+  async function rpc(fn, args) {
+    const { data, error } = await sb.rpc(fn, args || {});
+    if (error) { const e = new Error(error.message || 'Something went wrong. Try again.'); e.hint = error.hint; throw e; }
+    return data;
+  }
+  // Every change: the RPC, then a fresh poll (and the open record). Refusals show the server's words as they are.
+  async function call(fn, args, ok, onHint) {
+    try {
+      const r = await rpc(fn, args);
+      if (ok) toast(typeof ok === 'function' ? ok(r || {}) : ok);
+      await poll(true); return r || { ok: true };
+    } catch (e) {
+      if (onHint && onHint[e.hint]) onHint[e.hint](e); else toast(esc(e.message));
+      render(); return null;
+    }
+  }
+  const entry = (p, kind, data) => rpc('chart_entry_add', { p_case: p.id, p_kind: kind, p_data: data });
+  // Any charting moves a "Called to room" patient to with-the-nurse first (FLOW-AUDIT #1).
+  async function touch(p) { if (p && p.nurse === 'me' && p.phase === 'called') { try { await rpc('chart_with_patient', { p_case: p.id }); } catch { /* the charting call below still runs */ } } }
+  async function chartIt(p, kind, data, ok) { try { await touch(p); await entry(p, kind, data); if (ok) toast(ok); } catch (e) { toast(esc(e.message)); } await poll(true); }
+
+  async function poll(now) {
+    if (!app.isConnected) { clearTimeout(pollT); return; }
+    if (polling) { if (now) dirty = true; return; }
+    polling = true; clearTimeout(pollT);
+    try {
+      const s = await rpc('chart_poll', { p_since_rev: now ? 0 : REV });
+      if (s && !s.unchanged) { ingest(s); if (drag) dirty = true; else render(); }
+      S.pollErr = null;
+    } catch (e) { S.pollErr = e.message; }
+    polling = false;
+    if (S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
+    pollT = setTimeout(() => poll(), document.hidden ? 15000 : 3000);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && app.isConnected) poll(); });
+  document.addEventListener('focusout', () => { if (dirty && !drag && app.isConnected) { dirty = false; setTimeout(render, 0); } });
+
+  // ---------- snapshot → view model ----------
+  const person = (id, name, dept) => { if (!id) return null; const sid = sidOf(id); if (sid === 'me') return sid;
+    let x = D.STAFF.find((s) => s.id === sid); if (!x) { x = { id: sid, name: name || 'Someone', dept: dept || '' }; D.STAFF.push(x); } else { if (name) x.name = name; if (dept) x.dept = dept; } return sid; };
+  const HIST = { checkin: 'Checked in', colour: 'Colour changed', confirm_colour: 'Colour confirmed', assign: 'Assigned', assign_override: 'Assigned outside their team', got_it: 'Accepted',
+    expire_assign: 'Not accepted in time', called: 'Called to room', called_out: 'Called in by Reception', with_patient: 'With the nurse', no_show: 'No show', hand_back: 'Handed over',
+    theyve_gone: 'Nurse left', move: 'Moved', swap: 'Swapped beds', discharge: 'Discharged', left: 'Closed', aftercare: 'After-care at the desk', rate: 'Rated',
+    request: 'Request', request_accept: 'Request accepted', request_here: 'Arrived at bedside', request_done: 'Consult finished', request_cancel: 'Request cancelled', code: 'Code Blue', code_clear: 'Code Blue cleared', transfer: 'Transferred', off_ward: 'Off the ward', handover: 'Ambulance handover', team: 'Teams changed' };
+  const histWords = (h) => `${HIST[h.action] || String(h.action || '').replace(/_/g, ' ')}${h.actor_name ? ' · ' + h.actor_name : ''}`;
+  function toP(c) {
+    const st = c.state, ph = { assigned: 'assigned', called: 'called', in_care: 'in' }[st];
+    const stage = st === 'checked_in' ? 'checkin' : st === 'incoming' ? 'incoming' : st === 'waiting' || st === 'waiting_in_room' ? 'queue' : ph ? 'care' : 'closed';
+    const nurse = c.owner ? person(c.owner, c.owner_name) : null;
+    const transferred = ph === 'in' && c.off_ward && S.staffRole[nurse] === 'oncall';
+    const old = P().find((x) => x.id === c.id) || {};
+    const rec = (RECS[c.id] || {}).p || {};
+    return Object.assign({ vitals: [], did: [], orders: [], diagnosis: null, notes: '', colourLog: [], log: [], consults: [], symptoms: [] }, rec, {
+      id: c.id, name: c.short_name, roblox: c.roblox_username || old.roblox || '', urgency: c.esi, colourConfirmed: !!c.colour_confirmed,
+      stage, phase: transferred ? 'transferred' : ph || null, where: transferred ? c.off_ward : null, source: c.source,
+      teams: [c.team || 'Any', ...(c.extra_teams || [])], dept: c.team, child: !!c.child, npc: !!c.npc,
+      room: c.bed ? BED_LABEL[c.bed] || c.bed : null, nurse, ownerName: c.owner_name,
+      bumped: !!c.prioritised, lost: !!c.lost_nurse, handback: c.handback_note ? { note: c.handback_note, by: null, at: c.queued_at } : null,
+      hbCount: c.handback_count || 0, flag: (c.handback_count || 0) >= 3, inRoom: !!c.handback_note,
+      queuedAt: c.queued_at, assignedAt: c.assigned_at, assignExp: c.assign_expires_at, calledAt: c.called_at, calledOut: !!c.called_out_at, calledOutAt: c.called_out_at,
+      age: c.age ?? old.age ?? null, pain: c.pain ?? null, suggestedEsi: c.suggested_esi || null, careNotes: c.care_notes || '', robloxId: c.roblox_user_id || null,
+      offWard: transferred ? null : c.off_ward, said: SAID[c.said] || old.said || null, tags: c.tags || {}, online: !!c.online_unconfirmed,
+      arrived: rec.arrived || c.queued_at || c.assigned_at || new Date().toISOString(), takenAt: c.assigned_at, called: ph === 'in' });
+  }
+  function ingest(s) {
+    SNAP = s; REV = s.rev || REV; if (s.server_now) SKEW = Date.parse(s.server_now) - Date.now();
+    const me = s.me || {}, ops = s.ops || {};
+    if (me.discord_id) ME_ID = String(me.discord_id);
+    const meRow = D.STAFF.find((x) => x.you) || { id: 'me', you: true };
+    Object.assign(meRow, { name: me.name || meRow.name || 'You', dept: me.department || me.shift_department || '', depts: me.departments || [] });
+    D.STAFF = [meRow];
+    // rooms and beds
+    if (s.rooms) {
+      D.ROOMS = s.rooms.map((r) => ({ id: String(r.id), beds: r.beds, area: r.area, ped: r.who === 'kids' }));
+      s.rooms.forEach((r) => { S.roomDept[r.id] = r.department; S.roomCfg[r.id] = Object.assign(S.roomCfg[r.id] || { log: [] }, { kids: r.who === 'kids', adults: r.who === 'adults', closed: !!r.closed, why: r.closed_reason || '', problem: r.problem || null, off: {} }); });
+    }
+    S.bedOwner = {};
+    if (s.beds) {
+      D.BEDS = s.beds.map((b) => b.label);
+      s.beds.forEach((b) => { BED_LABEL[b.id] = b.label; BED_ID[b.label] = b.id;
+        if (!b.available && S.roomCfg[b.room]) S.roomCfg[b.room].off[b.label] = b.off_reason || true;
+        if (b.owner) S.bedOwner[b.label] = person(b.owner.discord_id, b.owner.name); });
+    }
+    // people
+    S.staffRole = {}; S.staffReady = {}; S.staffStatus = {}; S.staffReq = {};
+    (s.staff || []).forEach((x) => { const sid = person(x.discord_id, x.name, x.department); if (sid === 'me') return;
+      S.staffRole[sid] = ROLE_IN[x.role] || (x.status === 'break' ? 'break' : 'off'); if (x.status === 'ready') S.staffReady[sid] = x.ready_since || true;
+      S.staffStatus[sid] = x.status; S.staffReq[sid] = x.request || null; });
+    (ops.supervisors || []).forEach((x) => { const sid = person(x.discord_id, x.name); if (sid !== 'me' && !S.staffRole[sid]) S.staffRole[sid] = 'super'; });
+    // me
+    const wasRole = S.role; S.onShift = me.on_shift !== false; S.role = ROLE_IN[me.role] || null; S.rdept = me.department || null;
+    if (S.role && S.role !== wasRole) { S.sec = SECTIONS[S.role][0][0]; S.ph = [{ s: isPhone() && S.role === 'super' ? 'board' : S.sec }]; S.deskTab = S.role === 'reception' ? 'checkin' : 'queue'; }
+    S.ready = !!me.ready; S.readyAt = me.ready_since || null; S.readyExp = me.ready_expires_at || null;
+    S.myDepts = me.departments || []; S.canPick = me.can_pick || []; S.canSuper = !!me.can_supervise; S.offer = me.offer || null;
+    (me.notices || []).forEach((n) => { if (!(S.seenNotices || (S.seenNotices = new Set())).has(n.id)) { S.seenNotices.add(n.id); toast(esc(n.text), 6000); } });
+    S.session = ops.session === 'live'; S.autoMode = !!ops.auto_mode; S.superOther = !ops.auto_mode && S.role !== 'super';
+    S.recOpen = ops.reception_open !== false; S.online = (ops.online_mode || 'open') === 'open';
+    // cases (open board) + the desk's recently discharged
+    const cases = (s.cases || []).map(toP);
+    const closed = (s.recent_discharged || []).map((x) => { const o = P().find((y) => y.id === x.id) || {};
+      return Object.assign({ vitals: [], did: [], orders: [], colourLog: [], log: [], symptoms: [] }, o, { id: x.id, name: x.short_name, stage: 'closed', discharged: true, outcome: OUT_IN[x.outcome] || x.outcome, closedAt: x.discharged_at, rating: x.rated ? o.rating || 1 : null, ratedBy: x.rated ? o.ratedBy || 'patient' : null, deskDone: false }); });
+    D.patients = [...cases, ...closed];
+    S.queueIds = s.queue || [];
+    S.incoming = (s.incoming || []).map((id) => { const p = byId(id); return p ? { id, name: p.name, urgency: p.urgency || 4, what: '', at: p.queuedAt || p.arrived, eta: null, by: S.role === 'road' ? 'me' : 'x', done: false } : null; }).filter(Boolean);
+    // requests (or, for roles that don't get the list, the per-case tags)
+    if (s.requests) S.reqs = s.requests.map((r) => ({ id: r.id, type: r.kind, mode: r.surgery_mode === 'take_to_surgery' ? 'take' : r.surgery_mode ? 'down' : undefined, pid: r.case_id,
+      by: person(r.asked_by, r.asked_by_name), at: r.asked_at, note: r.note || '', acceptedBy: r.accepted_by ? person(r.accepted_by, r.accepted_by_name) : null, acceptedAt: r.accepted_at,
+      hereAt: r.here_at, sentTo: r.sent_to ? person(r.sent_to) : null, auto: !!r.auto, chase: r.chased || 0, red: !!r.red, reopened: r.reopened || 0 }));
+    else S.reqs = (s.cases || []).flatMap((c) => Object.entries(c.tags || {}).filter(([, t]) => t && t !== 'done').map(([k, t]) => ({ id: `t${c.id}${k}`, type: k, pid: c.id, at: c.queued_at, acceptedBy: t === 'accepted' || t === 'here' ? 'tag' : null, acceptedAt: c.queued_at, hereAt: t === 'here' ? c.queued_at : null })));
+    S.codes = (s.codes || []).map((c) => ({ pid: c.case_id, by: c.by_name, at: c.at }));
+    syncDesk();
+  }
+  async function loadRec(id) {
+    if (loadingRec === id) return; loadingRec = id;
+    try {
+      const r = await rpc('chart_case', { p_id: id }), c = r.case || {}, E = (r.entries || []).filter((e) => !e.error);
+      const by = (e) => (String(e.by) === String(ME_ID) ? 'me' : e.by_name || '');
+      const d = (e) => e.data || {};
+      RECS[id] = { rev: REV, can: r.can || {}, p: {
+        age: c.age, symptoms: c.symptoms || [], fullName: c.patient_name, follow: c.follow_up, rating: c.rating, ratedBy: c.rating_source === 'reception' ? 'desk' : c.rating_source ? 'patient' : null,
+        vitals: E.filter((e) => e.kind === 'vitals').map((e) => ({ at: e.at, by: by(e), ...d(e) })),
+        did: E.filter((e) => e.kind === 'intervention').map((e) => ({ id: e.id, what: d(e).text, by: by(e), at: e.at })),
+        orders: E.filter((e) => e.kind === 'order').map((e) => ({ id: e.id, what: d(e).text, who: d(e).who || 'Anyone', by: by(e), at: e.at, done: e.done_at || d(e).done_at || null, doneBy: e.done_by_name || d(e).done_by_name, result: e.result || d(e).result || null })),
+        diagnosis: (E.filter((e) => e.kind === 'diagnosis').pop() || { data: {} }).data.text || c.diagnosis || null,
+        notes: (E.filter((e) => e.kind === 'note').pop() || { data: {} }).data.text || '',
+        consults: (r.requests || []).filter((q) => q.done_at && q.kind !== 'imaging').map((q) => ({ by: String(q.accepted_by) === String(ME_ID) ? 'me' : q.accepted_by_name, type: q.kind, at: q.done_at, text: q.done_note || '' })),
+        colourLog: (r.history || []).filter((h) => h.action === 'colour' || h.action === 'confirm_colour').map((h) => ({ from: (h.detail || {}).from, to: (h.detail || {}).to ?? c.esi, by: h.actor_name, at: h.at, confirm: h.action === 'confirm_colour' })),
+        log: (r.history || []).map((h) => ({ at: h.at, t: histWords(h) })),
+        arrived: c.opened_at || c.queued_at } };
+      const p = byId(id); if (p) Object.assign(p, RECS[id].p);
+      render();
+    } catch (e) { if (e.hint === 'no_access' && S.open === id) { S.open = null; toast(esc(e.message)); render(); } }
+    loadingRec = null;
+  }
+  const canDo = (p, k) => { const r = RECS[p.id]; return r ? r.can[k] !== false : true; };
+
+  // ---------- small pieces the screens use ----------
   const log = (p, t) => (p.log = p.log || []).push({ at: new Date(), t });
-  const fresh = (o) => ({ id: ++nextId, vitals: [], did: [], orders: [], diagnosis: null, notes: '', colourLog: [], arrived: new Date(), ...o });
   const outName = (k) => ({ lbbs: 'Left before being seen', ended: 'Closed at end of session', died: 'Deceased', transferred: 'Transferred' }[k] || (D.OUTCOMES.find((o) => o[0] === k) || [0, k])[1]);
-  // A patient's extra teams become pending requests once someone has them: Medical = doctor, Surgical = surgeon.
-  function teamReqs(p, why) { if (p.stage !== 'care' || !p.nurse) return;
-    teamsOf(p).slice(1).forEach((t) => { const type = t === 'Medical' ? 'doctor' : t === 'Surgical' ? 'surgery' : null;
-      if (type && !S.reqs.some((r) => r.pid === p.id && r.type === type && isOpenReq(r))) S.reqs.push({ id: ++reqId, type, mode: type === 'surgery' ? 'down' : undefined, pid: p.id, by: p.nurse, at: new Date(), note: `${t} needed (${why})`, auto: true }); }); }
+  const teamsArg = (t) => (t && t.length ? t : ['Any']);
   // Reception can change the colour while the patient is still on the desk side; once a nurse is with them, the nurse owns it.
   const deskOwnsColour = (p) => p.stage === 'checkin' || p.stage === 'queue' || (p.stage === 'care' && (p.phase === 'assigned' || p.phase === 'called'));
   function editBox(p) { const own = deskOwnsColour(p), tm = teamsOf(p), lock = p.stage === 'care' && p.phase !== 'assigned' && p.phase !== 'called';
     return `<div class="sendbox edit-box"><div class="ma-h"><b>Edit ${esc(p.name)}</b><button type="button" class="btn small" data-a="editx">Done</button></div>
       <div class="f"><span>Teams <em>${lock ? 'a nurse has them: you can add a team (it becomes a request), not remove one' : 'first = main team'}</em></span><div class="chips">${[...D.CARE_DEPTS.map((x) => x[0]), 'Any'].map((t) => { const i = tm.indexOf(t);
         return `<button type="button" class="chip team${i >= 0 ? ' on' : ''}" aria-pressed="${i >= 0}" style="--dc:${deptColour(t)}" data-eteam="${t}"${lock && (i >= 0 || t === 'Any') ? ' disabled' : ''}>${t === 'Any' ? 'Any team' : t}${i === 0 && t !== 'Any' && tm.length > 1 ? ' <i>main</i>' : ''}</button>`; }).join('')}</div></div>
-      ${own ? `<div class="f"><span>Their colour</span>${urgPicker(p.urgency, 'data-ecol')}</div>${colourQs('data-ecol')}` : `<div class="f"><span>Their colour</span><div class="urg-now">${upill(p.urgency)}<span class="muted small">${esc(first(p.nurse))} is with them, so the nurse owns the colour now.</span></div></div>`}</div>`; }
-  function editTeam(p, t) { const before = teamsOf(p).join(' + '), lock = p.stage === 'care' && p.phase !== 'assigned' && p.phase !== 'called';
+      ${own ? `<div class="f"><span>Triage colour</span>${urgPicker(p.urgency, 'data-ecol')}</div>${colourQs('data-ecol')}` : `<div class="f"><span>Triage colour</span><div class="urg-now">${upill(p.urgency)}<span class="muted small">${esc(first(p.nurse))} is with them, so the nurse owns the colour now.</span></div></div>`}</div>`; }
+  function editTeam(p, t) { const lock = p.stage === 'care' && p.phase !== 'assigned' && p.phase !== 'called';
     if (lock && (teamsOf(p).includes(t) || t === 'Any')) return;
-    p.teams = toggleTeam(teamsOf(p), t); if (!p.teams.length) p.teams = ['Any']; p.dept = p.teams[0];
-    log(p, `Teams changed by Reception: ${before} → ${p.teams.join(' + ')}`); teamReqs(p, 'added by Reception');
-    toast(`${esc(p.name)}: ${esc(p.teams.join(' + '))}.${p.stage === 'care' && p.nurse ? ' Extra teams show as requests.' : ''}`); }
-  function editColour(p, n) { if (!deskOwnsColour(p) || n === p.urgency) return; const from = p.urgency;
-    setColour(p, n, 'desk', 'Changed by Reception'); log(p, `Colour changed by Reception: ${U(from) ? U(from).name : 'none'} → ${U(n).name}`);
-    toast(`${esc(p.name)} is now ${esc(U(n).name)}.${p.stage === 'queue' ? ` ${nth(place(p))} in Up next.` : ''}`); }
-  function touch(p) { if (p && p.nurse === 'me' && p.phase === 'called') { p.phase = 'in'; p.called = true; p.handback = null; log(p, 'With the patient (started charting)'); } }
-  function closeReqs(p) { S.reqs.forEach((r) => { if (r.pid === p.id && isOpenReq(r)) r.cancelled = 'Patient left'; }); S.codes = S.codes.filter((c) => c.pid !== p.id); }
-  function finish(p, outcome) { closeReqs(p); Object.assign(p, { outcome, stage: 'closed', phase: null, room: null, offWard: null, closedAt: new Date() }); if (S.open === p.id) S.open = null; log(p, `Closed: ${outName(outcome)}`); }
+    let next = toggleTeam(teamsOf(p), t); if (!next.length) next = ['Any'];
+    call('chart_set_team', { p_case: p.id, p_teams: next }, `${esc(p.name)}: ${esc(next.join(' + '))}.`); }
+  function editColour(p, n) { if (!deskOwnsColour(p) || n === p.urgency) return;
+    call('chart_colour', { p_case: p.id, p_esi: n, p_reason: 'Changed by Reception' }, `${esc(p.name)} is now ${esc(U(n).name)}.`); }
+
   const act = {
-    deskOn() { S.deskBy = 'me'; S.sec = 'desk'; },
-    deskOff() { S.deskBy = null; toConfirm().forEach((p) => act.confirm(p, fromSaid[p.said] || 4, true)); },
     add(d) {
-      const p = fresh({ name: d.name.trim() || 'Unknown patient', roblox: d.roblox.trim(), age: d.age ? +d.age : null, symptoms: d.symptoms.slice(), urgency: null, stage: 'queue', source: 'desk', queuedAt: new Date(), teams: d.teams.length ? d.teams.slice() : ['Any'] }); p.dept = p.teams[0];
-      setColour(p, d.urgency, 'desk'); P().push(p); S.draft = { name: '', roblox: '', age: '', symptoms: [], urgency: null, teams: [] }; S.npOpen = false;
-      toast(`${esc(p.name)} checked in · ${nth(place(p))} in the queue · send them to ${esc(D.WAITING_ROOM)}.`);
+      call('chart_checkin', { p_patient: { name: d.name.trim(), roblox_username: d.roblox.trim() || null, age: d.age ? +d.age : null, symptoms: d.symptoms.slice() },
+        p_source: S.role === 'reception' || S.role === 'super' ? 'desk' : 'walk_in', p_esi: d.urgency, p_teams: teamsArg(d.teams) },
+        `${esc(d.name.trim())} checked in · send them to ${esc(D.WAITING_ROOM)}.`);
+      S.draft = { name: '', roblox: '', age: '', symptoms: [], urgency: null, teams: [] }; S.npOpen = false;
     },
-    confirm(p, colour, auto) { p.teams = (S.cdept[p.id] && S.cdept[p.id].length ? S.cdept[p.id] : null) || p.teams || [p.dept || 'Any']; p.dept = p.teams[0]; setColour(p, colour, auto ? 'self' : 'desk'); p.stage = 'queue'; p.queuedAt = new Date(); S.confirmFor = null;
-      if (!auto) toast(`${esc(p.name)} confirmed: ${nth(place(p))} in Up next. They wait in ${esc(D.WAITING_ROOM)}.`); },
-    arrive(a) {
-      const x = a || D.ARRIVALS[S.arrivals++ % D.ARRIVALS.length];
-      const p = fresh({ ...x, urgency: null, stage: 'checkin', source: 'online' }); P().push(p);
-      if (!S.deskBy) act.confirm(p, fromSaid[p.said] || 4, true);
-      toast(`<b>${esc(p.name)}</b> checked in online (“${esc(p.said || '')}”). ${S.deskBy ? 'Reception will confirm them.' : superOn() ? 'Nobody is on Reception, so they joined Up next for the supervisor.' : 'Nobody is on Reception, so they go to the next person who is Ready.'}`);
-      return p;
+    confirm(p, colour) { S.confirmFor = null;
+      call('chart_confirm_online', { p_case: p.id, p_esi: colour, p_teams: teamsArg(S.cdept[p.id] || p.teams), p_child: !!(p.child || isChild(p)) }, `${esc(p.name)} confirmed and in the queue.`); },
+    gotIt(p) { call('chart_got_it', { p_case: p.id }, `Accepted: ${esc(p.name)}${p.room ? ', ' + esc(shortBed(p.room)) : ''}.`); },
+    calledOut(p, undo) { call('chart_called_out', { p_case: p.id, p_undo: !!undo }, undo ? 'Called in: undone.' : `${esc(p.name)} called in · <button type="button" class="toast-undo" data-undocall="${p.id}">Undo</button>`); },
+    withPatient(p) { return call('chart_with_patient', { p_case: p.id }, `You're with ${esc(p.name)}.`); },
+    noShow(p) { call('chart_no_show', { p_case: p.id }, `${esc(p.name)}: no show recorded.`); },
+    ready() { call('chart_ready', { p_on: true }, (r) => (r.need_room ? 'Pick your room first.' : superOn() ? 'You’re Ready. The supervisor will give you your next patient.' : 'You’re Ready.'),
+      { need_room: () => { S.pick = true; toast('Pick your room first.'); } }).then((r) => { if (r && r.need_room) { S.pick = true; render(); } }); },
+    notReady() { call('chart_ready', { p_on: false }); },
+    stayReady() { call('chart_stay_ready', {}, 'Still Ready.'); },
+    bump(p) { call('chart_prioritise', { p_case: p.id, p_on: !p.bumped }, p.bumped ? 'Priority removed.' : `${esc(p.name)} prioritised.`); },
+    recheck(p, colour) { S.recheckFor = null; call('chart_colour', { p_case: p.id, p_esi: colour, p_reason: 'Re-checked while waiting' }, `${esc(p.name)} re-checked: ${esc(U(colour).name)}.`); },
+    handback(p, note) { S.handbackFor = null; if (S.open === p.id) S.open = null; return call('chart_hand_back', { p_case: p.id, p_note: String(note || '').trim() }, `${esc(p.name)} handed over.`); },
+    // Discharge (FLOW-AUDIT §3). The details v1 has no argument for (admitted to, left AMA, forced) go on the record as a note first.
+    async leave(p, outcome, forced) {
+      const lv = { ...S.lv };
+      try {
+        await touch(p);
+        if (outcome === 'left') await rpc('chart_left', { p_case: p.id, p_kind: 'left_during_care', p_note: (lv.left || '').trim() });
+        else await rpc('chart_discharge', { p_case: p.id, p_outcome: { home: 'home', follow: 'follow_up', admit: 'admitted', transferred: 'transferred' }[outcome],
+          p_follow_up: (lv.follow || '').trim() || null, p_advice: (p.advice || '').trim() || null, p_admitted_to: outcome === 'admit' ? (lv.admit || '').trim() || null : null, p_forced: !!forced });
+        Object.assign(S, { tab: 'chart', outcome: null, open: null, lv: {}, forceAsk: false });
+        toast(outcome === 'left' ? `${esc(p.name)}: left against medical advice.` : `${esc(p.name)} ${outcome === 'admit' ? 'admitted' : 'discharged'}. Hand over the discharge papers in game.`);
+      } catch (e) { if (e.hint === 'min_record') { S.forceAsk = true; render(); return; } toast(esc(e.message)); }
+      await poll(true);
     },
-    // A patient is given to someone (auto mode, or the Supervisor by hand). They have 60 s to press Got it.
-    assign(p, sid, bed) {
-      const inRoom = !!p.room;
-      const target = inRoom ? p.room : bed || bedPick(p, sid), no = bedUsable(target, p);
-      if (no) { toast(`${esc(p.name)} can't go there: ${esc(no)}.`); return null; }
-      if (!inRoom) p.room = target; else if (!ownerOf(p.room)) S.bedOwner[p.room] = sid;
-      Object.assign(p, { stage: 'care', phase: 'assigned', assignedAt: new Date(), nurse: sid, takenAt: new Date(), bumped: false, called: false, calledOut: false, inRoom });
-      if (sid === 'me') { S.ready = false; S.readyGone = false; } else { delete S.staffReady[sid]; setTimeout(() => { if (p.phase === 'assigned' && p.nurse === sid) { act.gotIt(p); render(); } }, 2500); }
-      log(p, `Given to ${first(sid)} in ${p.room || '?'}${superOn() ? '' : ' (auto)'}`);
-      teamReqs(p, 'picked at check-in');
-      return p;
+    async death(p, d) {
+      const [h, m] = String(d.time || '').split(':').map(Number), t = new Date(); if (!isNaN(h)) t.setHours(h, m || 0, 0, 0);
+      try { await rpc('chart_left', { p_case: p.id, p_kind: 'died', p_note: d.note.trim(), p_time_of_death: t.toISOString(), p_confirmed_by: idOf(d.by) });
+        Object.assign(S, { tab: 'chart', outcome: null, open: null, lv: {}, dth: {}, deathFor: null }); toast(`Death recorded for ${esc(p.name)}.`); }
+      catch (e) { toast(esc(e.message)); }
+      await poll(true);
     },
-    gotIt(p) { p.phase = p.inRoom ? 'in' : 'called'; p.calledAt = new Date(); p.called = p.inRoom; if (p.inRoom) p.handback = null; log(p, `${first(p.nurse)} accepted the patient`);
-      if (p.nurse === 'me') toast(`Accepted: ${esc(p.name)}, ${esc(shortBed(p.room))}.`); },
-    missed(p) { const who = p.nurse; log(p, `${first(who)} didn't accept in time`);
-      Object.assign(p, { stage: 'queue', phase: null, nurse: null, bumped: true }); if (!p.inRoom) p.room = null;
-      if (who === 'me') { S.ready = false; if (S.open === p.id) S.open = null; toast('Patient not accepted in time. They\u2019ve gone back to the queue, and you\u2019re now Not ready.'); } },
-    calledOut(p) { p.calledOut = true; p.calledOutAt = new Date(); log(p, 'Called in by reception'); toast(`${esc(p.name)} called in · <button type="button" class="toast-undo" data-undocall="${p.id}">Undo</button>`, 5000); },
-    withPatient(p) { p.phase = 'in'; p.called = true; p.handback = null; log(p, `With ${first(p.nurse)}`); toast(`You're with ${esc(p.name)}.`); },
-    noShow(p) { p.noShows = (p.noShows || 0) + 1; const room = p.room; closeReqs(p);
-      if (p.noShows >= 2) { finish(p, 'lbbs'); toast(`${esc(p.name)} didn't turn up again, so they're closed as Left before being seen.`); return; }
-      Object.assign(p, { stage: 'queue', phase: null, nurse: null, room: null, bumped: true }); log(p, 'No show: back to the top of Up next (once)');
-      toast(`${esc(p.name)} didn't turn up, so they're back at the top of Up next. ${esc(room || '')} is free again.`); },
-    ready() {
-      if (!bedsOf('me').length) { S.pick = true; toast('Pick your room first.'); return; }
-      if (roomCap() <= 0) { toast(mine().length >= D.LIMIT ? `You have ${D.LIMIT} patients, the most anyone can have.` : 'Your beds are all in use.'); return; }
-      S.ready = true; S.readyAt = new Date(); S.readyGone = false; S.lastAct = Date.now();
-      if (superOn()) toast('You\u2019re Ready. The supervisor will give you your next patient.');
-      else if (!autoRun()) toast('You\u2019re Ready. You\u2019ll get the next patient who fits your beds as soon as one is waiting.');
-    },
-    bump(p) { p.bumped = !p.bumped; toast(p.bumped ? `${esc(p.name)} moved to the top of Up next.` : `${esc(p.name)} is back in normal order.`); },
-    recheck(p, colour) { if (colour !== p.urgency) setColour(p, colour, 'desk', 'Re-checked while waiting'); p.queuedAt = new Date(); S.recheckFor = null;
-      toast(`${esc(p.name)} re-checked: ${esc(U(colour).name)}.`); },
-    handback(p, note, lost) { const by = p.nurse; p.handback = { note: (note || '').trim() || 'No note', by, at: new Date() }; p.hbCount = (p.hbCount || 0) + 1; if (p.hbCount >= 3) p.flag = true;
-      Object.assign(p, { stage: 'queue', phase: null, nurse: null, bumped: false, queuedAt: new Date(), offWard: null }); if (lost) { p.lost = true; p.bumped = true; }
-      log(p, `Handed over by ${first(by)}: ${p.handback.note}`); S.handbackFor = null; if (S.open === p.id) S.open = null;
-      toast(`${esc(p.name)} handed over · waiting in ${esc(p.room || 'their room')}.${p.flag ? ' <b>Handed over 3 times:</b> flagged to the supervisor.' : ''}`); },
-    // Discharge (owner, 19 Nov 2026): Home, follow-up or admitted closes the case and frees the bed; the patient's phone
-    // shows the papers and the rating. Left during care or died also close it.
-    // Left during care or died: the case closes.
-    leave(p, outcome, forced) { const room = p.room, miss = minMissing(p, outcome); p.outcome = outcome; p.leftCare = new Date();
-      if (S.lv.follow) p.follow = S.lv.follow.trim(); if (S.lv.admit) p.admittedTo = S.lv.admit.trim(); if (S.lv.left) p.leftNote = S.lv.left.trim();
-      if (forced && miss.length) log(p, `Discharged without the minimum record (missing: ${miss.join(', ')})`);
-      Object.assign(S, { tab: 'chart', outcome: null, open: null, lv: {}, forceAsk: false });
-      if (outcome === 'left') { if (p.leftNote) log(p, `Left against medical advice: ${p.leftNote}`); finish(p, outcome); toast(`${esc(p.name)}: left against medical advice.${room ? ` ${esc(shortBed(room))} free.` : ''}`); return; }
-      closeReqs(p); p.room = null; p.phase = null; p.offWard = null;
-      p.stage = 'closed'; p.discharged = true; p.closedAt = new Date();
-      log(p, `${outName(outcome)}${p.admittedTo ? ': ' + p.admittedTo : p.follow ? ': ' + p.follow : ''}`);
-      toast(`${esc(p.name)} ${outcome === 'admit' ? 'admitted' : 'discharged'}${room ? ` · ${esc(shortBed(room))} free` : ''}. Hand over the discharge papers in game.`); },
-    death(p, d) { const room = p.room; p.death = { time: d.time, by: d.by, note: d.note.trim() }; log(p, `Death recorded: ${d.time}, confirmed by ${staff(d.by).name}. ${d.note.trim()}`);
-      Object.assign(S, { tab: 'chart', outcome: null, open: null, lv: {}, dth: {}, deathFor: null }); finish(p, 'died'); toast(`Death recorded for ${esc(p.name)}.${room ? ` ${esc(shortBed(room))} free.` : ''}`); },
     checkedOut(p) { const c = S.checkout[p.id] || {};
-      if (!p.rating && c.rating) { p.rating = c.rating; p.ratedBy = 'desk'; log(p, `Rating entered by Reception for the patient: ${c.rating} of 5`); }
-      p.deskDone = true; log(p, 'Came back to the desk'); toast(`Done: ${esc(p.name)}'s visit is complete.`); },
-    lbbs(p) { finish(p, 'lbbs'); toast(`${esc(p.name)} is closed as Left before being seen.`); },
-    npc(name, bed) { if (bedUsable(bed)) { toast(`${esc(bedUsable(bed))}.`); return; } const p = fresh({ name: (name || '').trim() || 'NPC patient', npc: true, symptoms: [], urgency: null, stage: 'care', phase: 'in', called: true, nurse: 'me', room: bed, source: 'npc', queuedAt: new Date(), takenAt: new Date() });
-      setColour(p, 4, 'me'); P().push(p); log(p, 'NPC logged (no session running)'); S.npc = null; toast(`NPC ${esc(p.name)} logged in ${esc(bed)}. It counts towards your ${D.LIMIT}.`); },
+      call('chart_aftercare', { p_case: p.id, p_follow_up: (c.follow || '').trim() || null, p_papers: true, ...(!p.rating && c.rating ? { p_rating: c.rating } : {}) }, `Done: ${esc(p.name)}'s visit is complete.`)
+        .then((r) => { if (r) p.deskDone = true; render(); }); },
+    lbbs(p) { call('chart_left', { p_case: p.id, p_kind: 'left_before_seen' }, `${esc(p.name)}: left before being seen.`); },
+    npc(name, bed) { S.npc = null; call('chart_checkin', { p_patient: { name: (name || '').trim() || 'NPC patient', symptoms: [], bed: bedId(bed) }, p_source: 'npc', p_esi: 4, p_teams: ['Any'] }, `NPC logged in ${esc(bed)}. It counts towards your ${D.LIMIT}.`); },
   };
 
   // ---------- requests (OPERATIONS.md §4) ----------
   const REQ = { doctor: ['Doctor', 'A doctor comes to the room to review'], surgery: ['Surgery', 'A surgeon comes down, or takes them to surgery'],
     imaging: ['Imaging', 'You take them to Radiology yourself. The bed stays yours and shows Off the ward'], help: ['Assistance', 'Another pair of hands'] };
+  // The server decides; this only hides buttons that would certainly be refused.
   const canAccept = (r, sid = 'me') => { const role = roleOf(sid), dept = staffDept(sid);
     if (r.type === 'help') return role === 'room' || role === 'oncall';
     if (r.type === 'doctor') return (role === 'oncall' && dept === 'Medical') || role === 'super';
@@ -351,123 +464,100 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     if (r.type === 'imaging') return 'ok';
     if (r.acceptedBy) return r.hereAt ? 'ok' : since(r.acceptedAt) >= SEC(600) ? 'late' : since(r.acceptedAt) >= SEC(300) ? 'amber' : 'ok';
     if (since(r.at) >= SEC(480)) return 'stuck';
-    return since(r.at) >= SEC(180) || (p && p.urgency === 1) ? 'amber' : 'grey'; };
+    return since(r.at) >= SEC(180) || r.red || (p && p.urgency === 1) ? 'amber' : 'grey'; };
   const req = {
-    ask(p, type, note, mode) {
-      if (type === 'code') { if (!codeFor(p)) S.codes.push({ pid: p.id, by: 'me', at: new Date() }); log(p, 'Code called'); S.reqMenu = false;
-        toast(`<b>Code Blue</b> called for ${esc(p.name)} in ${esc(p.room)}. Press the Code button in game too: it starts CPR.`); return; }
+    async ask(p, type, note, mode) {
+      S.reqMenu = false; S.rq = null;
+      if (type === 'code') { call('chart_code', { p_case: p.id }, `<b>Code Blue</b> called for ${esc(p.name)}. Press the Code button in game too: it starts CPR.`); return; }
       const dup = S.reqs.find((x) => x.pid === p.id && x.type === type && isOpenReq(x)); if (dup) { toast(`A ${REQ[type][0].toLowerCase()} request is already open.`); S.rq = type; return; }
-      touch(p); const r = { id: ++reqId, type, mode, pid: p.id, by: 'me', at: new Date(), note: (note || '').trim() };
-      if (type === 'imaging') { r.acceptedBy = 'me'; r.acceptedAt = new Date(); p.offWard = 'Radiology'; log(p, `Gone to Radiology${r.note ? ': ' + r.note : ''}`);
-        toast(`Take ${esc(p.name)} to Radiology (the path between 105 and 106). The bed stays yours.`); }
-      else { log(p, `Asked for ${REQ[type][0].toLowerCase()}${mode === 'take' ? ' (take to surgery)' : ''}`); toast(`Asked for ${esc(REQ[type][0].toLowerCase())}. Keep going with ${esc(p.name)} while you wait.`); }
-      S.reqs.push(r); S.reqMenu = false; S.rq = null; },
-    accept(r, sid = 'me') { if (r.acceptedBy) { if (sid === 'me') toast(`${esc(first(r.acceptedBy))} took it.`); return false; }
-      r.acceptedBy = sid; r.acceptedAt = new Date(); const p = byId(r.pid); if (r.type === 'doctor') p.doctor = sid; log(p, `${first(sid)} accepted the ${REQ[r.type][0].toLowerCase()} request`);
-      if (sid === 'me') toast(`Room ${esc(roomIdOf(p.room) || '?')} · ${esc(p.name)} · from ${esc(title(r.by))}. Head there now.`); return true; },
-    here(r) { r.hereAt = new Date(); log(byId(r.pid), `${first(r.acceptedBy)} arrived`); },
-    done(r, text) { r.doneAt = new Date(); r.part = (text || '').trim(); const p = byId(r.pid);
-      if (r.type === 'imaging') { p.offWard = null; log(p, 'Back on the ward from Radiology'); return; }
-      (p.consults = p.consults || []).push({ by: r.acceptedBy, type: r.type, at: r.doneAt, text: r.part });
-      log(p, `Seen by ${first(r.acceptedBy)}, ${Math.max(1, Math.round(since(r.at) / 60000))} min after asking`); },
-    cancel(r, why) { r.cancelled = why || 'Cancelled'; },
-    again(r) { Object.assign(r, { acceptedBy: null, acceptedAt: null, hereAt: null, at: new Date() }); toast('The request is open again for anyone to take.'); },
-    transfer(r) { const p = byId(r.pid), room = p.room; r.doneAt = new Date(); Object.assign(p, { nurse: r.acceptedBy, phase: 'transferred', where: 'Pre-Op (2nd floor)', room: null, offWard: null });
-      log(p, `Transferred to ${first(r.acceptedBy)}: Pre-Op`); toast(`${esc(p.name)} is ${r.acceptedBy === 'me' ? 'yours now: wheel them' : 'going'} to Pre-Op (2nd floor).${room ? ` ${esc(room)} is free.` : ''}`); },
+      await touch(p);
+      await call('chart_request', { p_case: p.id, p_kind: type, p_note: (note || '').trim() || null, ...(type === 'surgery' ? { p_surgery_mode: mode === 'take' ? 'take_to_surgery' : 'come_down' } : {}) },
+        type === 'imaging' ? `Take ${esc(p.name)} to Radiology. The bed stays yours.` : `Asked for ${esc(REQ[type][0].toLowerCase())}. Keep going with ${esc(p.name)} while you wait.`);
+      if (type === 'imaging') call('chart_off_ward', { p_case: p.id, p_place: 'Radiology' });
+    },
+    accept(r) { const p = byId(r.pid); return call('chart_request_accept', { p_id: r.id }, `Accepted: room ${esc(roomIdOf(p && p.room) || '?')}, ${esc(p ? p.name : '')}.`); },
+    here(r) { call('chart_request_here', { p_id: r.id }, 'You’re at the bedside.'); },
+    done(r, text) {
+      if (r.type === 'imaging') { const p = byId(r.pid); call('chart_off_ward', { p_case: r.pid, p_place: null }).then(() => call('chart_request_cancel', { p_id: r.id, p_reason: 'Back on the ward' })); return; }
+      call('chart_request_done', { p_id: r.id, p_note: (text || '').trim() || null }, 'Consult finished.'); },
+    cancel(r, why) { call('chart_request_cancel', { p_id: r.id, p_reason: why || null }, 'Request cancelled.'); },
+    again(r) { call('chart_request_reopen', { p_id: r.id }, 'The request is open again for anyone to take.'); },
+    transfer(r) { call('chart_transfer', { p_case: r.pid, p_to: idOf(r.acceptedBy), p_off_ward: 'Pre-Op' }, 'Transferred: take them to Pre-Op (2nd floor).'); },
+    send(r, sid) { call('chart_request_send', { p_id: r.id, p_person: idOf(sid) }, `Sent to ${esc((staff(sid) || {}).name || '')}. It's still their choice to accept.`); },
+    chase(r) { call('chart_request_chase', { p_id: r.id }, 'Chased: on-call staff alerted again.'); },
   };
 
-  // No supervisor on: the Chart gives patients out by itself (§6). Whoever has been Ready longest goes first.
-  function autoRun() {
-    if (superOn()) return false; let got = null;
-    D.STAFF.filter((x) => roleOf(x.id) === 'room' && isReady(x.id)).sort((a, b) => readyAt(a.id) - readyAt(b.id))
-      .forEach((x) => { const p = bestFor(x.id); if (p && act.assign(p, x.id) && x.id === 'me') got = p; });
-    if (got) { toast(`New patient: <b>${esc(got.name)}</b>, ${esc(shortBed(got.room))}. Accept within 1 minute.`); if (!isPhone()) { S.open = got.id; S.tab = 'chart'; } }
-    return !!got;
+  function pickRole(r, dept) {
+    call('chart_role_set', { p_role: ROLE_OUT[r] || null, p_department: dept || null },
+      { reception: 'You’re on Reception.', room: `You’re on Room · ${esc(dept || '')}.`, oncall: `You’re On call · ${esc(dept || '')}.`, road: 'You’re on Road.', super: 'You’re supervising from the floor plan.' }[r] || '',
+      { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); } })
+      .then((res) => { if (!res) return;
+        Object.assign(S, { open: null, face: null, roomPanel: null, endShift: false, reqMenu: false, pick: !!res.need_room });
+        S.sec = SECTIONS[r][0][0]; S.ph = [{ s: isPhone() && r === 'super' ? 'board' : S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue'; render(); });
   }
-  function pickRole(r, dept, force) {
-    if (!force && mine().length) { S.endShift = true; toast('Hand back or finish your patients before changing role.'); return; }
-    if (r === 'reception' && !S.recOpen) { toast('Reception is closed by the supervisor.'); return; }
-    if (r !== 'room') bedsOf('me').forEach((b) => { const q = roomsInUse()[b]; if (!force || !q || q.nurse !== 'me') delete S.bedOwner[b]; });
-    Object.assign(S, { role: r, rdept: dept || null, ready: false, readyGone: false, open: null, face: null, roomPanel: null, pick: false, endShift: false, reqMenu: false });
-    syncDesk(); S.sec = SECTIONS[r][0][0]; S.ph = [{ s: isPhone() && r === 'super' ? 'board' : S.sec }]; S.deskTab = r === 'reception' ? 'checkin' : 'queue';
-    if (!force) toast({ reception: 'You\u2019re on Reception: only the front desk.', room: `You\u2019re on Room · ${esc(dept)}. Pick your room, then press Ready.`, oncall: `You\u2019re On call · ${esc(dept)}: you take requests.`, road: 'You\u2019re on Road: tell the ER who\u2019s coming in.', super: 'You\u2019re supervising from the floor plan.' }[r]);
+  const leaveRole = () => call('chart_role_set', { p_role: null }, '', { hold_patients: (e) => { S.endShift = true; toast(esc(e.message)); } });
+  // Room picking: tap beds to choose (up to 2), then Done sends them in one go.
+  function pickBed(bed) {
+    const sel = S.pickSel || (S.pickSel = bedsOf('me').slice()), o = ownerOf(bed);
+    if (sel.includes(bed)) { const p = roomsInUse()[bed]; if (p && p.nurse === 'me') { toast('You have a patient in that bed.'); return; } S.pickSel = sel.filter((b) => b !== bed); return; }
+    if (o && o !== 'me') { toast(`${esc((staff(o) || {}).name || 'Someone')} has ${esc(bed)}.`); return; }
+    const no = bedUsable(bed); if (no) { toast(`${esc(no)}.`); return; }
+    if (sel.length >= D.LIMIT) { toast(`You can have ${D.LIMIT} beds. Tap one of yours to let it go first.`); return; }
+    S.pickSel = [...sel, bed]; if (kidsOnly(bed)) toast(`${esc(bed)} is Paediatric: you'll get patients under 18 there.`);
   }
-  function pickBed(bed) { const o = ownerOf(bed), p = roomsInUse()[bed];
-    if (ownerOf(bed) !== 'me' && bedUsable(bed)) { toast(`${esc(bedUsable(bed))}.`); return; }
-    if (o === 'me') { if (p && p.nurse === 'me') { toast('You have a patient in that bed.'); return; } delete S.bedOwner[bed]; return; }
-    if (o) { toast(`${esc(staff(o).name)} has ${esc(bed)}.`); return; }
-    if (bedsOf('me').length >= D.LIMIT) { toast(`You have ${D.LIMIT} beds. Tap one of yours to let it go first.`); return; }
-    S.bedOwner[bed] = 'me'; if (kidsOnly(bed)) toast(`${esc(bed)} is Children only: you'll get patients under 18 there.`);
+  async function pickDone() {
+    const want = (S.pickSel || []).slice(), have = bedsOf('me');
+    if (!want.length) { toast('Pick at least one bed.'); return; }
+    if (want.length === have.length && want.every((b) => have.includes(b))) { S.pick = false; S.pickSel = null; render(); return; }
+    try { if (have.length) await rpc('chart_leave_beds', {}); await rpc('chart_take_beds', { p_beds: want.map(bedId) }); S.pick = false; S.pickSel = null; toast(`Your room: ${esc(want.join(', '))}. Press Ready when you're free.`); }
+    catch (e) { toast(esc(e.message)); }
+    await poll(true);
   }
   // Supervisor actions on people and rooms (§5)
   function setRole(sid, k, sure) { const m = mine(sid), cur = S.staffRole[sid]; if (!k || k === cur) return;
     if (m.length && !sure) { S.roleAsk = k; return; }
-    m.forEach((p) => act.handback(p, `${first(sid)} changed role`));
-    if (k !== 'room') bedsOf(sid).forEach((b) => delete S.bedOwner[b]);
-    S.staffRole[sid] = k; delete S.staffReady[sid]; S.roleAsk = null; syncDesk();
-    toast(`${esc(staff(sid).name)} is now ${esc(ROLE_NAME[k])}.${m.length ? ' Their patients are back in Up next, in their beds.' : ''}`); }
-  function gone(sid) { const m = mine(sid); m.forEach((p) => act.handback(p, 'Nurse left', true)); bedsOf(sid).forEach((b) => delete S.bedOwner[b]);
-    S.staffRole[sid] = 'off'; delete S.staffReady[sid]; S.face = null; syncDesk();
-    toast(`${esc(staff(sid).name)} marked as gone.${m.length ? ` ${m.length} patient${m.length > 1 ? 's are' : ' is'} back at the top of Up next, marked Lost nurse.` : ''} Their room is open.`); }
+    S.roleAsk = null;
+    call('chart_set_role_for', { p_person: idOf(sid), p_role: ROLE_OUT[k] || null, ...(m.length ? { p_hand_back_note: `${first(sid)}'s role was changed by the supervisor` } : {}) },
+      `${esc((staff(sid) || {}).name || '')} is now ${esc(ROLE_NAME[k] || 'Off the Chart')}.${m.length ? ' Their patients are back in the queue, in their beds.' : ''}`); }
+  function gone(sid) { S.face = null; call('chart_theyve_gone', { p_person: idOf(sid) }, `${esc((staff(sid) || {}).name || '')} marked as gone. Their patients are first in the queue.`); }
   function giveRoom(sid, id, move) {
-    if (S.roomCfg[id].closed) { toast(`Room ${esc(id)} is closed${S.roomCfg[id].why ? ': ' + esc(S.roomCfg[id].why) : ''}.`); return; }
+    if (S.roomCfg[id] && S.roomCfg[id].closed) { toast(`Room ${esc(id)} is closed${S.roomCfg[id].why ? ': ' + esc(S.roomCfg[id].why) : ''}.`); return; }
     const take = D.BEDS.filter((b) => roomIdOf(b) === id && !bedUsable(b) && (!ownerOf(b) || ownerOf(b) === sid)).slice(0, D.LIMIT);
     if (!take.length) { toast(`Every bed in ${esc(id)} already has someone.`); return; }
-    const old = bedsOf(sid).filter((b) => roomIdOf(b) !== id), withP = old.filter((b) => roomsInUse()[b]);
+    const withP = bedsOf(sid).filter((b) => roomIdOf(b) !== id && roomsInUse()[b]);
     if (withP.length && !move) { S.pendRoom = { sid, id }; return; }
-    const empty = take.filter((b) => !roomsInUse()[b]);
-    if (withP.length > empty.length) { toast(`Room ${esc(id)} hasn't enough free beds for ${esc(first(sid))}'s patients.`); S.pendRoom = null; return; }
-    withP.forEach((b, i) => { const q = roomsInUse()[b]; (q.moves = q.moves || []).push({ from: b, to: empty[i], by: 'me', at: new Date(), how: 'moved' }); q.room = empty[i]; });
-    old.forEach((b) => delete S.bedOwner[b]); take.forEach((b) => { S.bedOwner[b] = sid; });
-    if (!['room', 'oncall'].includes(S.staffRole[sid])) S.staffRole[sid] = 'room'; syncDesk(); S.pendRoom = null;
-    toast(`${esc(staff(sid).name)} now has ${esc(take.join(' and '))}.${old.length ? ` ${esc(old.join(', '))} ${old.length > 1 ? 'are' : 'is'} open.` : ''}${withP.length ? ' Their patients moved with them.' : ''}`);
+    S.pendRoom = null;
+    call('chart_give_room', { p_person: idOf(sid), p_beds: take.map(bedId), p_move_patients: !!move }, `${esc((staff(sid) || {}).name || '')} now has ${esc(take.join(' and '))}.`);
   }
   function giveTo(p, sid, bed, force) {
-    if (!force && !teamOk(p, sid)) { S.teamWarn = { pid: p.id, sid, bed }; return false; }
-    const no = bedUsable(p.room || bed, p); if (no) { S.teamWarn = null; toast(`${esc(p.name)} can't go there: ${esc(no)}.`); return false; }
-    if (bed && !ownerOf(bed)) S.bedOwner[bed] = sid;
-    if (!act.assign(p, sid, bed)) return false; S.teamWarn = null;
-    toast(`${esc(p.name)} given to ${esc(staff(sid).name)} in ${esc(p.room)}. They have a minute to accept.${kidsOnly(p.room) && !isChild(p) ? ' <b>Heads up:</b> that room is Children only.' : ''}${teamOk(p, sid) ? '' : ` <b>Not their team:</b> ${esc(teamsOf(p)[0])} patient.`}`); return true;
+    S.teamWarn = null;
+    return call('chart_assign', { p_case: p.id, p_bed: bedId(p.room || bed), p_person: idOf(sid), p_override: !!force },
+      `${esc(p.name)} given to ${esc((staff(sid) || {}).name || '')}. They have a minute to accept.`,
+      { not_their_team: () => { S.teamWarn = { pid: p.id, sid, bed }; } });
   }
-  const teamWarnPanel = () => { if (!S.teamWarn) return ''; const w = S.teamWarn, p = byId(w.pid), x = staff(w.sid);
-    return `<div class="move-ask warn-ask" role="alertdialog" aria-label="Not their team"><b>Not their team</b><span>${esc(p.name)}'s main team is <b>${esc(teamsOf(p)[0])}</b>. ${esc(x.name)} is working <b>${esc(staffDept(w.sid))}</b>. Give them anyway?</span>
+  const teamWarnPanel = () => { if (!S.teamWarn) return ''; const w = S.teamWarn, p = byId(w.pid), x = staff(w.sid) || {}; if (!p) return '';
+    return `<div class="move-ask warn-ask" role="alertdialog" aria-label="Not their team"><b>Not their team</b><span>${esc(p.name)}'s main team is <b>${esc(teamsOf(p)[0])}</b>. ${esc(x.name || '')} is working <b>${esc(staffDept(w.sid) || '')}</b>. Give them anyway?</span>
       <div class="row-btns"><button type="button" class="btn warn" data-a="twyes">Give anyway</button><button type="button" class="btn ghost" data-a="twno">Cancel</button></div></div>`; };
   function dropOnBed(pid, bed) {
     const p = byId(pid), o = ownerOf(bed), other = roomsInUse()[bed];
     const no = dropWhy(p, bed); if (no) { toast(`${esc(no)}.`); return; }
     if (p.stage === 'queue' && !p.room && !other) {
       if (!o) { S.who = { pid, bed }; return; }
-      if (mine(o).length >= D.LIMIT) { toast(`${esc(first(o))} already has ${D.LIMIT} patients.`); return; }
       giveTo(p, o, bed); return; }
     planMove(pid, bed);
   }
   function dropOnPerson(pid, sid) {
     const p = byId(pid);
     if (p.stage !== 'queue') { toast(`${esc(p.name)} is already with ${esc(first(p.nurse))}. Drag them onto a bed to move them.`); return; }
-    if (mine(sid).length >= D.LIMIT) { toast(`${esc(first(sid))} already has ${D.LIMIT} patients.`); return; }
-    if (p.room && ownerOf(p.room) && ownerOf(p.room) !== sid) { toast(`${esc(p.name)} is waiting in ${esc(first(ownerOf(p.room)))}'s bed. Drag them onto a bed of ${esc(first(sid))}'s instead.`); return; }
-    const bed = p.room || bedPick(p, sid); if (bed && bedUsable(bed, p)) { toast(`${esc(p.name)} can't go there: ${esc(bedUsable(bed, p))}.`); return; }
-    if (!bed) { toast(`${esc(first(sid))} has no free bed${bedsOf(sid).length ? '' : ': drag them onto a room first'}.`); return; }
+    const bed = p.room || bedPick(p, sid);
+    if (!bed) { toast(`${esc((staff(sid) || {}).name || '')} has no free bed${bedsOf(sid).length ? ' that fits' : ': drag them onto a room first'}.`); return; }
     giveTo(p, sid, bed);
   }
-  function endSession() { const open = P().filter((p) => ['checkin', 'queue', 'care'].includes(p.stage)); open.forEach((p) => finish(p, 'ended'));
-    Object.assign(S, { session: false, online: false, endSess: false, incoming: [], ready: false, codes: [] });
-    toast(`Session ended. ${open.length} open case${open.length === 1 ? '' : 's'} closed as Session ended. Online patients were told “We\u2019re closing for now”. Nothing was deleted.`); }
-  function handover(id) { const i = S.incoming.find((x) => x.id === id); i.done = true;
-    const p = fresh({ name: i.name, age: i.age ? +i.age : null, symptoms: i.what ? [i.what] : [], urgency: null, stage: 'queue', source: 'ambulance', queuedAt: new Date(), dept: 'Any', notes: `Ambulance handover: ${i.what || ''}` });
-    setColour(p, i.urgency, 'me', 'Set by the paramedic');
-    if (i.hr || i.bp) { const [sy, di] = String(i.bp || '').split('/'); p.vitals.push({ at: new Date(), by: 'me', ...(i.hr ? { hr: +i.hr } : {}), ...(sy ? { sys: +sy } : {}), ...(di ? { dia: +di } : {}) }); }
-    P().push(p); log(p, 'Handed over at the ER by the paramedic'); S.incDone = true;
-    toast(`${esc(p.name)} handed over: ${nth(place(p))} in Up next with your colour and note.`); }
-  function demoAdvance() {
-    const r = S.role === 'oncall' || S.role === 'super' ? S.reqs.find((x) => isOpenReq(x) && !x.acceptedBy && x.type !== 'imaging') : S.reqs.find((x) => isOpenReq(x) && x.by === 'me' && x.type !== 'imaging');
-    if (!r) { toast('(Demo) No open request to move on.'); return; }
-    const p = byId(r.pid);
-    if (!r.acceptedBy) { const who = r.type === 'surgery' ? 'kai' : r.type === 'help' ? 'sam' : 'mia'; req.accept(r, who); toast(`(Demo) ${esc(staff(who).name)} accepted the ${esc(REQ[r.type][0].toLowerCase())} request for ${esc(p.name)}.`); }
-    else if (r.type === 'surgery' && r.mode === 'take') req.transfer(r);
-    else if (!r.hereAt) { req.here(r); toast(`(Demo) ${esc(first(r.acceptedBy))} is in the room.`); }
-    else { req.done(r, r.type === 'doctor' ? 'Reviewed: dehydration. Fluids and rest.' : r.type === 'surgery' ? 'Reviewed: no surgery needed for now.' : 'Helped move the patient.'); toast(`(Demo) ${esc(first(r.acceptedBy))} finished. It's on the record.`); }
-  }
+  function endSession() { S.endSess = false; call('chart_session_end', { p_close_all: true }, (r) => `Session ended. ${(r.open || []).length} open case${(r.open || []).length === 1 ? '' : 's'} closed as Closed at end of session. Nothing was deleted.`); }
+  function handover(id) { S.incDone = true; call('chart_handover', { p_case: id, p_note: 'Handed over at the ER' }, 'Handed over: they’re in the queue with your colour and note.'); }
+  function roomSet(id, ch) { const c = S.roomCfg[id] || {};
+    const next = { p_room: id, p_department: S.roomDept[id], p_who: c.kids ? 'kids' : c.adults ? 'adults' : 'anyone', p_closed: !!c.closed, p_closed_reason: c.why || null, ...ch };
+    return call('chart_room_set', next, ch.p_closed === true ? `Room ${esc(id)} is closed. Nobody can take it.` : ch.p_closed === false ? `Room ${esc(id)} is open again.` : `Room ${esc(id)} updated.`); }
 
   // ---------- shared pieces ----------
   const teamPick = (sel, attr) => `<div class="chips" role="group" aria-label="Teams">${[...D.CARE_DEPTS.map((x) => x[0]), 'Any'].map((t) => { const i = sel.indexOf(t);
@@ -517,8 +607,8 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     let body = '';
     if (S.deskTab === 'checkin') body = `${S.npOpen ? newPatient() : '<button type="button" class="btn" data-a="npopen">+ Walk-in patient</button>'}
       <section class="card"><div class="card-head"><h3>Checked in online <span class="count">${toConfirm().length}</span></h3>${S.online ? '<button type="button" class="link" data-a="arrive">Simulate an online check-in</button>' : '<span class="tag-warn">Online check-in closed: walk-ins only</span>'}</div>
-        ${toConfirm().length ? `<ul class="wlist">${toConfirm().map((p) => `<li style="--u:#9aa9c4"><span class="ubar"></span>${pnameRow(p, ` · said “${esc(p.said || '–')}” · suggested ${esc(U(fromSaid[p.said] || 4).name)}`)}<span class="wl-t" data-since="${new Date(p.arrived).toISOString()}">${ago(p.arrived)}</span>
-          <span class="row-btns"><button type="button" class="btn small" data-cconf="${p.id}" data-c="${fromSaid[p.said] || 4}">Confirm ${esc(U(fromSaid[p.said] || 4).name)}</button><button type="button" class="btn small ghost" data-confirm="${p.id}">Change</button></span>${S.confirmFor === p.id ? `<div class="sendbox"><div class="f"><span>Which teams? <em>first = main</em></span>${teamPick(S.cdept[p.id] || [], `data-cdeptp="${p.id}" data-v`)}</div><div class="f"><span>Set their colour</span>${urgPicker(null, `data-cconf="${p.id}" data-c`)}</div>${colourQs(`data-cconf="${p.id}" data-c`)}</div>` : ''}</li>`).join('')}</ul>`
+        ${toConfirm().length ? `<ul class="wlist">${toConfirm().map((p) => `<li style="--u:#9aa9c4"><span class="ubar"></span>${pnameRow(p, ` · said “${esc(p.said || '–')}” · suggested ${esc(U((p.suggestedEsi || fromSaid[p.said] || 4)).name)}`)}<span class="wl-t" data-since="${new Date(p.arrived).toISOString()}">${ago(p.arrived)}</span>
+          <span class="row-btns"><button type="button" class="btn small" data-cconf="${p.id}" data-c="${(p.suggestedEsi || fromSaid[p.said] || 4)}">Confirm ${esc(U((p.suggestedEsi || fromSaid[p.said] || 4)).name)}</button><button type="button" class="btn small ghost" data-confirm="${p.id}">Change</button></span>${S.confirmFor === p.id ? `<div class="sendbox"><div class="f"><span>Which teams? <em>first = main</em></span>${teamPick(S.cdept[p.id] || [], `data-cdeptp="${p.id}" data-v`)}</div><div class="f"><span>Set their colour</span>${urgPicker(null, `data-cconf="${p.id}" data-c`)}</div>${colourQs(`data-cconf="${p.id}" data-c`)}</div>` : ''}</li>`).join('')}</ul>`
           : '<p class="muted">Nobody to confirm. Online check-ins appear here.</p>'}</section>`;
     if (S.deskTab === 'queue') body = `<section class="card"><div class="card-head"><h3>Up next <span class="count">${upNext().length}</span></h3><span class="muted small">Prioritised first, then colour, then longest wait.</span></div>
       ${upNext().length ? `<ol class="wlist qlist">${upNext().map((p, i) => `<li style="--u:${U(p.urgency).colour}" class="${p.handback ? 'hb' : ''}"><span class="qn">${i + 1}</span>${pnameRow(p, ` · ${p.room ? `${bell}<b class="wir-inline">Waiting in ${esc(p.room)}</b>` : `in ${esc(D.WAITING_ROOM)}`}${p.bumped ? ' · <b>prioritised</b>' : ''}${p.lost ? ' · <b>needs a new nurse</b>' : ''}${p.flag ? ' · <b>handed over 3 times</b>' : ''}`)}
@@ -553,17 +643,17 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
       <div class="np-foot"><button type="button" class="btn" data-a="add"${ok ? '' : ' disabled'}>Check in to the queue</button><span class="muted small">${ok ? `${esc(d.name.trim())} · ${esc(U(d.urgency).name)}` : 'Needs a name and a triage colour.'}</span></div></section>`;
   }
   // ---------- small shared pieces for the roles ----------
-  const initial = (sid) => (staff(sid) ? staff(sid).name.replace('Dr. ', '')[0] : '?');
-  const face = (sid) => (sid ? `<span class="face${sid === 'me' ? ' me' : ''}" title="${esc(staff(sid).name)}" style="--dc:${deptColour(staffDept(sid))}">${esc(initial(sid))}</span>` : '');
+  const initial = (sid) => (staff(sid) ? nm(sid).replace('Dr. ', '')[0] : '?');
+  const face = (sid) => (sid ? `<span class="face${sid === 'me' ? ' me' : ''}" title="${esc(nm(sid))}" style="--dc:${deptColour(staffDept(sid))}">${esc(initial(sid))}</span>` : '');
   // Request tags: full words; short forms only on the compact floor-plan beds, with the full word on hover.
   const RT = { doctor: 'Doctor', surgery: 'Surgery', imaging: 'Imaging', help: 'Assist' }, RTS = { doctor: 'DR', surgery: 'SURG', imaging: 'IMG', help: 'ASSIST' };
   const flags = (p, short) => [...reqsFor(p).map((r) => { const ok = !!r.acceptedBy, lv = reqLevel(r);
-      return `<span class="rq-ic rt ${ok ? 'rt-ok' : 'rt-wait'}${lv === 'stuck' || lv === 'late' ? ' late' : ''}" title="${esc(REQ[r.type][0])}: ${r.type === 'imaging' ? 'off the ward at Radiology' : ok ? `${esc(staff(r.acceptedBy).name)} ${r.hereAt ? 'is here' : 'is on the way'}` : 'waiting for someone to take it'}">${(short ? RTS : RT)[r.type]}</span>`; }),
+      return `<span class="rq-ic rt ${ok ? 'rt-ok' : 'rt-wait'}${lv === 'stuck' || lv === 'late' ? ' late' : ''}" title="${esc(REQ[r.type][0])}: ${r.type === 'imaging' ? 'off the ward at Radiology' : ok ? `${esc(nm(r.acceptedBy))} ${r.hereAt ? 'is here' : 'is on the way'}` : 'waiting for someone to take it'}">${(short ? RTS : RT)[r.type]}</span>`; }),
     codeFor(p) ? '<span class="rq-ic code">CODE</span>' : '', p.npc ? '<span class="rq-ic npc">NPC</span>' : ''].join('');
   const noShowBtn = (p) => (since(p.calledAt) >= SEC(300) ? `<button type="button" class="btn small warn" data-noshow="${p.id}">No show</button>` : `<span class="muted small">No show after ${countdown(p.calledAt, 300)}</span>`);
   const incomingStrip = () => { const l = S.incoming.filter((i) => !i.done); return l.length ? `<div class="inc-strip"><span>Incoming by ambulance</span>${l.map((i) => `<span class="q-chip inc ro" style="--u:${U(i.urgency).colour}"><b>${esc(i.name)}</b><small>${esc(U(i.urgency).name)} · ${since(i.at) >= SEC(i.eta * 60) ? 'arriving now' : 'ETA ' + countdown(i.at, i.eta * 60)}</small></span>`).join('')}</div>` : ''; };
   const bedStrip = () => `<div class="bed-strip" aria-label="Beds"><span>Beds</span>${D.BEDS.map((b) => { const q = roomsInUse()[b], o = ownerOf(b);
-    return `<span class="bs${q ? ' used' : ''}${closedBed(b) ? ' closed' : ''}" style="${q ? `--u:${U(q.urgency).colour}` : ''}" title="${esc(b)}${o ? ' · ' + esc(staff(o).name) : ' · nobody'}${q ? ' · ' + esc(q.name) : ' · free'}">${esc(b.replace(' Bed ', ''))}${o ? `<i>${esc(initial(o))}</i>` : ''}</span>`; }).join('')}</div>`;
+    return `<span class="bs${q ? ' used' : ''}${closedBed(b) ? ' closed' : ''}" style="${q ? `--u:${U(q.urgency).colour}` : ''}" title="${esc(b)}${o ? ' · ' + esc(nm(o)) : ' · nobody'}${q ? ' · ' + esc(q.name) : ' · free'}">${esc(b.replace(' Bed ', ''))}${o ? `<i>${esc(initial(o))}</i>` : ''}</span>`; }).join('')}</div>`;
   // ---------- THE NEXT-STEP BAR (Alpha's flow audit #1): exactly one primary, worked out from where the patient really is ----------
   const myReq = (p) => S.reqs.find((r) => r.pid === p.id && isOpenReq(r) && r.type !== 'imaging' && (r.acceptedBy === 'me' || (!r.acceptedBy && S.role === 'oncall' && canAccept(r))));
   const youAre = (sid, verb) => (sid === 'me' ? `You're ${verb}` : `${first(sid)} is ${verb}`);
@@ -624,7 +714,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     const free = `${cap} bed${cap === 1 ? '' : 's'} free`;
     const card = m.length >= D.LIMIT ? `<div class="ready-line"><b>You have ${D.LIMIT} patients</b><span>That's the most at once. Finish or hand over one to get another.</span></div>`
       : cap <= 0 ? `<div class="ready-line"><b>Your bed${beds.length > 1 ? 's are' : ' is'} in use</b><span>${beds.length < D.LIMIT ? 'One bed means one patient at a time.' : 'Ready comes back when a bed frees.'}</span>${beds.length < D.LIMIT ? '<button type="button" class="btn small ghost" data-a="pick">Add a room</button>' : ''}</div>`
-      : S.ready ? `<div class="${m.length ? 'ready-line on' : 'ready-card on'}"><span class="ready-dot" aria-hidden="true"></span><b>You're Ready</b><span>${superOn() ? 'The supervisor will give you your next patient.' : 'You\u2019ll get the next patient who fits your beds.'} Expires in ${countdown(Math.max(S.lastAct, readyAt('me')), 600)} if nothing happens.</span><span class="row-btns"><button type="button" class="btn small ghost" data-a="stayready">Stay ready</button><button type="button" class="btn small ghost" data-a="notready">Not ready</button></span>${m.length ? '' : deskOffer}</div>`
+      : S.ready ? `<div class="${m.length ? 'ready-line on' : 'ready-card on'}"><span class="ready-dot" aria-hidden="true"></span><b>You're Ready</b><span>${superOn() ? 'The supervisor will give you your next patient.' : 'You\u2019ll get the next patient who fits your beds.'} Expires in ${countdown(S.readyExp ? new Date(Date.parse(S.readyExp) - 600000).toISOString() : new Date(Date.now() + SKEW).toISOString(), 600)} if nothing happens.</span><span class="row-btns"><button type="button" class="btn small ghost" data-a="stayready">Stay ready</button><button type="button" class="btn small ghost" data-a="notready">Not ready</button></span>${m.length ? '' : deskOffer}</div>`
       : m.length ? `<div class="ready-line"><b>Ready for another?</b><span>${free}</span><button type="button" class="btn small" data-a="ready">Ready</button></div>`
       : `<div class="ready-card">${S.readyGone ? '<b>Your Ready status expired</b><span>10 minutes went by with no patient. Still free?</span>' : `<b>Ready for a patient?</b><span>${superOn() ? 'Press Ready and the supervisor will give you one.' : 'Press Ready and you\u2019ll be given the next patient who fits your beds.'}</span>`}<button type="button" class="btn big ready-btn" data-a="ready">Ready</button></div>`;
     return `<div class="pane-pad care"><div class="pane-head"><div><h2>My Room</h2><p class="muted">${beds.map(esc).join(' · ')} · ${m.length} of ${D.LIMIT} patients</p></div>${m.length ? '' : '<button type="button" class="btn ghost" data-a="pick">Change room</button>'}</div>
@@ -715,14 +805,14 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">${S.online ? 'Online check-in open' : 'Full: walk-ins only'}</button>
     <button type="button" class="btn small ghost" data-a="endsess">End session</button></div>`;
   const closeWhy = (id) => { const beds = D.BEDS.filter((b) => roomIdOf(b) === id), pt = beds.map((b) => roomsInUse()[b]).find(Boolean), ow = beds.map(ownerOf).find(Boolean);
-    return pt ? `${pt.name} is in it: move them out first.` : ow ? `${ow === 'me' ? 'You have' : staff(ow).name + ' has'} it: make it open first (below).` : ''; };
+    return pt ? `${pt.name} is in it: move them out first.` : ow ? `${ow === 'me' ? 'You have' : nm(ow) + ' has'} it: make it open first (below).` : ''; };
   const roomLog = (id, t) => S.roomCfg[id].log.unshift({ at: new Date(), by: 'me', t });
   function roomPanel() { const id = S.roomPanel; if (!id) return ''; const c = S.roomCfg[id], beds = D.BEDS.filter((b) => roomIdOf(b) === id);
     return `<div class="move-ask room-set"><div class="ma-h"><b>Room ${esc(id)} settings</b><button type="button" class="link" data-a="roompx">Done</button></div>
       <div class="f"><span>Department</span><div class="chips">${[...D.CARE_DEPTS.map((x) => x[0]), 'Any'].map((d) => `<button type="button" class="chip team${S.roomDept[id] === d ? ' on' : ''}" style="--dc:${deptColour(d)}" data-rdset="${d}">${d}</button>`).join('')}</div></div>
       <div class="f"><span>Who can go in</span><div class="chips">${[['', 'Anyone'], ['kids', 'Paediatric only'], ['adults', 'Adults only']].map(([k, l]) => { const on = k ? c[k] : !c.kids && !c.adults; return `<button type="button" class="chip${on ? ' on' : ''}" aria-pressed="${on}" data-rrestr="${k}">${l}</button>`; }).join('')}</div></div>
       ${beds.length > 1 ? `<div class="f"><span>Beds available</span><div class="chips">${beds.map((b) => { const off = !!c.off[b], used = roomsInUse()[b]; return `<button type="button" class="chip${off ? '' : ' on'}" aria-pressed="${!off}" data-bedoff="${esc(b)}"${used && !off ? ' disabled title="Someone is in it"' : ''}>${esc(b.split(' ').slice(1).join(' '))}${off ? ' · off' : ''}</button>`; }).join('')}</div></div>` : ''}
-      <div class="f"><span>Who has it</span>${beds.map((b) => { const o = ownerOf(b), q = roomsInUse()[b]; return `<div class="rp-bed"><span>${esc(b)}</span>${o ? `${face(o)} ${esc(staff(o).name)}${q && q.stage === 'care' ? '' : ` <button type="button" class="link" data-unown="${esc(b)}">Make open</button>`}` : '<span class="muted">Nobody</span>'}</div>`; }).join('')}</div>
+      <div class="f"><span>Who has it</span>${beds.map((b) => { const o = ownerOf(b), q = roomsInUse()[b]; return `<div class="rp-bed"><span>${esc(b)}</span>${o ? `${face(o)} ${esc(nm(o))}${q && q.stage === 'care' ? '' : ` <button type="button" class="link" data-unown="${esc(b)}">Make open</button>`}` : '<span class="muted">Nobody</span>'}</div>`; }).join('')}</div>
       ${c.closed ? `<div class="rs-closed"><b>Closed</b><span>${esc(c.why || 'No reason given')}</span><button type="button" class="btn small" data-a="roomopen">Open the room</button></div>`
         : `<div class="f"><span>Close the room <em>nobody can take it while it's closed</em></span><div class="fb-row"><input id="rc-why" placeholder="Why? e.g. Training in ${esc(id)}" autocomplete="off"><button type="button" class="btn warn" data-a="roomclose"${closeWhy(id) ? ` disabled title="${esc(closeWhy(id))}"` : ''}>Close room</button></div>${closeWhy(id) ? `<small class="muted">${esc(closeWhy(id))}</small>` : ''}</div>`}
       ${c.log.length ? `<details class="rs-log"><summary>Changes (${c.log.length})</summary><ol class="tl">${c.log.map((l) => `<li><time>${clock(l.at)}</time><span>${esc(l.t)} · ${esc(first(l.by))}</span></li>`).join('')}</ol></details>` : ''}</div>`; }
@@ -771,7 +861,7 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
       <div class="plan-grid${open ? '' : ' shut'}"><div class="floor-wrap"><div class="floor" aria-label="Main ward floor plan">${floorInner('super')}</div></div>
         <aside class="plan-s" aria-label="People on shift"><div class="ps-h"><h3>People</h3><button type="button" class="link" data-a="pplx" aria-expanded="${open}" title="${open ? 'Make the People list narrow' : 'Show the People list'}">${open ? 'Hide' : '‹'}</button></div>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('')}</aside></div>
       ${S.roomPanel ? `<div class="room-pop" data-room="${S.roomPanel}" role="dialog" aria-label="Room ${S.roomPanel} settings">${roomPanel()}</div>` : ''}
-      ${S.face ? `<div class="popover" data-anchor="${S.face}" role="dialog" aria-label="${esc(staff(S.face).name)}">${facePanel()}</div>` : ''}</div>`;
+      ${S.face ? `<div class="popover" data-anchor="${S.face}" role="dialog" aria-label="${esc(nm(S.face))}">${facePanel()}</div>` : ''}</div>`;
   }
   // The main ward floor plan, roughly to scale with the owner's map (chart/maps/main-ward.png). Units are ~studs:
   // corridors are 20 wide and run all round the Central Hub (one building: the nurses' & doctors' station, break room,
@@ -799,14 +889,14 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     const placing = mode === 'super' && S.placeFor && !p ? (dropWhy(byId(S.placeFor), bed) ? ' no-drop' : ' fit') : '';
     if (placing === ' fit') return `<button type="button" class="${cls} fit" data-placebed="${esc(bed)}" aria-label="Place ${esc(byId(S.placeFor).name)} in ${esc(bed)}"><span class="bed-n">${esc(short)}</span><small class="free-l">Place</small></button>`;
     if (mode === 'pick') return `<button type="button" class="${cls} pickable" data-pickbed="${esc(bed)}" aria-pressed="${o === 'me'}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}><span class="bed-n">${esc(short)}</span>${o ? `${face(o)}<b>${o === 'me' ? 'Yours' : esc(first(o))}</b>` : `<small class="free-l">${p ? `${esc(p.name)} waiting · nobody's` : bedOff(bed) ? 'Unavailable' : closedBed(bed) ? `Closed${S.roomCfg[roomIdOf(bed)].why ? ': ' + esc(S.roomCfg[roomIdOf(bed)].why) : ''}` : 'Free'}</small>`}</button>`;
-    return `<div class="${cls}${placing}" data-bed="${esc(bed)}"${p ? ` style="--u:${U(p.urgency).colour}" data-open="${p.id}"${mode === 'super' ? ` data-drag="${p.id}"` : ''} role="button" tabindex="0" aria-label="${esc(p.name)} in ${esc(bed)}${o ? ', ' + esc(staff(o).name) + '\u2019s bed' : ''}. Enter opens the record${mode === 'super' ? ', M moves them' : ''}."` : ''}>
+    return `<div class="${cls}${placing}" data-bed="${esc(bed)}"${p ? ` style="--u:${U(p.urgency).colour}" data-open="${p.id}"${mode === 'super' ? ` data-drag="${p.id}"` : ''} role="button" tabindex="0" aria-label="${esc(p.name)} in ${esc(bed)}${o ? ', ' + esc(nm(o)) + '\u2019s bed' : ''}. Enter opens the record${mode === 'super' ? ', M moves them' : ''}."` : ''}>
       ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}">${esc(narrow ? inits(p.name) : p.name)}</b><span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l">${bedOff(bed) ? 'Off' : narrow ? '' : 'Free'}</small>`}</div>`; };
   const roomBox = (r, mode) => { const beds = D.BEDS.filter((b) => D.roomOfBed(b) === r), g = FLOOR.rooms[r.id]; if (!g) return '';
     const c = S.roomCfg[r.id], rd = S.roomDept[r.id], open = !beds.some(ownerOf);
     const owners = [...new Set(beds.map(ownerOf).filter(Boolean))];
     const helpers = S.reqs.filter((x) => isOpenReq(x) && x.acceptedBy && x.type !== 'imaging' && beds.includes((byId(x.pid) || {}).room));
     const people = [...owners, ...helpers.map((x) => x.acceptedBy)];
-    const who = mode === 'pick' ? '' : `<span class="rh-who">${owners.map((o) => `${face(o)}${g[2] >= 100 ? `<i>${esc(o === 'me' ? 'You' : first(o).replace('Dr. ', 'Dr '))}</i>` : ''}`).join('')}${helpers.map((x) => `<span class="face helper${x.hereAt ? '' : ' going'}" style="--dc:${deptColour(staffDept(x.acceptedBy))}" title="${esc(staff(x.acceptedBy).name)} ${x.hereAt ? 'is here' : 'is on the way'} (${esc(REQ[x.type][0].toLowerCase())})">${esc(initial(x.acceptedBy))}</span>`).join('')}</span>`;
+    const who = mode === 'pick' ? '' : `<span class="rh-who">${owners.map((o) => `${face(o)}${g[2] >= 100 ? `<i>${esc(o === 'me' ? 'You' : first(o).replace('Dr. ', 'Dr '))}</i>` : ''}`).join('')}${helpers.map((x) => `<span class="face helper${x.hereAt ? '' : ' going'}" style="--dc:${deptColour(staffDept(x.acceptedBy))}" title="${esc(nm(x.acceptedBy))} ${x.hereAt ? 'is here' : 'is on the way'} (${esc(REQ[x.type][0].toLowerCase())})">${esc(initial(x.acceptedBy))}</span>`).join('')}</span>`;
     return `<div class="fp-room${c.kids ? ' ped' : ''}${c.closed ? ' closed' : ''}${open ? ' open' : ''}${mode === 'pick' && rd === S.rdept ? ' mydept' : ''}${g[2] > g[3] * 1.3 ? ' wide' : ''}${r.beds > 1 && g[2] <= g[3] * 1.3 ? ' stack' : ''}${S.face && people.includes(S.face) ? ' hl' : ''}" data-room="${r.id}" data-people="${people.join(' ')}" title="Room ${r.id} · ${esc(rd)}${c.kids ? ' · children only' : ''}${c.closed ? ' · closed' : ''}" style="${box(g)};--dc:${deptColour(rd)}">
       <div class="fp-rh"><b>${r.id}</b>${g[2] >= 100 || mode === 'pick' ? `<span class="rd-tag">${esc(rd)}</span>` : ''}${c.kids ? '<span class="ped-tag">Paediatric</span>' : ''}${c.adults ? '<span class="ad-tag">Adults</span>' : ''}${who}${mode === 'super' ? `<button type="button" class="rh-edit" data-roomcfg="${r.id}" aria-label="Room ${r.id} settings" title="Room ${r.id} settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button>` : ''}</div>
       ${c.closed ? `<div class="cl-why"><b>Closed</b>${c.why ? `<span>${esc(c.why)}</span>` : ''}</div>` : ''}
@@ -839,14 +929,9 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     doMove(pid, bed);
   }
   function doMove(pid, bed, swapId) {
-    { const no = bedUsable(bed, byId(pid)); if (no) { S.pending = null; S.moveFor = null; toast(`${esc(no)}.`); return; } }
-    const p = byId(pid), from = p.room, q = swapId && byId(swapId);
-    const logMove = (x, a, b2, how) => { (x.moves = x.moves || []).push({ from: a, to: b2, by: 'me', at: new Date(), how }); };
-    if (q) { q.room = from || null; logMove(q, bed, from, 'swapped'); if (!from && q.stage === 'queue') q.room = null; }
-    p.room = bed; logMove(p, from, bed, q ? 'swapped' : 'moved');
     S.pending = null; S.moveFor = null;
-    let re = ''; if (p.stage === 'care' && ownerOf(bed) && ownerOf(bed) !== p.nurse) { const was = p.nurse; p.nurse = ownerOf(bed); re = ` Now ${first(p.nurse)}'s patient (${first(was)} is told).`; }
-    toast(`${esc(p.name)} ${from ? `moved from ${esc(from)} to` : 'is now in'} ${esc(bed)}${q ? `; ${esc(q.name)} ${q.room ? 'moved to ' + esc(q.room) : 'went back to Up next'}` : ''}.${re}${kidsOnly(bed) && !isChild(p) ? ' <b>Heads up:</b> this room is Children only.' : ''}`);
+    if (swapId) call('chart_swap', { p_case_a: pid, p_case_b: swapId }, 'Swapped.');
+    else call('chart_move', { p_case: pid, p_bed: bedId(bed) }, `Moved to ${esc(bed)}.`);
   }
   function movePanel() {
     if (S.pending) { const pd = S.pending, p = byId(pd.pid), o = pd.swap && byId(pd.swap);
@@ -948,20 +1033,25 @@ window.CBH_CHART_OFF = !(LOCAL && (() => { try { return localStorage.getItem('cb
     road: [['road', 'Incoming'], ['board', 'Ward Board']], super: [['plan', 'Floor Plan'], ['desk', 'Front Desk'], ['reqs', 'Requests'], ['board', 'Ward Board']] };
   const me = () => staff('me');
   function roleScreen() {
-    const ds = D.CARE_DEPTS.map((x) => x[0]).filter((d) => S.myDepts.includes(d)), room = ds.filter((d) => d !== 'Paramedicine'), oc = ds.filter((d) => d === 'Medical' || d === 'Surgical');
+    const can = (r) => (S.canPick || []).includes(r);
+    const ds = D.CARE_DEPTS.map((x) => x[0]).filter((d) => S.myDepts.includes(d)), room = can('room') ? ds.filter((d) => d !== 'Paramedicine') : [], oc = can('on_call') ? ds.filter((d) => d === 'Medical' || d === 'Surgical') : [];
     const db = (r, d) => `<button type="button" class="btn" style="--dc:${deptColour(d)}" data-role="${r}" data-rdept="${d}">${d}</button>`;
     return `<div class="role-screen"><div class="rs-in"><span class="lab">${S.session ? 'Session live' : 'No session running'} · CBH Chart</span><h1>What are you doing ${S.session ? 'this session' : 'right now'}?</h1>
-      <p class="muted">${S.session ? 'Pick one. During a session the patients are players only: no NPCs.' : `No session is on, so NPC patients can be charted. Next session: <b>${esc(D.nextSession)}</b>.`}</p>
+      <p class="muted">${S.session ? 'Pick one. During a session the patients are players only: no NPCs.' : `No session is on, so NPC patients can be charted.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`}</p>
       <div class="role-cards">
-        <button type="button" class="rc" data-role="reception"${S.recOpen ? '' : ' disabled'}><span class="rc-ic rc-rec" aria-hidden="true"></span><b>Reception</b><span>${S.recOpen ? 'Check people in, set their colour, call them in, check them out. You only see the front desk.' : 'The supervisor has closed Reception, so everyone is Patient Care.'}</span></button>
+        ${can('reception') || !S.recOpen ? `<button type="button" class="rc" data-role="reception"${S.recOpen ? '' : ' disabled'}><span class="rc-ic rc-rec" aria-hidden="true"></span><b>Reception</b><span>${S.recOpen ? 'Check people in, set their colour, call them in, check them out. You only see the front desk.' : 'The supervisor has closed Reception, so everyone is Patient Care.'}</span></button>` : ''}
         <div class="rc care"><span class="rc-ic rc-care" aria-hidden="true"></span><b>Patient Care</b>
-          ${room.length ? `<div class="pc-opt"><b>Room</b><span>Pick your room, press Ready, and you're given patients.</span><div class="rc-depts">${room.map((d) => db('room', d)).join('')}</div></div>` : ''}
+          ${!room.length && !oc.length && !(can('road') && ds.includes('Paramedicine')) ? '<p class="muted small">None of your departments work at the bedside.</p>' : ''}${room.length ? `<div class="pc-opt"><b>Room</b><span>Pick your room, press Ready, and you're given patients.</span><div class="rc-depts">${room.map((d) => db('room', d)).join('')}</div></div>` : ''}
           ${oc.length ? `<div class="pc-opt"><b>On call</b><span>Take doctor requests: go to the room and write your part.</span><div class="rc-depts">${oc.map((d) => db('oncall', d)).join('')}</div></div>` : ''}
-          ${ds.includes('Paramedicine') ? `<div class="pc-opt"><b>Road</b><span>Ambulance cases: tell the ER who's coming.</span><div class="rc-depts">${db('road', 'Paramedicine')}</div></div>` : ''}</div>
-        ${S.canSuper ? '<button type="button" class="rc" data-role="super"><span class="rc-ic rc-sup" aria-hidden="true"></span><b>Supervisor</b><span>Run the floor plan: give out patients and rooms, and watch requests. You have Supervise sessions (session hosts get it too).</span></button>' : ''}
+          ${can('road') && ds.includes('Paramedicine') ? `<div class="pc-opt"><b>Road</b><span>Ambulance cases: tell the ER who's coming.</span><div class="rc-depts">${db('road', 'Paramedicine')}</div></div>` : ''}</div>
+        ${S.canSuper && can('supervisor') ? '<button type="button" class="rc" data-role="super"><span class="rc-ic rc-sup" aria-hidden="true"></span><b>Supervisor</b><span>Run the floor plan: give out patients and rooms, and watch requests. You have Supervise sessions (session hosts get it too).</span></button>' : ''}
       </div>${S.superOther && S.canSuper ? '<p class="muted small">Someone else is supervising. Two supervisors both have full powers.</p>' : ''}</div></div>`;
   }
-  const gate = () => (S.role ? '' : roleScreen());
+  const nextSess = () => { try { const n = typeof currentSession === 'object' && currentSession && currentSession.next; return n && typeof whenAhead === 'function' ? whenAhead(n.scheduled_for) : ''; } catch { return ''; } };
+  const holdScreen = (h, t, btn) => `<div class="role-screen"><div class="rs-in"><span class="lab">CBH Chart</span><h1>${h}</h1>${t ? `<p class="muted">${t}</p>` : ''}${btn || ''}</div></div>`;
+  const gate = () => (!SNAP ? holdScreen(S.pollErr ? 'The Chart didn\u2019t load' : 'Loading the Chart\u2026', S.pollErr ? `${esc(S.pollErr)} Try again in a moment.` : '')
+    : !S.onShift ? holdScreen('Start a shift to use the Chart', `The Chart is for staff on shift.${nextSess() ? ` Next session: <b>${esc(nextSess())}</b>.` : ''}`, '<a class="btn" href="#shifts">Go to Shift Manager</a>')
+    : S.role ? '' : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
   const openReqCount = () => S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && (S.role === 'super' || canAccept(r))).length;
   const codeBar = () => (S.codes.length ? `<div class="code-bar" role="alert">${S.codes.map((c) => { const p = byId(c.pid); return `<div><b>CODE BLUE</b><span>Room ${esc(roomIdOf(p.room) || '?')} · ${esc(p.name)} · ${elapsed(c.at)}</span>${p.nurse === 'me' || S.role === 'super' ? `<button type="button" class="btn small" data-codeclear="${p.id}">Clear</button>` : ''}</div>`; }).join('')}</div>` : '');
@@ -1162,7 +1252,6 @@ ${nextBarHtml(p)}
     const a = [...el.attributes].filter((x) => x.name.startsWith('data-') && x.name !== 'data-since').map((x) => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
     return a ? el.tagName.toLowerCase() + a : null; };
   function render() {
-    if (!superOn()) autoRun();   // no supervisor on: Ready people get the next patient as soon as one fits
     const se = document.scrollingElement;
     const K0 = render.keys || {}, before = { page: [se.scrollTop, K0.page], ...Object.fromEntries(AREAS.map((sel) => { const e = $(sel); return [sel, e ? [e.scrollTop, K0[sel]] : null]; })) };
     const focusSig = sig(document.activeElement), keep = document.activeElement && document.activeElement.id;
@@ -1231,7 +1320,7 @@ ${nextBarHtml(p)}
     else if (t.dataset.v && t.closest('.vin')) { S.vdraft[t.dataset.v] = t.value; const v = D.VITALS.find((x) => x.key === t.dataset.v), lab = t.closest('.vin'); lab.className = 'vin ' + vstate(v, t.value); lab.querySelector('small').textContent = vrange(v, t.value, `${v.lo}–${v.hi}`); }
   });
   app.addEventListener('change', (e) => {
-    if (e.target.id === 'p-notes') { const p = byId(S.open); if (p && p.notes.trim()) { const was = p.phase; touch(p); if (was !== p.phase) render(); } return; }
+    if (e.target.id === 'p-notes') { const p = byId(S.open), v = e.target.value.trim(), last = ((RECS[S.open] || {}).p || {}).notes || ''; if (p && v && v !== last) chartIt(p, 'note', { text: v }, 'Note saved.'); return; }
     if (e.target.id === 'dth-by') { S.dth.by = e.target.value; return; }
     if (e.target.id !== 'p-room') return;
     const bed = e.target.value.replace(' (children only)', '');
@@ -1244,14 +1333,13 @@ ${nextBarHtml(p)}
     if (id === 'sym') { if (!S.draft.symptoms.includes(v)) S.draft.symptoms.push(v); return true; }
     if (id === 'psym') { if (!S.pdraft.symptoms.includes(v)) S.pdraft.symptoms.push(v); return true; }
     if (kind === 'follow') { const pid = +id.slice(2); S.checkout[pid].follow = v; byId(pid).follow = v; return true; }
-    if (/^rq\d+$/.test(id)) { req.done(reqById(id.slice(2)), v); toast('Done. Your part is on the record.'); return true; }
+    if (/^rq\d+$/.test(id)) { req.done(reqById(id.slice(2)), v); return true; }
     const p = isPhone() ? byId(top().id) : byId(S.open); if (!p) return false;
-    if (kind === 'advice') p.advice = v;
-    if (['did', 'order', 'result', 'dx', 'advice'].includes(kind)) touch(p);
-    if (kind === 'did') p.did.push({ what: v, by: 'me', at: new Date() });
-    if (kind === 'order') { p.orders.push({ what: v, who: S.orderWho || 'Anyone', by: 'me', at: new Date() }); toast(`Asked for ${esc(v)}.`); }
-    if (kind === 'result') p.orders[+id.slice(3)].result = v;
-    if (kind === 'dx') { p.diagnosis = v; S.dxEdit = false; }
+    if (kind === 'advice') { p.advice = v; return true; }   // goes out with the discharge
+    if (kind === 'did') chartIt(p, 'intervention', { text: v });
+    if (kind === 'order') chartIt(p, 'order', { text: v, who: S.orderWho || 'Anyone' }, `Ordered: ${esc(v)}.`);
+    if (kind === 'result') { const o = p.orders[+id.slice(3)]; if (o && o.id) touch(p).then(() => call('chart_order_done', { p_entry: o.id, p_result: v }, 'Result saved.')); }
+    if (kind === 'dx') { chartIt(p, 'diagnosis', { text: v }, 'Diagnosis saved.'); S.dxEdit = false; }
     return true;
   }
   app.addEventListener('keydown', (e) => { const t = e.target; if (e.key === 'Enter' && t.dataset && t.dataset.fb) { e.preventDefault(); const b = app.querySelector(`[data-fbadd="${CSS.escape(t.dataset.fb)}"]`); if (b) b.click(); } });
@@ -1266,7 +1354,7 @@ ${nextBarHtml(p)}
     if (!drag) return;
     if (!drag.ghost) { if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
       const p = drag.pid && byId(drag.pid); drag.ghost = document.createElement('div'); drag.ghost.className = 'drag-ghost'; drag.ghost.style.setProperty('--u', p ? U(p.urgency).colour : deptColour(staffDept(drag.sid)));
-      drag.ghost.textContent = p ? p.name : staff(drag.sid).name; document.body.append(drag.ghost); document.body.classList.add('dragging-p'); drag.src.classList.add('drag-src'); }
+      drag.ghost.textContent = p ? p.name : nm(drag.sid); document.body.append(drag.ghost); document.body.classList.add('dragging-p'); drag.src.classList.add('drag-src'); }
     e.preventDefault();
     drag.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
     const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -1316,8 +1404,8 @@ ${nextBarHtml(p)}
     const sure = (v, msg) => { if (String(v || '').trim()) return true; toast(msg); return false; };
     // roles and Ready
     if (ds.role) pickRole(ds.role, ds.rdept);
-    else if (ds.a === 'changerole') { if (mine().length) { S.endShift = true; if (S.role === 'room') { S.sec = 'myroom'; S.ph = [{ s: 'myroom' }]; } toast('Hand back or finish your patients before changing role.'); }
-      else { bedsOf('me').forEach((x) => delete S.bedOwner[x]); Object.assign(S, { role: null, ready: false, open: null, pick: false }); syncDesk(); } }
+    else if (ds.a === 'changerole') { if (mine().length) { S.endShift = true; if (S.role === 'room') { S.sec = 'myroom'; S.ph = [{ s: 'myroom' }]; } toast('Hand over or finish your patients before changing role.'); }
+      else { Object.assign(S, { open: null, pick: false }); leaveRole(); } }
     else if (ds.a === 'rail') S.railOpen = !S.railOpen;
     else if (ds.a === 'sndtoggle') { A.on = !A.on; saveA(); arm(); if (A.on) tone('patient'); toast(A.on ? 'Alert sounds on.' : 'Alert sounds muted.'); }
     else if (ds.a === 'alertset') { S.alertSet = !S.alertSet; if (S.alertSet) S.railOpen = true; }
@@ -1330,7 +1418,7 @@ ${nextBarHtml(p)}
     else if (ds.a === 'pplx') S.peopleOpen = !pplOpen();
     else if (ds.discharge) { const id = +ds.discharge; Object.assign(S, { outcome: null, lv: {}, forceAsk: false }); if (isPhone()) go('p-leave', { id }); else { if (S.open !== id) openP(id); S.tab = 'leave'; } }
     else if (ds.rqfinish) { const r = reqById(ds.rqfinish), v = ((S.rqf || {})[r.id] || '').trim();
-      if (!v && !ds.force) S.finishAsk = r.id; else { req.done(r, v); S.finishAsk = null; delete S.rqf[r.id]; toast('Consult finished.'); } }
+      if (!v && !ds.force) S.finishAsk = r.id; else { req.done(r, v); S.finishAsk = null; delete S.rqf[r.id]; } }
     else if (ds.a === 'finishno') { S.finishAsk = null; setTimeout(() => { const t = $('.rqf'); if (t) t.focus(); }, 0); }
     else if (ds.skipvit) S.skipVit[+ds.skipvit] = true;
     else if (ds.a === 'focusdid') { if (isPhone()) go('p-did', { id: top().id }); else { S.tab = 'chart'; setTimeout(() => { const i = $('#fb-did'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus(); } }, 0); } }
@@ -1344,19 +1432,19 @@ ${nextBarHtml(p)}
     else if (ds.mvbed) { const id = S.mvBed; S.mvBed = null; planMove(id, ds.mvbed); }
     else if (ds.place) { S.placeFor = S.placeFor === +ds.place ? null : +ds.place; if (S.placeFor) toast('Lit beds can take them: click one.'); }
     else if (ds.placebed) { const id = S.placeFor; S.placeFor = null; dropOnBed(id, ds.placebed); }
-    else if (ds.rqchase) { const r = reqById(ds.rqchase); r.chase = (r.chase || 0) + 1; r.chasedAt = new Date(); toast('Chased: on-call staff alerted again.'); }
+    else if (ds.rqchase) req.chase(reqById(ds.rqchase));
     else if (ds.a === 'incnew') S.incDone = false;
     else if (ds.a === 'urgopen') S.urgOpen = true;
     else if (ds.a === 'urgx') S.urgOpen = false;
     else if (ds.a === 'ready') act.ready();
-    else if (ds.a === 'notready') { S.ready = false; S.readyGone = false; }
-    else if (ds.a === 'stayready') { S.readyAt = new Date(); toast('Still Ready.'); }
-    else if (ds.gotit) { const p = byId(+ds.gotit); if (p.phase === 'assigned') { act.gotIt(p); openP(p.id); } }
-    else if (ds.withpt) { const p = byId(+ds.withpt); act.withPatient(p); if (!isPhone()) openP(p.id); }
+    else if (ds.a === 'notready') act.notReady();
+    else if (ds.a === 'stayready') act.stayReady();
+    else if (ds.gotit) { const p = byId(+ds.gotit); if (p && p.phase === 'assigned') { act.gotIt(p); openP(p.id); } }
+    else if (ds.withpt) { const p = byId(+ds.withpt); if (p) { act.withPatient(p); if (!isPhone()) openP(p.id); } }
     else if (ds.noshow) { act.noShow(byId(+ds.noshow)); if (isPhone()) home(); }
-    else if (ds.takeover) { const p = byId(+ds.takeover); if (!act.assign(p, 'me')) { render(); return; } act.gotIt(p); openP(p.id); toast(`You took over ${esc(p.room)}: ${esc(p.name)} is yours.`); }
-    else if (ds.a === 'pick') S.pick = true;
-    else if (ds.a === 'pickdone') { S.pick = false; toast(`Your room: ${esc(bedsOf('me').join(', '))}. Press Ready when you're free.`); }
+    else if (ds.takeover) call('chart_offer_take', {}, 'You took over the room.');
+    else if (ds.a === 'pick') { S.pick = true; S.pickSel = bedsOf('me').slice(); }
+    else if (ds.a === 'pickdone') pickDone();
     else if (ds.pickbed) pickBed(ds.pickbed);
     else if (ds.a === 'npc') S.npc = { name: '' }; else if (ds.a === 'npcx') S.npc = null;
     else if (ds.npcbed) act.npc(S.npc.name, ds.npcbed);
@@ -1366,35 +1454,35 @@ ${nextBarHtml(p)}
     else if (ds.rqmode) S.rqMode = ds.rqmode;
     else if (ds.rqgo) { req.ask(byId(+ds.rqgo), S.rq, ($('#rq-note') || {}).value, S.rq === 'surgery' ? S.rqMode : undefined); if (isPhone()) back(); }
     else if (ds.rqcode) { req.ask(byId(+ds.rqcode), 'code'); if (isPhone()) back(); }
-    else if (ds.codeclear) { S.codes = S.codes.filter((c) => c.pid !== +ds.codeclear); toast('Code Blue cleared.'); }
-    else if (ds.accept) { const r = reqById(ds.accept); if (req.accept(r)) openP(r.pid); }
+    else if (ds.codeclear) call('chart_code_clear', { p_case: +ds.codeclear }, 'Code Blue cleared.');
+    else if (ds.accept) { const r = reqById(ds.accept); if (r) req.accept(r).then((ok) => { if (ok) { openP(r.pid); render(); } }); }
     else if (ds.here) req.here(reqById(ds.here));
     else if (ds.transfer) req.transfer(reqById(ds.transfer));
-    else if (ds.rqdone) { req.done(reqById(ds.rqdone)); toast('Back on the ward.'); }
+    else if (ds.rqdone) req.done(reqById(ds.rqdone));
     else if (ds.rqagain) req.again(reqById(ds.rqagain));
-    else if (ds.rqcancel) { req.cancel(reqById(ds.rqcancel)); toast('Request cancelled.'); }
+    else if (ds.rqcancel) req.cancel(reqById(ds.rqcancel));
     else if (ds.rqkeep) reqById(ds.rqkeep).kept = true;
-    else if (ds.rqwithout) { req.cancel(reqById(ds.rqwithout), 'Carried on without'); toast('Request closed: you carried on without.'); }
-    else if (ds.rqhelp) { const r = reqById(ds.rqhelp); req.cancel(r, 'Asked for help instead'); req.ask(byId(r.pid), 'help', `Instead of a ${REQ[r.type][0].toLowerCase()}${r.note ? ': ' + r.note : ''}`); }
+    else if (ds.rqwithout) req.cancel(reqById(ds.rqwithout), 'Continued without');
+    else if (ds.rqhelp) { const r = reqById(ds.rqhelp); call('chart_request_cancel', { p_id: r.id, p_reason: 'Asked for assistance instead' }).then(() => req.ask(byId(r.pid), 'help', `Instead of a ${REQ[r.type][0].toLowerCase()}${r.note ? ': ' + r.note : ''}`)); }
     else if (ds.sendto) S.sendFor = S.sendFor === +ds.sendto ? null : +ds.sendto;
-    else if (ds.sendsid) { reqById(S.sendFor).sentTo = ds.sendsid; S.sendFor = null; toast(`Sent to ${esc(staff(ds.sendsid).name)}. It's still their choice to accept.`); }
+    else if (ds.sendsid) { const r = reqById(S.sendFor); S.sendFor = null; if (r) req.send(r, ds.sendsid); }
     // supervisor
     else if (ds.roomcfg) { S.roomPanel = S.roomPanel === ds.roomcfg ? null : ds.roomcfg; S.face = null; }
     else if (ds.a === 'roompx') S.roomPanel = null;
-    else if (ds.rdset) { S.roomDept[S.roomPanel] = ds.rdset; roomLog(S.roomPanel, `Department: ${ds.rdset}`); toast(`Room ${esc(S.roomPanel)} is now ${esc(ds.rdset)}. Nobody in it moves.`); }
-    else if (ds.rrestr !== undefined) { const id = S.roomPanel, c = S.roomCfg[id]; c.kids = ds.rrestr === 'kids'; c.adults = ds.rrestr === 'adults'; const t = c.kids ? 'Paediatric only' : c.adults ? 'Adults only' : 'Anyone'; roomLog(id, `Who can go in: ${t}`); toast(`Room ${esc(id)}: ${t.toLowerCase()}.`); }
-    else if (ds.bedoff && !S.roomCfg[S.roomPanel].off[ds.bedoff] && roomsInUse()[ds.bedoff]) toast('Someone is in that bed: move them first.');
-    else if (ds.bedoff) { const id = S.roomPanel, c = S.roomCfg[id]; c.off[ds.bedoff] = !c.off[ds.bedoff]; if (c.off[ds.bedoff] && ownerOf(ds.bedoff)) { roomLog(id, `${staff(ownerOf(ds.bedoff)).name} no longer has ${ds.bedoff}`); delete S.bedOwner[ds.bedoff]; } roomLog(id, `${ds.bedoff} ${c.off[ds.bedoff] ? 'switched off' : 'available again'}`); toast(`${esc(ds.bedoff)} ${c.off[ds.bedoff] ? 'is unavailable' : 'is available again'}.`); }
+    else if (ds.rdset) roomSet(S.roomPanel, { p_department: ds.rdset });
+    else if (ds.rrestr !== undefined) roomSet(S.roomPanel, { p_who: ds.rrestr === 'kids' ? 'kids' : ds.rrestr === 'adults' ? 'adults' : 'anyone' });
+    else if (ds.bedoff && !(S.roomCfg[S.roomPanel] || { off: {} }).off[ds.bedoff] && roomsInUse()[ds.bedoff]) toast('Someone is in that bed: move them first.');
+    else if (ds.bedoff) { const off = !!(S.roomCfg[S.roomPanel] || { off: {} }).off[ds.bedoff]; call('chart_bed_set', { p_bed: bedId(ds.bedoff), p_available: off, p_reason: off ? null : 'Switched off by the supervisor' }, off ? `${esc(ds.bedoff)} is available again.` : `${esc(ds.bedoff)} is switched off.`); }
     else if (ds.a === 'roomclose' && closeWhy(S.roomPanel)) toast(esc(closeWhy(S.roomPanel)));
-    else if (ds.a === 'roomclose') { const id = S.roomPanel, c = S.roomCfg[id], why = (($('#rc-why') || {}).value || '').trim(); c.closed = true; c.why = why; roomLog(id, `Closed${why ? ': ' + why : ''}`); toast(`Room ${esc(id)} is closed${why ? ': ' + esc(why) : ''}. Nobody can take it.`); }
-    else if (ds.a === 'roomopen') { const id = S.roomPanel, c = S.roomCfg[id]; c.closed = false; c.why = ''; roomLog(id, 'Opened again'); toast(`Room ${esc(id)} is open again.`); }
-    else if (ds.unown) { delete S.bedOwner[ds.unown]; toast(`Nobody has ${esc(ds.unown)} now.`); }
+    else if (ds.a === 'roomclose') { const why = (($('#rc-why') || {}).value || '').trim(); if (why.length < 3) toast('Say why the room is closed (at least 3 letters).'); else roomSet(S.roomPanel, { p_closed: true, p_closed_reason: why }); }
+    else if (ds.a === 'roomopen') roomSet(S.roomPanel, { p_closed: false, p_closed_reason: null });
+    else if (ds.unown) toast('Ask them to leave the bed, or use They\u2019ve gone.');
     else if (ds.sid) { S.face = S.face === ds.sid ? null : ds.sid; S.roleAsk = null; S.roomPanel = null; }
     else if (ds.a === 'facex') { S.face = null; S.roleAsk = null; }
     else if (ds.setrole) setRole(S.face, ds.setrole);
     else if (ds.a === 'roleyes') setRole(S.face, S.roleAsk, true);
     else if (ds.a === 'roleno') S.roleAsk = null;
-    else if (ds.setready) { if (S.staffReady[ds.setready]) delete S.staffReady[ds.setready]; else S.staffReady[ds.setready] = new Date(); }
+    else if (ds.setready) toast('Only they can set themselves Ready.');
     else if (ds.gone) gone(ds.gone);
     else if (ds.whosid) { const { pid, bed } = S.who; S.who = null; giveTo(byId(pid), ds.whosid, bed); }
     else if (ds.a === 'twyes') { const w = S.teamWarn; giveTo(byId(w.pid), w.sid, w.bed, true); }
@@ -1402,17 +1490,18 @@ ${nextBarHtml(p)}
     else if (ds.a === 'whox') S.who = null;
     else if (ds.a === 'pryes') giveRoom(S.pendRoom.sid, S.pendRoom.id, true);
     else if (ds.a === 'prno') S.pendRoom = null;
-    else if (ds.a === 'recopen') { S.sessMenu = false; S.recOpen = !S.recOpen; if (!S.recOpen) { D.STAFF.forEach((x) => { if (!x.you && S.staffRole[x.id] === 'reception') S.staffRole[x.id] = 'off'; }); syncDesk(); }
-      toast(S.recOpen ? 'Reception is open: anyone on shift can pick it.' : 'Reception closed: everyone is Patient Care. Online check-ins join Up next.'); }
-    else if (ds.a === 'online') { S.sessMenu = false; S.online = !S.online; toast(S.online ? 'Online check-in is open again.' : 'Full: walk-ins only. Online patients see “Walk-ins only right now”.'); }
+    else if (ds.a === 'recopen') { S.sessMenu = false; call('chart_switches', { p_reception_open: !S.recOpen, p_online_mode: S.online ? 'open' : 'walk_ins_only' }, S.recOpen ? 'Reception closed: everyone is Patient Care.' : 'Reception is open.'); }
+    else if (ds.a === 'online') { S.sessMenu = false; call('chart_switches', { p_reception_open: S.recOpen, p_online_mode: S.online ? 'walk_ins_only' : 'open' }, S.online ? 'Walk-ins only: online check-in is paused.' : 'Online check-in is open again.'); }
     else if (ds.a === 'endsess') { S.endSess = !S.endSess; S.sessMenu = false; } else if (ds.a === 'endsessx') S.endSess = false;
-    else if (ds.endcase) finish(byId(+ds.endcase), 'ended');
+    else if (ds.endcase) toast('Use Close all at the bottom, or Finish now for this one.');
     else if (ds.finish) { S.open = +ds.finish; S.tab = 'leave'; S.outcome = null; }
     else if (ds.a === 'endall') endSession();
     // road
     else if (ds.iurg) S.inc.urgency = +ds.iurg;
     else if (ds.ieta) S.inc.eta = +ds.ieta;
-    else if (ds.a === 'incgo') { const d = S.inc; S.incoming.push({ ...d, id: ++nextId, by: 'me', at: new Date(), name: d.name.trim() }); S.inc = null; S.incDone = false; toast(`${esc(d.name.trim())} is on the way. The ER sees them as Incoming.`); }
+    else if (ds.a === 'incgo') { const d = S.inc, [sy, di] = String(d.bp || '').split('/');
+      call('chart_checkin', { p_patient: { name: d.name.trim(), age: d.age ? +d.age : null, symptoms: d.what ? [d.what] : [], eta_minutes: d.eta, note: d.what || '', vitals: { ...(d.hr ? { hr: +d.hr } : {}), ...(sy ? { sys: +sy } : {}), ...(di ? { dia: +di } : {}) } }, p_source: 'incoming', p_esi: d.urgency, p_teams: ['Any'] }, `${esc(d.name.trim())} is on the way. The ER sees them as Incoming.`);
+      S.inc = null; S.incDone = false; }
     else if (ds.handover) handover(+ds.handover);
     // front desk
     else if (ds.lbbs) { act.lbbs(byId(+ds.lbbs)); if (isPhone()) back(); }
@@ -1429,9 +1518,9 @@ ${nextBarHtml(p)}
     else if (ds.pdsymrm) S.pdraft.symptoms.splice(+ds.pdsymrm, 1);
     else if (ds.furm) { S.checkout[+ds.furm].follow = ''; byId(+ds.furm).follow = ''; }
     else if (ds.advrm !== undefined) delete cur().advice;
-    else if (ds.didrm) cur().did.splice(+ds.didrm, 1);
+    else if (ds.didrm) { const d = cur().did[+ds.didrm]; if (d && d.id) call('chart_entry_error', { p_entry: d.id, p_reason: 'Removed by the author' }, 'Removed.'); }
     else if (ds.ow) S.orderWho = ds.ow;
-    else if (ds.reschange) delete cur().orders[+ds.reschange].result;
+    else if (ds.reschange) { const o = cur().orders[+ds.reschange]; if (o) o.result = null; }
     else if (ds.a === 'dxedit') S.dxEdit = true;
     else if (ds.mvTo) { const id = S.moveFor; S.moveFor = null; dropOnBed(id, ds.mvTo); }
     else if (ds.mvYes !== undefined) doMove(S.pending.pid, S.pending.bed);
@@ -1439,27 +1528,27 @@ ${nextBarHtml(p)}
     else if (ds.mvNo !== undefined) { S.pending = null; S.moveFor = null; }
     else if (ds.mvopen) S.moveFor = +ds.mvopen;
     else if (ds.a === 'moveto') { S.sec = 'plan'; S.moveFor = S.open; S.open = null; }
-    else if (ds.a === 'arrive') act.arrive();
+    else if (ds.a === 'arrive') toast('Online check-ins come from patients on the #visit page.');
     else if (ds.a === 'npopen') S.npOpen = true; else if (ds.a === 'npx') S.npOpen = false;
     else if (ds.a === 'add') act.add(S.draft);
     else if (ds.a === 'padd') { act.add(S.draft); S.ph = [{ s: S.role === 'room' ? 'myroom' : 'desk' }]; }
     else if (ds.a === 'closerec') { S.open = null; S.vopen = false; S.outcome = null; S.handbackFor = null; S.reqMenu = false; }
     else if (ds.a === 'vopen') { S.vopen = true; S.vdraft = {}; }
     else if (ds.a === 'vsave') { const p = cur(); const vals = Object.fromEntries(Object.entries(S.vdraft).filter(([, v]) => v !== '').map(([k, v]) => [k, +v]));
-      if (Object.keys(vals).length) { touch(p); p.vitals.push({ at: new Date(), by: 'me', ...vals }); toast('Vitals saved.'); } S.vopen = false; S.vdraft = {}; if (isPhone()) back(); }
-    else if (ds.a === 'pconfirm') { const p = cur(); touch(p); p.colourLog.push({ to: p.urgency, by: 'me', at: new Date(), confirm: true }); p.colourConfirmed = true; toast(`Triage colour confirmed: ${esc(U(p.urgency).name)}.`); if (isPhone() && top().s === 'p-urg') back(); }
-    else if (ds.a === 'leavego') { const p = cur(); if (!minMissing(p, S.outcome).length) { act.leave(p, S.outcome); if (isPhone()) home(); } }
+      if (Object.keys(vals).length) chartIt(p, 'vitals', vals, 'Vitals saved.'); S.vopen = false; S.vdraft = {}; if (isPhone()) back(); }
+    else if (ds.a === 'pconfirm') { const p = cur(); touch(p).then(() => call('chart_colour', { p_case: p.id, p_esi: p.urgency, p_confirm: true }, `Triage colour confirmed: ${esc(U(p.urgency).name)}.`)); if (isPhone() && top().s === 'p-urg') back(); }
+    else if (ds.a === 'leavego') { const p = cur(); act.leave(p, S.outcome); if (isPhone()) home(); }
     else if (ds.a === 'endshift') S.endShift = !S.endShift; else if (ds.a === 'endx') S.endShift = false;
-    else if (ds.a === 'hball') { const note = ($('#hb-all') || {}).value; if (sure(note, 'Add a short note for whoever takes over.')) { mine().forEach((p) => act.handback(p, note)); bedsOf('me').forEach((x) => delete S.bedOwner[x]);
-      Object.assign(S, { endShift: false, ready: false, role: null, open: null }); syncDesk(); toast('Handed over and clocked out. (In the prototype you go back to the role screen.)'); } }
-    else if (ds.a === 'endgo') { bedsOf('me').forEach((x) => delete S.bedOwner[x]); Object.assign(S, { endShift: false, ready: false, role: null, open: null }); syncDesk(); toast('Your shift has ended. (In the prototype you go back to the role screen.)'); }
+    else if (ds.a === 'hball') { const note = ($('#hb-all') || {}).value; if (sure(note, 'Add a short note for whoever takes over.')) { Promise.all(mine().map((p) => rpc('chart_hand_back', { p_case: p.id, p_note: note.trim() }).catch(() => null)))
+      .then(() => rpc('chart_leave_beds', {}).catch(() => null)).then(() => { S.endShift = false; toast('Handed over. Clock out in Shift Manager.'); location.hash = '#shifts'; }); } }
+    else if (ds.a === 'endgo') { rpc('chart_leave_beds', {}).catch(() => null).then(() => { S.endShift = false; location.hash = '#shifts'; }); }
     else if (ds.a === 'hbx') S.handbackFor = null;
     else if (ds.a === 'phone') S.phone = !S.phone; else if (ds.a === 'phonex') S.phone = false;
-    else if (ds.a === 'pdgo') { const p = act.arrive({ name: S.pdraft.name.trim(), roblox: S.pdraft.name.trim(), vkey: Math.random().toString(36).slice(2, 10), age: null, symptoms: S.pdraft.symptoms.slice(), said: S.pdraft.said }); S.pid = p.id; S.pdraft = { name: '', symptoms: [], said: null }; }
+    else if (ds.a === 'pdgo') toast('Patients check in on the #visit page.');
     else if (ds.a === 'pdreset') S.pid = null;
     else if (ds.copycode !== undefined) { try { navigator.clipboard.writeText(D.JOIN_CODE); } catch { /* fine */ } S.copied = true; setTimeout(() => { S.copied = false; if (!typing()) render(); }, 2000); toast('Join code copied.'); }
     else if (ds.pdsaid) S.pdraft.said = ds.pdsaid;
-    else if (ds.prate) { const p = byId(S.pid); if (!p.rating) { p.rating = +ds.prate; p.ratedBy = 'patient'; log(p, `Rated by the patient: ${p.rating} of 5`); toast('Thanks for your rating!'); } }
+    else if (ds.prate) toast('Patients rate on their visit page.');
     else if (ds.durg) S.draft.urgency = +ds.durg;
     else if (ds.confirm) S.confirmFor = S.confirmFor === +ds.confirm ? null : +ds.confirm;
     else if (ds.cconf) { act.confirm(byId(+ds.cconf), +ds.c); if (isPhone()) back(); }
@@ -1471,8 +1560,8 @@ ${nextBarHtml(p)}
     else if (ds.outDone) { act.checkedOut(byId(+ds.outDone)); if (isPhone()) back(); }
     else if (ds.hb) S.handbackFor = S.handbackFor === +ds.hb ? null : +ds.hb;
     else if (ds.hbgo) { const note = ($('#hb-note') || {}).value; if (sure(note, 'Add a short note first: it\u2019s needed.')) { act.handback(byId(+ds.hbgo), note); if (isPhone()) home(); } }
-    else if (ds.purg) { const p = cur(); touch(p); if (+ds.purg !== p.urgency) { setColour(p, +ds.purg, 'me', 'Changed after checking them'); toast(`Colour changed to ${esc(U(+ds.purg).name)}. It's in the colour history.`); } }
-    else if (ds.odone) { const o = cur().orders[+ds.odone]; o.done = new Date(); o.doneBy = 'me'; }
+    else if (ds.purg) { const p = cur(), n = +ds.purg; if (n !== p.urgency) touch(p).then(() => call('chart_colour', { p_case: p.id, p_esi: n, p_confirm: p.nurse === 'me', p_reason: 'Changed after checking them' }, `Colour changed to ${esc(U(n).name)}. It's in the colour history.`)); }
+    else if (ds.odone) { const o = cur().orders[+ds.odone]; if (o && o.id) call('chart_order_done', { p_entry: o.id }, `${esc(o.what)}: done.`); }
     else if (ds.out) { S.outcome = ds.out; S.forceAsk = false; }
     else if (ds.tab) { S.tab = ds.tab; S.vopen = false; }
     else if (ds.dtab) { S.deskTab = ds.dtab; S.confirmFor = null; S.recheckFor = null; }
@@ -1490,8 +1579,6 @@ ${nextBarHtml(p)}
   setInterval(() => {
     if (!app.isConnected) return;
     let dirty = false;
-    P().forEach((p) => { if (p.stage === 'care' && p.phase === 'assigned' && since(p.assignedAt) > SEC(60)) { act.missed(p); dirty = true; } });
-    if (S.ready && since(Math.max(S.lastAct, readyAt('me'))) > SEC(600)) { S.ready = false; S.readyGone = true; dirty = true; toast('Your Ready ran out after 10 minutes with no patient. Tap Ready if you\u2019re still free.'); }
     const sig2 = [...S.reqs.filter(isOpenReq).map(reqLevel), ...P().filter((p) => p.phase === 'called').map((p) => (since(p.calledAt) >= SEC(300) ? 1 : 0)), ...S.incoming.map((x) => (since(x.at) >= SEC(x.eta * 60) ? 1 : 0))].join();
     if (sig2 !== tickSig) { tickSig = sig2; dirty = true; }
     if (dirty && !typing() && !drag) render();
@@ -1502,7 +1589,7 @@ ${nextBarHtml(p)}
   setInterval(() => app.querySelectorAll('[data-since]').forEach((el) => { el.textContent = ago(el.dataset.since); }), 20000);
   let wasPhone = isPhone();
   window.addEventListener('resize', () => { if (!app.isConnected) return; if (isPhone() !== wasPhone) { wasPhone = isPhone(); render(); } else if (!isPhone()) sizeBoard(); });
-  app.addEventListener('click', (e) => { const u = e.target.closest('[data-undocall]'); if (!u) return; const p = byId(+u.dataset.undocall); if (p && p.calledOut) { p.calledOut = false; log(p, 'Called in: undone'); $('#chx-toast').hidden = true; render(); } });
+  app.addEventListener('click', (e) => { const u = e.target.closest('[data-undocall]'); if (!u) return; const p = byId(+u.dataset.undocall); if (p) { $('#chx-toast').hidden = true; act.calledOut(p, true); } });
   if (window.ResizeObserver) new ResizeObserver(() => { if (!isPhone()) sizeBoard(); }).observe(app);
   // Test hook (prototype only): the room-rule self-test in the console uses these.
   if (LOCAL) window.__cbh = { S, D, A, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
@@ -1515,7 +1602,7 @@ ${nextBarHtml(p)}
   openAccess();
   LIVE.chart = (body) => {
     document.body.classList.add('in-chart'); setPageTitle('stethoscope', 'CBH Chart', 'staff');
-    body.replaceChildren(app); render();
+    body.replaceChildren(app); render(); poll(true);
   };
   window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#chart')) document.body.classList.remove('in-chart'); });
 
