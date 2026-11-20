@@ -206,6 +206,23 @@
     const t = Math.floor(typeof shiftSecs === 'function' ? shiftSecs(shift) : (Date.now() - new Date(shift.started_at)) / 1000), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60;
     return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
   setInterval(() => { if (!shift) return; const v = shiftTimeTxt(); document.querySelectorAll('[data-dt-time]').forEach((el) => { if (el.textContent !== v) el.textContent = v; }); }, 1000);
+  // A shift started, paused or ended on another device (the user, 20 Nov 2026): checked every 20 seconds and when the tab
+  // comes back, so the top bar's timer and End shift show on every device. Only the top bar (and Shift Manager, which
+  // shows the same thing) is redrawn, and only when the shift actually changed.
+  const shiftSig = () => (shift ? [shift.id, shift.status, shift.break_seconds, shift.break_started_at || ''].join('|') : '');
+  let syncing = false;
+  async function syncShift() {
+    if (!data || syncing || document.hidden || !document.body.classList.contains('desk')) return;
+    syncing = true; const was = shiftSig();
+    try { await loadShift(); } catch { syncing = false; return; }
+    syncing = false;
+    if (shiftSig() === was) return;
+    drawTop(); document.dispatchEvent(new CustomEvent('cbh-shift-change'));
+    if (location.hash === '#shifts' && typeof route === 'function') route();
+  }
+  setInterval(syncShift, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncShift(); });
+  window.addEventListener('focus', syncShift);
   async function clock(btn) {
     if (!shift && myDepartments.length > 1) { location.hash = '#shifts'; return; }   // pick the department there
     if (shift && Date.now() > endArmed) { endArmed = Date.now() + 4000; drawTop(); setTimeout(drawTop, 4100); return; }

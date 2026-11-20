@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.42.1 (2026-11-20)
+
+**Fixed:**
+- **Your shift shows on every device.** Start (or pause, or end) a shift on one device and the top bar's timer and End shift button now appear on your others within 20 seconds, or as soon as you come back to the tab. Shift Manager updates with it.
+- **Closed rooms stay closed until someone opens them.** Changing a room's department or who can go in used to re-send the room's whole state as that device last saw it, which could quietly reopen a room another supervisor had just closed. Now only the setting being changed is sent. A closed room stays closed across sessions until someone presses "Open the room".
+
+Database change: no.
+
 ## 0.42.0 (2026-11-20)
 
 **Changed:**

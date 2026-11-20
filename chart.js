@@ -580,8 +580,11 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   }
   function endSession() { S.endSess = false; call('chart_session_end', { p_close_all: true }, (r) => `Session ended. ${(r.open || []).length} open case${(r.open || []).length === 1 ? '' : 's'} closed as Closed at end of session. Nothing was deleted.`); }
   function handover(id) { S.incDone = true; call('chart_handover', { p_case: id, p_note: 'Handed over at the ER' }, 'Handed over: they’re in the queue with your colour and note.'); }
-  function roomSet(id, ch) { const c = S.roomCfg[id] || {};
-    const next = { p_room: id, p_department: S.roomDept[id], p_who: c.kids ? 'kids' : c.adults ? 'adults' : 'anyone', p_closed: !!c.closed, p_closed_reason: c.why || null, ...ch };
+  // Only what is being changed is sent (the server keeps the rest). Sending this device's whole copy could quietly reopen
+  // a room another supervisor had closed since the last poll (the user, 20 Nov 2026: a closed room stays closed until
+  // someone opens it).
+  function roomSet(id, ch) {
+    const next = { p_room: id, p_department: null, p_who: null, p_closed: null, p_closed_reason: null, ...ch };
     return call('chart_room_set', next, ch.p_closed === true ? `Room ${esc(id)} is closed. Nobody can take it.` : ch.p_closed === false ? `Room ${esc(id)} is open again.` : `Room ${esc(id)} updated.`); }
 
   // ---------- shared pieces ----------
