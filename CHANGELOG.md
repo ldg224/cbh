@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.43.0 (2026-11-20)
+
+**Added:**
+- **Allow NPC patients during a session.** A new supervisor switch, "Allow NPC patients" (Session menu on computers; Session settings on the phone's Floor Plan tab). While it's on, Room staff get "+ NPC patient" during sessions too, and the top bar shows "NPC patients allowed". It stays as set until a supervisor turns it off. Off by default, so nothing changes until someone turns it on.
+- Phones: Supervisors get Session settings on the Floor Plan tab (Allow Reception, Online check-in, Allow NPC patients, End session), which phones didn't have before.
+
+**Fixed:**
+- The Session menu's switches now look like on/off switches (they were plain grey buttons, so you couldn't tell which were on).
+
+Database change: yes (0094: the NPC switch; additive).
+
 ## 0.42.2 (2026-11-20)
 
 **Fixed:**

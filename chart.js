@@ -360,7 +360,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     (me.notices || []).forEach((n) => { if (!(S.seenNotices || (S.seenNotices = new Set())).has(n.id)) { S.seenNotices.add(n.id); toast(esc(n.text), 6000); } });
     S.launched = ops.launched !== false;
     S.session = ops.session === 'live'; S.autoMode = !!ops.auto_mode; S.superOther = !ops.auto_mode && S.role !== 'super';
-    S.recOpen = ops.reception_open !== false; S.online = (ops.online_mode || 'open') === 'open';
+    S.recOpen = ops.reception_open !== false; S.npcOk = !!ops.npc_in_session; S.online = (ops.online_mode || 'open') === 'open';
     // cases (open board) + the desk's recently discharged
     const cases = (s.cases || []).map(toP);
     const closed = (s.recent_discharged || []).map((x) => { const o = P().find((y) => y.id === x.id) || {};
@@ -755,7 +755,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       ${card}
       ${S.hadPatient || m.length ? (S.hadPatient = true, deskOffer) : ''}
       ${S.offer ? `<div class="offer-card" style="--u:#f0a530"><div><b>${bell}Nobody has room ${esc(S.offer.room)}${S.offer.waiting ? `: ${S.offer.waiting} waiting` : ''}</b><span>Take it over to look after ${S.offer.waiting > 1 ? 'them' : 'them'}.</span></div><button type="button" class="btn small ghost" data-takeover="1">Take over ${esc(S.offer.room)}</button></div>` : ''}
-      ${!S.session ? (S.npc ? npcForm() : `<div class="npc-row"><button type="button" class="btn ghost" data-a="npc"${cap > 0 ? '' : ' disabled'}>+ NPC patient</button><span class="muted small">No session is running, so NPC patients can be charted. They count towards your ${D.LIMIT}.</span></div>`) : ''}
+      ${!S.session || S.npcOk ? (S.npc ? npcForm() : `<div class="npc-row"><button type="button" class="btn ghost" data-a="npc"${cap > 0 ? '' : ' disabled'}>+ NPC patient</button><span class="muted small">${S.session ? 'The supervisor has allowed NPC patients this session.' : 'No session is running, so NPC patients can be charted.'} They count towards your ${D.LIMIT}.</span></div>`) : ''}
       ${!S.deskBy && S.session ? (S.npOpen ? newPatient() : '<div class="npc-row"><button type="button" class="btn ghost" data-a="npopen">+ Walk-in patient</button><span class="muted small">Nobody is on Reception. A walk-in goes through the queue like anyone else.</span></div>') : ''}
       <button type="button" class="btn ghost end-btn" data-a="endshift">End my shift</button>${S.endShift ? endShiftPanel() : ''}</div>`;
   }
@@ -1193,11 +1193,12 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const red = { desk: 1, reqs: 1, myroom: 1 };
     const pill = (on, t) => `<span class="spill${on ? ' on' : ''}">${t}</span>`;
     return `<div class="ch-top"><nav class="vtabs" role="tablist" aria-label="Views">${SECTIONS[S.role].map(([k, l]) => `<button type="button" role="tab" aria-selected="${S.sec === k}" data-sec="${k}">${l}${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</nav>
-      <div class="sess">${pill(S.session, S.session ? 'Session live' : 'No session')}${pill(!!S.deskBy, S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Nobody on Reception' : 'Reception closed')}${pill(S.online, S.online ? 'Online check-in open' : 'Walk-ins only')}${superOn() ? '' : pill(false, 'Auto mode')}
+      <div class="sess">${pill(S.session, S.session ? 'Session live' : 'No session')}${pill(!!S.deskBy, S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Nobody on Reception' : 'Reception closed')}${pill(S.online, S.online ? 'Online check-in open' : 'Walk-ins only')}${S.session && S.npcOk ? pill(true, 'NPC patients allowed') : ''}${superOn() ? '' : pill(false, 'Auto mode')}
         <button type="button" class="btn small ghost top-change" data-a="changerole">Change role</button>
         ${S.role === 'super' ? `<div class="sess-m"><button type="button" class="btn small ghost" data-a="sessmenu" aria-expanded="${!!S.sessMenu}">Session ▾</button>${S.sessMenu ? `<div class="sess-pop" role="menu">
           <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Allow Reception</button>
           <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
+          <button type="button" class="dm-t${S.npcOk ? ' on' : ''}" data-a="npcallow" aria-pressed="${!!S.npcOk}">Allow NPC patients</button>
           <span class="muted small">${S.superOther ? 'Supervising: you and 1 other' : 'Supervising: you'}</span>
           ${S.session ? '<button type="button" class="btn small warn" data-a="endsess">End session…</button>' : '<span class="muted small">No session running</span>'}</div>` : ''}</div>` : ''}</div></div>`;
   }
@@ -1313,6 +1314,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const pzSnap = (moved) => { const r = fpzView(); if (!r) { pzS = null; return; }
     pzS = { rect: r.v.getBoundingClientRect(), z: { ...(S.fpz || { k: fitK(r.w, r.h), x: 0, y: 0 }) }, p: [...pzPts.values()].map((q) => ({ ...q })), moved: !!moved }; };
   function wireFpz() {   // called once the Chart's root element (app) exists
+  app.addEventListener('toggle', (e) => { if (e.target.matches && e.target.matches('.ph-sess')) S.phSess = e.target.open; }, true);
   app.addEventListener('pointerdown', (e) => { if (!e.target.closest('.fpz') || e.target.closest('.fpz-ctl, .fpz-full')) return;
     pzPts.set(e.pointerId, { x: e.clientX, y: e.clientY }); pzSnap(pzS && pzS.moved); });
   window.addEventListener('pointermove', (e) => {
@@ -1352,6 +1354,11 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (t.s === 'plan') { const q = upNext(), ppl = D.STAFF.filter((x) => !x.you);
       const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
       h = `${phHead('Floor Plan', `Main ward · ${Object.keys(roomsInUse()).length} of ${D.BEDS.length} beds in use`)}
+      <details class="ph-sess"${S.phSess ? ' open' : ''}><summary data-a="phsess">Session settings</summary><div class="ph-sess-in">
+        <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Allow Reception</button>
+        <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
+        <button type="button" class="dm-t${S.npcOk ? ' on' : ''}" data-a="npcallow" aria-pressed="${!!S.npcOk}">Allow NPC patients</button>
+        ${S.session ? '<button type="button" class="btn small warn" data-a="endsess">End session…</button>' : '<span class="muted small">No session running</span>'}</div></details>
       <div class="fpx-q fpz-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span>${q.length ? q.map((p) => `<button type="button" class="q-chip${S.placeFor === p.id ? ' sel' : ''}" style="--u:${U(p.urgency).colour}" data-place="${p.id}" aria-pressed="${S.placeFor === p.id}">${p.room ? bell : ''}<b>${esc(p.name)}</b><small>${ago(p.queuedAt)}</small></button>`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>
       ${S.placeFor && byId(S.placeFor) ? `<div class="fpx-hint"><b>Place ${esc(byId(S.placeFor).name)}</b><span>Tap a lit bed.</span><button type="button" class="link" data-place="${S.placeFor}">Cancel</button></div>` : ''}
       ${fpzBlock('super')}
@@ -1675,6 +1682,8 @@ ${nextBarHtml(p)}
     else if (ds.a === 'pryes') giveRoom(S.pendRoom.sid, S.pendRoom.id, true);
     else if (ds.a === 'prno') S.pendRoom = null;
     else if (ds.a === 'recopen') { S.sessMenu = false; call('chart_switches', { p_reception_open: !S.recOpen, p_online_mode: S.online ? 'open' : 'walk_ins_only' }, S.recOpen ? 'Reception closed: everyone is Patient Care.' : 'Reception allowed: someone can now pick the Reception role.'); }
+    else if (ds.a === 'phsess') { e.preventDefault(); S.phSess = !S.phSess; }
+    else if (ds.a === 'npcallow') { S.sessMenu = false; call('chart_npc_allow', { p_on: !S.npcOk }, S.npcOk ? 'NPC patients are off during sessions again.' : 'NPC patients allowed: Room staff can add them during the session.'); }
     else if (ds.a === 'online') { S.sessMenu = false; call('chart_switches', { p_reception_open: S.recOpen, p_online_mode: S.online ? 'walk_ins_only' : 'open' }, S.online ? 'Walk-ins only: online check-in is paused.' : 'Online check-in is open again.'); }
     else if (ds.a === 'endsess') { S.endSess = !S.endSess; S.sessMenu = false; } else if (ds.a === 'endsessx') S.endSess = false;
     else if (ds.endcase) toast('Use Close all at the bottom, or Finish now for this one.');
