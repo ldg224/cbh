@@ -1436,6 +1436,11 @@ const SESSION_TYPES = [
   { id: 'event', label: 'Event', color: '#e09a00' },
   { id: 'department', label: 'Department session', color: '#6a4fd6' },
 ];
+// The Chart's floor plans (0095, sessions.chart_map)
+const SESSION_MAPS = [
+  { id: 'main', label: 'Main ward', color: '#3a82d0' },
+  { id: 'main_er', label: 'Main ward + Emergency', color: '#e5484d' },
+];
 function sessionType(s) {
   const t = SESSION_TYPES.find((x) => x.id === (s.kind || 'regular')) || SESSION_TYPES[0];
   if (t.id === 'department' && s.department) {
@@ -1579,6 +1584,8 @@ function sessionForm(slot, mode, opts, ctx) {
       <button type="button" role="radio" class="ss-type${(row.location_kind || 'discord') === 'discord' ? ' on' : ''}" data-loc="discord" style="--t:#5865f2"><span class="ss-sw"></span>Discord only</button>
       <button type="button" role="radio" class="ss-type${row.location_kind === 'in_game' ? ' on' : ''}" data-loc="in_game" style="--t:#0d9488"><span class="ss-sw"></span>In game</button></div>
       <input name="location_text" maxlength="80" placeholder="Where in Maple Hospital? e.g. Main Hospital, Floor 2" value="${esc(row.location_text || '')}"${row.location_kind === 'in_game' ? '' : ' hidden'}></div>
+    <div class="f ss-map-f"${row.location_kind === 'in_game' ? '' : ' hidden'}><span>Floor plan</span><div class="ss-types" role="radiogroup">${SESSION_MAPS.map((m) => `
+      <button type="button" role="radio" aria-checked="${m.id === (row.chart_map || 'main')}" class="ss-type${m.id === (row.chart_map || 'main') ? ' on' : ''}" data-map="${m.id}" style="--t:${m.color}"><span class="ss-sw"></span>${esc(m.label)}</button>`).join('')}</div></div>
     <div class="f"><span>Co-hosts <em>(optional)</em></span><div class="ss-hosts" data-hosts></div>
       <select name="addhost"><option value="">Add a co-host…</option>${ctx.people.slice().sort((a, b) => cleanName(a.display_name).localeCompare(cleanName(b.display_name)))
         .map((p) => `<option value="${esc(p.discord_id)}">${esc(cleanName(p.display_name))}</option>`).join('')}</select></div>
@@ -1604,7 +1611,14 @@ function sessionForm(slot, mode, opts, ctx) {
     loc = b.dataset.loc;
     f.querySelectorAll('[data-loc]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
     f.elements.location_text.hidden = loc !== 'in_game';
+    f.querySelector('.ss-map-f').hidden = loc !== 'in_game';
     if (loc === 'in_game') f.elements.location_text.focus();
+  }));
+  // Floor plan (0095): in-game sessions only; a supervisor can change it during the session on the Chart
+  let map = row.chart_map || 'main';
+  f.querySelectorAll('[data-map]').forEach((b) => b.addEventListener('click', () => {
+    map = b.dataset.map;
+    f.querySelectorAll('[data-map]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
   }));
   const lead = () => (mode === 'edit' && f.elements.host ? f.elements.host.value : (row.host_discord_id || myDiscordId));
   let cohosts = (opts.coHosts || []).slice();
@@ -1633,7 +1647,8 @@ function sessionForm(slot, mode, opts, ctx) {
     const v = (n) => (f.elements[n] ? f.elements[n].value.trim() : '');
     const data = { kind: k, department: k === 'department' ? dept : null, note: v('note') || null,
       announcement: v('announcement') || null, ping: f.elements.ping.checked,
-      location_kind: loc, location_text: loc === 'in_game' ? v('location_text') : null };
+      location_kind: loc, location_text: loc === 'in_game' ? v('location_text') : null,
+      chart_map: loc === 'in_game' ? map : 'main' };
     if (loc === 'in_game' && !data.location_text) return err('Type where in the game the session is.');
     if (mode !== 'live') {
       if (!v('date') || !v('time')) return err('Pick a date and a time.');
