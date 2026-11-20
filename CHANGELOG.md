@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.42.2 (2026-11-20)
+
+**Fixed:**
+- CBH Chart: the top bar said a green "Reception open" whenever Reception was allowed, even with nobody at the desk. It's now green only when someone is on Reception ("Reception: Nina"); otherwise it says "Nobody on Reception" (or "Reception closed"). The supervisor's switch in the Session menu is now called "Allow Reception".
+
+Database change: no.
+
 ## 0.42.1 (2026-11-20)
 
 **Fixed:**

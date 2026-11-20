@@ -1193,10 +1193,10 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const red = { desk: 1, reqs: 1, myroom: 1 };
     const pill = (on, t) => `<span class="spill${on ? ' on' : ''}">${t}</span>`;
     return `<div class="ch-top"><nav class="vtabs" role="tablist" aria-label="Views">${SECTIONS[S.role].map(([k, l]) => `<button type="button" role="tab" aria-selected="${S.sec === k}" data-sec="${k}">${l}${badge[k] ? `<i class="${red[k] ? 'red' : ''}">${badge[k]}</i>` : ''}</button>`).join('')}</nav>
-      <div class="sess">${pill(S.session, S.session ? 'Session live' : 'No session')}${pill(S.recOpen, S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Reception open' : 'Reception closed')}${pill(S.online, S.online ? 'Online check-in open' : 'Walk-ins only')}${superOn() ? '' : pill(false, 'Auto mode')}
+      <div class="sess">${pill(S.session, S.session ? 'Session live' : 'No session')}${pill(!!S.deskBy, S.deskBy ? `Reception: ${esc(first(S.deskBy))}` : S.recOpen ? 'Nobody on Reception' : 'Reception closed')}${pill(S.online, S.online ? 'Online check-in open' : 'Walk-ins only')}${superOn() ? '' : pill(false, 'Auto mode')}
         <button type="button" class="btn small ghost top-change" data-a="changerole">Change role</button>
         ${S.role === 'super' ? `<div class="sess-m"><button type="button" class="btn small ghost" data-a="sessmenu" aria-expanded="${!!S.sessMenu}">Session ▾</button>${S.sessMenu ? `<div class="sess-pop" role="menu">
-          <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Reception open</button>
+          <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Allow Reception</button>
           <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
           <span class="muted small">${S.superOther ? 'Supervising: you and 1 other' : 'Supervising: you'}</span>
           ${S.session ? '<button type="button" class="btn small warn" data-a="endsess">End session…</button>' : '<span class="muted small">No session running</span>'}</div>` : ''}</div>` : ''}</div></div>`;
@@ -1674,7 +1674,7 @@ ${nextBarHtml(p)}
     else if (ds.a === 'whox') S.who = null;
     else if (ds.a === 'pryes') giveRoom(S.pendRoom.sid, S.pendRoom.id, true);
     else if (ds.a === 'prno') S.pendRoom = null;
-    else if (ds.a === 'recopen') { S.sessMenu = false; call('chart_switches', { p_reception_open: !S.recOpen, p_online_mode: S.online ? 'open' : 'walk_ins_only' }, S.recOpen ? 'Reception closed: everyone is Patient Care.' : 'Reception is open.'); }
+    else if (ds.a === 'recopen') { S.sessMenu = false; call('chart_switches', { p_reception_open: !S.recOpen, p_online_mode: S.online ? 'open' : 'walk_ins_only' }, S.recOpen ? 'Reception closed: everyone is Patient Care.' : 'Reception allowed: someone can now pick the Reception role.'); }
     else if (ds.a === 'online') { S.sessMenu = false; call('chart_switches', { p_reception_open: S.recOpen, p_online_mode: S.online ? 'walk_ins_only' : 'open' }, S.online ? 'Walk-ins only: online check-in is paused.' : 'Online check-in is open again.'); }
     else if (ds.a === 'endsess') { S.endSess = !S.endSess; S.sessMenu = false; } else if (ds.a === 'endsessx') S.endSess = false;
     else if (ds.endcase) toast('Use Close all at the bottom, or Finish now for this one.');
