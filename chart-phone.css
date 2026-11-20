@@ -155,3 +155,21 @@ body.fp-open { overflow: hidden; }
 .chx .docked-view .bed b { font-size: 11.5px !important; }
 .chx .docked-view .fp-rh .ped-tag { font-size: 0; padding: 0 5px; }
 .chx .docked-view .fp-rh .ped-tag::after { content: "Child"; font-size: 9.5px; }
+
+/* ---------- zoom and pan (0.42.0): the map upright on the Floor Plan tab and Pick your room ---------- */
+.chx .fpz { position: relative; overflow: hidden; height: clamp(300px, 56vh, 620px); border: 1px solid var(--line); border-radius: 16px; background: #F3F7FC; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.chx .fpz-in { position: absolute; left: 0; top: 0; width: 880px; height: 613px; padding: 30px 110px 34px 10px; box-sizing: border-box; transform-origin: 0 0; will-change: transform; }
+.chx .fpz .floor { width: 760px; height: 549px; min-width: 0; max-width: none; aspect-ratio: auto; }
+.chx .fpz-ctl { position: absolute; right: 8px; bottom: 8px; display: grid; gap: 6px; z-index: 5; }
+.chx .fpz-ctl button { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--text); font-size: 22px; font-weight: 700; line-height: 1; box-shadow: 0 4px 12px rgba(11, 30, 74, .14); }
+.chx .fpz-ctl .fit-b { font-size: 12px; font-weight: 800; }
+.chx .fpz:not(.zoomed) .fpz-ctl .fit-b { opacity: .5; }
+.chx .fpz-full { position: absolute; left: 8px; bottom: 8px; z-index: 5; border: 1px solid var(--line); background: rgba(255, 255, 255, .94); border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 800; color: var(--text); box-shadow: 0 4px 12px rgba(11, 30, 74, .12); }
+.chx .fpz-q { padding: 2px 0; }
+.chx .fpz-ppl { margin-top: 2px; }
+.chx .fpz-ppl .staff-drop small { display: block; }
+/* the sheet for a bed's actions, the asks, room settings and a person: over the bottom of the screen, above the tabs */
+.chx .fpz-sheet { position: fixed; left: 8px; right: 8px; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 60; max-height: 58vh; overflow-y: auto; display: grid; gap: 8px;
+  background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 10px; box-shadow: 0 -10px 34px rgba(11, 30, 74, .22); }
+.chx .fpz-sheet .move-ask { margin: 0; box-shadow: none; border: 0; padding: 4px; background: #fff; }
+.chx .fpz-sheet .fpx-acts .btn { width: 100%; min-height: 46px; }

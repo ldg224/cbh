@@ -3,6 +3,15 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.42.0 (2026-11-20)
+
+**Changed:**
+- **The floor plan on phones is now zoom and pan.** The map sits upright right on the Floor Plan tab, with no turning the phone. Pinch or use + and − to zoom, drag to move around, and Fit to see the whole ward. It opens zoomed in enough to read, starting from the left (rooms 101–107). Tap someone in Up next, then a lit bed, to give them out; tap a patient's bed for Open record, Move or Give to someone. Those choices, room settings and people open in a sheet at the bottom of the screen. Dragging or pinching never counts as a tap.
+- Room role: Pick your room on phones uses the same zoomable map (the list is still underneath).
+- The sideways full-screen view is still there behind the map's "Full screen" button.
+
+Database change: no.
+
 ## 0.41.4 (2026-11-20)
 
 **Fixed:**

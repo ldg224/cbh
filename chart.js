@@ -763,7 +763,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   function pickSection() {
     const n = pickSelNow().length;
     return `<div class="pane-pad rooms-pad"><div class="pane-head"><div><h2>${n ? 'Your room' : 'Pick your room'}</h2><p class="muted">Tap beds to take them, up to ${D.LIMIT}: a 2-bed room, any two 1-bed rooms, or one bed in a shared room. ${esc(S.rdept || '')} rooms are outlined. You stay in it for the shift.</p></div>${n ? `<button type="button" class="btn" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>
-      ${isPhone() ? fpLaunch('fppick', 'Pick on the floor plan', 'Full screen · turn your phone sideways') + '<h4 class="ph-sub ph-or">Or pick from the list</h4>' : ''}${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${r.id} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? 'Bed ' + b.slice(-1) : 'Bed', 'pick')).join('')}</div>`).join('')
+      ${isPhone() ? fpzBlock('pick') + '<h4 class="ph-sub ph-or">Or pick from the list</h4>' : ''}${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${r.id} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? 'Bed ' + b.slice(-1) : 'Bed', 'pick')).join('')}</div>`).join('')
         : `<div class="floor-wrap"><div class="floor pick" aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
   }
 
@@ -1278,6 +1278,64 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       <div class="fpx-main"><div class="fpx-floor"><div class="floor${pick ? ' pick' : ''}">${floorInner(pick ? 'pick' : 'super')}</div></div><div class="fpx-side">${hint}${side}</div></div></div>`;
   }
 
+  // ---------- PHONE FLOOR PLAN, ZOOM AND PAN (the user, 20 Nov 2026: "zoom and pan please") ----------
+  // The map sits upright on the Floor Plan tab (and Pick your room): pinch or +/- to zoom, drag to move around, tap a bed
+  // as usual. It's drawn at a fixed size (FZW x FZH, room for the exit labels) and scaled with a transform kept in S.fpz,
+  // so the polls' redraws keep the view. A drag or pinch never counts as a tap.
+  const FZW = 880, FZH = 613, FZMAX = 1.5;
+  const fpzBlock = (mode) => `<div class="fpz" data-mode="${mode}"><div class="fpz-in"><div class="floor${mode === 'pick' ? ' pick' : ''}" aria-label="${mode === 'pick' ? 'Pick your room' : 'Main ward floor plan'}">${floorInner(mode)}</div></div>
+    <div class="fpz-ctl"><button type="button" data-fpz="in" aria-label="Zoom in">+</button><button type="button" data-fpz="out" aria-label="Zoom out">−</button><button type="button" data-fpz="fit" class="fit-b" aria-label="Show the whole ward">Fit</button></div>
+    <button type="button" class="fpz-full" data-a="${mode === 'pick' ? 'fppick' : 'fpopen'}">Full screen</button></div>`;
+  const fpzView = () => { const v = $('.fpz'); return v ? { v, w: v.clientWidth, h: v.clientHeight } : null; };
+  const fitK = (w, h) => Math.min(w / FZW, h / FZH);
+  function fpzApply(reset) {
+    const r = fpzView(); if (!r || !r.w) return; const kf = fitK(r.w, r.h);
+    // first view: zoomed so the map fills the box's height (readable), from the left; Fit (reset) shows the whole ward
+    if (reset === true) S.fpz = { k: kf, x: 0, y: 0, fit: true };
+    else if (!S.fpz || S.fpz.auto) { const k0 = Math.min(FZMAX, Math.max(kf, r.h / FZH)); S.fpz = { k: k0, x: 0, y: 0, auto: true, fit: k0 <= kf + 1e-6 }; }   // left edge: rooms 101-107 (the middle is the Central Hub)
+    const z = S.fpz; z.k = Math.max(kf, Math.min(FZMAX, z.k));
+    const sw = FZW * z.k, sh = FZH * z.k;
+    z.x = sw <= r.w ? (r.w - sw) / 2 : Math.min(0, Math.max(r.w - sw, z.x));
+    z.y = sh <= r.h ? (r.h - sh) / 2 : Math.min(0, Math.max(r.h - sh, z.y));
+    r.v.querySelector('.fpz-in').style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.k})`;
+    r.v.classList.toggle('zoomed', !z.fit);
+  }
+  function fpzZoom(f, cx, cy) {
+    const r = fpzView(); if (!r) return; const kf = fitK(r.w, r.h), z = S.fpz || { k: kf, x: 0, y: 0 };
+    if (cx == null) { cx = r.w / 2; cy = r.h / 2; }
+    const k = Math.max(kf, Math.min(FZMAX, z.k * f)), px = (cx - z.x) / z.k, py = (cy - z.y) / z.k;
+    S.fpz = { k, x: cx - px * k, y: cy - py * k, fit: k <= kf + 1e-6 }; fpzApply();
+  }
+  const pzPts = new Map(); let pzS = null, pzMoved = false;
+  const pzSnap = (moved) => { const r = fpzView(); if (!r) { pzS = null; return; }
+    pzS = { rect: r.v.getBoundingClientRect(), z: { ...(S.fpz || { k: fitK(r.w, r.h), x: 0, y: 0 }) }, p: [...pzPts.values()].map((q) => ({ ...q })), moved: !!moved }; };
+  function wireFpz() {   // called once the Chart's root element (app) exists
+  app.addEventListener('pointerdown', (e) => { if (!e.target.closest('.fpz') || e.target.closest('.fpz-ctl, .fpz-full')) return;
+    pzPts.set(e.pointerId, { x: e.clientX, y: e.clientY }); pzSnap(pzS && pzS.moved); });
+  window.addEventListener('pointermove', (e) => {
+    if (!pzPts.has(e.pointerId) || !pzS) return; pzPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = [...pzPts.values()], s0 = pzS, r = fpzView(); if (!r) return;
+    if (p.length === 1) { const dx = p[0].x - s0.p[0].x, dy = p[0].y - s0.p[0].y; if (!s0.moved && Math.hypot(dx, dy) < 8) return;
+      s0.moved = true; S.fpz = { ...s0.z, x: s0.z.x + dx, y: s0.z.y + dy, fit: false, auto: false }; }
+    else if (s0.p.length >= 2) {
+      const d0 = Math.hypot(s0.p[0].x - s0.p[1].x, s0.p[0].y - s0.p[1].y) || 1, d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+      const m0x = (s0.p[0].x + s0.p[1].x) / 2 - s0.rect.left, m0y = (s0.p[0].y + s0.p[1].y) / 2 - s0.rect.top;
+      const mx = (p[0].x + p[1].x) / 2 - s0.rect.left, my = (p[0].y + p[1].y) / 2 - s0.rect.top;
+      const kf = fitK(r.w, r.h), k = Math.max(kf, Math.min(FZMAX, s0.z.k * d / d0)), px = (m0x - s0.z.x) / s0.z.k, py = (m0y - s0.z.y) / s0.z.k;
+      s0.moved = true; S.fpz = { k, x: mx - px * k, y: my - py * k, fit: k <= kf + 1e-6 }; }
+    else return;
+    e.preventDefault(); fpzApply();
+  }, { passive: false });
+  const pzEnd = (e) => { if (!pzPts.has(e.pointerId)) return; pzPts.delete(e.pointerId); const moved = pzS && pzS.moved;
+    if (pzPts.size) pzSnap(moved); else { pzS = null; if (moved) { pzMoved = true; setTimeout(() => { pzMoved = false; }, 0); } } };
+  window.addEventListener('pointerup', pzEnd); window.addEventListener('pointercancel', pzEnd);
+  app.addEventListener('wheel', (e) => { const v = e.target.closest('.fpz'); if (!v) return; e.preventDefault(); const r = v.getBoundingClientRect(); fpzZoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  ['resize', 'orientationchange'].forEach((ev) => window.addEventListener(ev, () => { if ($('.fpz')) fpzApply(); }));
+  }
+  // the asks, a bed's actions, room settings and a person: a sheet over the bottom of the phone screen
+  const phSheet = () => { const h = `${S.endSess ? endSessionPanel() : ''}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}${bedActPanel()}${S.roomPanel ? roomPanel() : ''}${S.face ? facePanel() : ''}`;
+    return h ? `<div class="fpx-sheet fpz-sheet" role="dialog" aria-label="Floor plan">${h}</div>` : ''; };
+
   // ---------- PHONE (staff): one thing per screen ----------
   const top = () => S.ph[S.ph.length - 1];
   const go = (s, extra = {}) => { S.ph.push({ s, ...extra }); };
@@ -1288,8 +1346,14 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const t = top(), p = t.id && byId(t.id); let h = '';
     const plist = (list, attrs, extra) => `<ul class="ph-list">${list.map((x) => `<li style="--u:${x.urgency ? U(x.urgency).colour : '#9aa9c4'}"><button type="button" class="ph-row" ${attrs(x)}><span class="ubar"></span><span><b>${esc(x.name)}</b><small>${extra(x)}</small></span></button></li>`).join('')}</ul>`;
     if (S.fp && (S.fp === 'pick' ? !S.pick : S.role !== 'super')) S.fp = false;
-    if (t.s === 'plan') h = `${phHead('Floor Plan', `Main ward · ${Object.keys(roomsInUse()).length} of ${D.BEDS.length} beds in use`)}${fpLaunch('fpopen', 'Open the floor plan', 'Full screen · turn your phone sideways')}
-      <h4 class="ph-sub">Up next</h4>${upNext().length ? plist(upNext(), (x) => `data-fpplace="${x.id}"`, (x) => `${x.room ? 'Waiting in ' + esc(x.room) : ago(x.queuedAt)} · tap to place`) : '<p class="muted">Nobody waiting.</p>'}`;
+    if (t.s === 'plan') { const q = upNext(), ppl = D.STAFF.filter((x) => !x.you);
+      const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
+      h = `${phHead('Floor Plan', `Main ward · ${Object.keys(roomsInUse()).length} of ${D.BEDS.length} beds in use`)}
+      <div class="fpx-q fpz-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span>${q.length ? q.map((p) => `<button type="button" class="q-chip${S.placeFor === p.id ? ' sel' : ''}" style="--u:${U(p.urgency).colour}" data-place="${p.id}" aria-pressed="${S.placeFor === p.id}">${p.room ? bell : ''}<b>${esc(p.name)}</b><small>${ago(p.queuedAt)}</small></button>`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>
+      ${S.placeFor && byId(S.placeFor) ? `<div class="fpx-hint"><b>Place ${esc(byId(S.placeFor).name)}</b><span>Tap a lit bed.</span><button type="button" class="link" data-place="${S.placeFor}">Cancel</button></div>` : ''}
+      ${fpzBlock('super')}
+      <div class="fpx-ppl fpz-ppl plan-s">${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('') || '<p class="muted small">Nobody else is on the Chart.</p>'}</div>
+      ${S.fp ? '' : phSheet()}`; }
     if (t.s === 'myroom') h = myRoomSection();
     if (t.s === 'reqs') h = reqSection();
     if (t.s === 'road') h = roadSection();
@@ -1345,6 +1409,7 @@ ${nextBarHtml(p)}
 
   // ---------- render (keeps every scroll area and the focus) ----------
   const app = document.createElement('div'); app.className = 'chx'; app.id = 'chx';
+  wireFpz();
   const AREAS = ['.pane-sec', '.pp-screen'];
   const areaKey = (sel) => (sel === '.pane-work' ? `${S.open}|${S.tab}` : sel === '.pane-sec' ? S.sec + S.deskTab : sel === '.pp-screen' ? 'pp' : sel === 'page' ? (isPhone() ? JSON.stringify(top()) : 'c') : 'same');
   const sig = (el) => { if (!el || el === document.body) return null; if (el.id) return '#' + CSS.escape(el.id);
@@ -1371,6 +1436,7 @@ ${nextBarHtml(p)}
     render.keys = { page: areaKey('page'), ...Object.fromEntries(AREAS.map((sel) => [sel, areaKey(sel)])) };
     if (!isPhone()) { sizeBoard(); placePop(); }
     if (S.fp) { sizeFp(); requestAnimationFrame(sizeFp); }
+    if ($('.fpz')) fpzApply();
     try { const el = keep ? document.getElementById(keep) : focusSig && app.querySelector(focusSig); if (el) { el.focus({ preventScroll: true }); if (keep && el.setSelectionRange && el.type === 'text') el.setSelectionRange(el.value.length, el.value.length); } } catch { /* fine */ }
   }
   function placePop() { placeRoomPop(); const pop = $('.popover'), plan = $('.plan'); if (!pop || !plan) return;
@@ -1496,7 +1562,7 @@ ${nextBarHtml(p)}
   app.addEventListener('keydown', (e) => { if ((e.key === 'm' || e.key === 'M') && e.target.matches('.bed[data-drag]')) { e.preventDefault(); S.moveFor = +e.target.dataset.drag; render(); } });
   app.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bed[data-open]')) { e.preventDefault(); e.target.click(); } });
   app.addEventListener('click', (e) => {
-    if (justDragged) { e.preventDefault(); return; }
+    if (justDragged || pzMoved) { e.preventDefault(); return; }
     let closed = false;
     if (S.sessMenu && !e.target.closest('.sess-m')) { S.sessMenu = false; closed = true; }
     if (S.face && !e.target.closest('.popover, .staff-drop, .fpx-sheet')) { S.face = null; S.roleAsk = null; closed = true; }
@@ -1512,7 +1578,8 @@ ${nextBarHtml(p)}
     if (ds.a === 'fpopen' || ds.a === 'fppick' || ds.fpplace) { fpOpen(ds.a === 'fppick' ? 'pick' : 'super', ds.fpplace ? +ds.fpplace : null); render(); return; }
     if (ds.a === 'fpclose') { fpClose(); render(); return; }
     if (ds.a === 'bedactx') { S.bedAct = null; render(); return; }
-    if (S.fp === 'super' && b.matches('.bed[data-open]')) { Object.assign(S, { bedAct: +ds.open, face: null, roomPanel: null, moveFor: null, placeFor: null }); render(); return; }
+    if (ds.fpz) { if (ds.fpz === 'fit') fpzApply(true); else fpzZoom(ds.fpz === 'in' ? 1.4 : 1 / 1.4); return; }
+    if ((S.fp === 'super' || (S.role === 'super' && isPhone() && b.closest('.fpz'))) && b.matches('.bed[data-open]')) { Object.assign(S, { bedAct: +ds.open, face: null, roomPanel: null, moveFor: null, placeFor: null }); render(); return; }
     if (ds.fprec) { const id = +ds.fprec; fpClose(); openP(id); render(); return; }
     if (ds.fpwho) { const p = byId(+ds.fpwho); S.bedAct = null; if (p) S.who = { pid: p.id, bed: p.room }; render(); return; }
     if (ds.a === 'pickdone' && S.fp) fpClose();
@@ -1544,7 +1611,7 @@ ${nextBarHtml(p)}
     else if (ds.a === 'mvbedopen') S.mvBed = S.mvBed === S.open || S.mvBed === (top() || {}).id ? null : (isPhone() ? top().id : S.open);
     else if (ds.a === 'mvbedx') S.mvBed = null;
     else if (ds.mvbed) { const id = S.mvBed; S.mvBed = null; planMove(id, ds.mvbed); }
-    else if (ds.place) { S.placeFor = S.placeFor === +ds.place ? null : +ds.place; if (S.placeFor && !S.fp) toast('Lit beds can take them: click one.'); }
+    else if (ds.place) { S.placeFor = S.placeFor === +ds.place ? null : +ds.place; if (S.placeFor && !isPhone()) toast('Lit beds can take them: click one.'); }
     else if (ds.placebed) { const id = S.placeFor; S.placeFor = null; dropOnBed(id, ds.placebed); }
     else if (ds.rqchase) req.chase(reqById(ds.rqchase));
     else if (ds.a === 'incnew') S.incDone = false;
