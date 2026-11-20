@@ -20,9 +20,9 @@ body.fp-open { overflow: hidden; }
 .chx .fpx-q .q-chip { flex: none; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; min-height: 36px; padding: 4px 10px; touch-action: manipulation; cursor: pointer; color: var(--text); }
 .chx .fpx-q .q-chip small { color: var(--muted); font-weight: 600; font-size: 11px; }
 .chx .fpx-q .q-chip.sel { background: var(--teal-wash); box-shadow: 0 0 0 3px var(--teal); }
-.chx .fpx-main { display: grid; grid-template-columns: auto minmax(180px, 1fr); min-height: 0; min-width: 0; }
-.chx .fpx-floor { min-height: 0; min-width: 0; height: 100%; display: flex; align-items: center; justify-content: center; padding: 20px 92px 24px 8px; }
-.chx .fpx .floor { height: 100%; width: auto; max-width: 100%; min-width: 0; aspect-ratio: 415 / 300; }
+.chx .fpx-main { display: grid; grid-template-columns: minmax(0, 1fr) clamp(180px, 30%, 320px); grid-template-rows: minmax(0, 1fr); min-height: 0; min-width: 0; }
+.chx .fpx-floor { min-height: 0; min-width: 0; height: 100%; display: flex; align-items: center; justify-content: center; padding: 20px 92px 24px 8px; overflow: hidden; }
+.chx .fpx .floor { flex: none; width: 415px; height: 300px; max-width: none; min-width: 0; aspect-ratio: auto; }
 .chx .fpx-side { min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); background: #fff; padding: 8px; display: grid; align-content: start; gap: 8px; }
 .chx .fpx-side .move-ask { margin: 0; box-shadow: none; border: 1px solid var(--line); background: #fff; }
 .chx .fpx-sheet { display: grid; gap: 8px; }

@@ -1245,6 +1245,14 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch { /* fine */ }
     try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); } catch { /* fine */ }
   }
+  // The plan is sized here in pixels to fit its box (415 x 300 units). CSS aspect-ratio + height:100% left it 0 wide
+  // in Safari/WebKit, squashing everything to one side (the user, 20 Nov 2026).
+  function sizeFp() {
+    const box = $('.fpx-floor'), fl = box && box.querySelector('.floor'); if (!fl) return;
+    const cs = getComputedStyle(box), w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const k = Math.max(0, Math.min(w / FW, h / FH)); fl.style.width = Math.floor(FW * k) + 'px'; fl.style.height = Math.floor(FH * k) + 'px';
+  }
+  ['resize', 'orientationchange', 'fullscreenchange'].forEach((ev) => (ev === 'fullscreenchange' ? document : window).addEventListener(ev, () => { if (S.fp) { sizeFp(); setTimeout(sizeFp, 250); } }));
   function bedActPanel() { const p = S.bedAct && byId(S.bedAct); if (!p) return '';
     return `<div class="move-ask"><div class="ma-h"><b>${esc(p.name)}</b><button type="button" class="link" data-a="bedactx">Close</button></div>
       <span class="muted small">${esc(p.room || '')} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}${p.nurse ? ' · ' + esc(first(p.nurse)) : ''}</span>
@@ -1362,6 +1370,7 @@ ${nextBarHtml(p)}
     se.scrollTop = before.page[1] === areaKey('page') ? before.page[0] : 0;
     render.keys = { page: areaKey('page'), ...Object.fromEntries(AREAS.map((sel) => [sel, areaKey(sel)])) };
     if (!isPhone()) { sizeBoard(); placePop(); }
+    if (S.fp) { sizeFp(); requestAnimationFrame(sizeFp); }
     try { const el = keep ? document.getElementById(keep) : focusSig && app.querySelector(focusSig); if (el) { el.focus({ preventScroll: true }); if (keep && el.setSelectionRange && el.type === 'text') el.setSelectionRange(el.value.length, el.value.length); } } catch { /* fine */ }
   }
   function placePop() { placeRoomPop(); const pop = $('.popover'), plan = $('.plan'); if (!pop || !plan) return;

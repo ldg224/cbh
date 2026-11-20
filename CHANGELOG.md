@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.41.4 (2026-11-20)
+
+**Fixed:**
+- CBH Chart on phones: the full-screen floor plan squashed into the left side of the screen on iPhone (Safari and Discord's browser). The plan is now sized to fit the screen exactly, upright or sideways, and resizes when the phone turns.
+
+Database change: no.
+
 ## 0.41.3 (2026-11-20)
 
 **Fixed:**
