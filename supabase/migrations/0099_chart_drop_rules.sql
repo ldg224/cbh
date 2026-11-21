@@ -9,6 +9,16 @@
 --                        p_anyway / p_pull as above
 --   chart_doctor_send    an On call doctor onto a patient: an accepted doctor (or surgery) request, order kind 'request'
 --   chart_orders         + case_id; kinds + 'patient', 'request'; me.order gains case_id and patient
+-- §7b (the user's answers to Delta's open cases):
+--   Move anyway             the patient left in the bed is flagged 'needs a nurse' (lost_nurse) and goes first in Up next
+--                           (prioritised), for the Supervisor and auto-assign alike (chart_sv_leave)
+--   Visits follow patients  a visit can name its patient (chart_visits.case_id; help visits find it themselves); when the
+--                           patient moves to another room the visit follows, with a notice "Max R. moved to Room 106"
+--                           (chart_sv_sweep). Doctor and surgery requests already follow the case.
+--   Closing a room          with patients in it -> room_has_patients ("Room 104 still has patients. Move them first.");
+--                           orders and visits on their way there are cancelled, with a notice to each person
+--   ER map off              orders and visits to Emergency wing rooms are cancelled with notices (held beds and patients
+--                           still block it: er_in_use)
 -- chart_person_place and chart_visit_send get longer parameter lists, so they are replaced (dropped and created), not
 -- overloaded: two versions with defaults would make the website's calls ambiguous. Old named calls keep working. The down
 -- file puts back their 0097 versions exactly. chart_order_mine is patched by exact text replacement (asserted).
@@ -136,17 +146,49 @@ begin
   return public.chart_done(res || jsonb_build_object('order_id', oid, 'bed', b.id));
 end $$;
 
+-- ---------- visits can follow a patient; orders and visits to a closed room are called off ----------
+alter table public.chart_visits add column if not exists case_id bigint;
+
+-- A room closed (or the Emergency wing switched off): orders and visits on their way there stop, and each person is told.
+create or replace function public.chart_room_cancel(p_room text, p_er boolean default false) returns integer
+language plpgsql volatile security definer set search_path = '' as $$
+declare x record; n int := 0; msg text;
+begin
+  msg := case when p_er then format('The Emergency wing was closed: you''re no longer needed in %s.', public.chart_room_name(p_room))
+              else format('%s was closed: you''re no longer needed there.', public.chart_room_name(p_room)) end;
+  for x in select v.id, v.person from public.chart_visits v where v.room_id = p_room and v.state in ('sent', 'on_way', 'arrived') loop
+    update public.chart_visits set state = 'removed', ended_at = now(), ended_by = public.my_discord_id(),
+           end_reason = case when p_er then 'Emergency wing closed' else 'Room closed' end
+    where id = x.id;
+    perform public.chart_notice(x.person, msg);
+    n := n + 1;
+  end loop;
+  for x in select o.id, o.person from public.chart_orders o where o.room_id = p_room and o.state in ('sent', 'seen') and o.kind <> 'off' loop
+    update public.chart_orders set state = 'expired' where id = x.id;
+    perform public.chart_notice(x.person, msg);
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke execute on function public.chart_room_cancel(text, boolean) from public, anon, authenticated;
+grant execute on function public.chart_room_cancel(text, boolean) to service_role;
+
 -- ---------- chart_visit_send: helpers, closed rooms, break and trauma ----------
 drop function if exists public.chart_visit_send(text, text, text, text);
 create function public.chart_visit_send(p_person text, p_room text, p_reason text, p_note text default null,
-                                        p_anyway boolean default false, p_pull boolean default false) returns jsonb
+                                        p_anyway boolean default false, p_pull boolean default false, p_case bigint default null) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
-declare r public.chart_rooms; note text := nullif(btrim(coalesce(p_note, '')), ''); vid bigint; role text;
+declare r public.chart_rooms; note text := nullif(btrim(coalesce(p_note, '')), ''); vid bigint; role text; cid bigint := p_case; rm text := p_room;
 begin
   perform public.chart_begin(); perform public.chart_need_sup();
   if (public.chart_shift_of(p_person)).id is null then perform public.chart_err('not_on_shift', format('%s isn''t on shift.', public.chart_pname(p_person))); end if;
   role := coalesce((select s.role from public.chart_staff s where s.discord_id = p_person), '');
-  select * into r from public.chart_rooms x where x.id = p_room;
+  -- a visit to a patient goes to the room their bed is in (and follows them if they move)
+  if cid is not null then
+    select b.room_id into rm from public.chart_cases c join public.chart_beds b on b.id = c.bed_id where c.id = cid and c.status = 'open';
+    if rm is null then perform public.chart_err('bad_state', 'That patient isn''t in a bed now: refresh.'); end if;
+  end if;
+  select * into r from public.chart_rooms x where x.id = rm;
   if r.id is null then perform public.chart_err('bad_input', 'Pick a room.'); end if;
   if not r.active or r.closed then perform public.chart_err('room_closed', format('%s is closed: %s', public.chart_room_name(r.id), coalesce(r.closed_reason, 'out of use'))); end if;
   -- admins, executives, Directors and On call; Room staff only to help where a patient has a nurse
@@ -164,8 +206,13 @@ begin
   -- a new visit replaces one they're already on
   update public.chart_visits set state = 'removed', ended_at = now(), ended_by = public.my_discord_id(), end_reason = 'Sent somewhere else'
   where person = p_person and state in ('sent', 'on_way', 'arrived');
-  insert into public.chart_visits (person, room_id, reason, note, by_id) values (p_person, r.id, p_reason, note, public.my_discord_id()) returning id into vid;
-  perform public.chart_act('visit_send', null, jsonb_build_object('visit', vid, 'reason', p_reason, 'note', note), r.id, null, p_person);
+  -- a help visit without a named patient helps the room's patient who has a nurse (so it can follow them)
+  if cid is null and p_reason = 'help' then
+    select c.id into cid from public.chart_cases c join public.chart_beds b on b.id = c.bed_id
+    where b.room_id = r.id and c.status = 'open' and c.owner_id is not null order by c.id limit 1;
+  end if;
+  insert into public.chart_visits (person, room_id, reason, note, by_id, case_id) values (p_person, r.id, p_reason, note, public.my_discord_id(), cid) returning id into vid;
+  perform public.chart_act('visit_send', cid, jsonb_build_object('visit', vid, 'reason', p_reason, 'note', note), r.id, null, p_person);
   return public.chart_done(jsonb_build_object('visit_id', vid));
 end $$;
 
@@ -212,8 +259,8 @@ revoke execute on function public.chart_send_check(text, boolean, boolean) from 
 grant execute on function public.chart_send_check(text, boolean, boolean) to service_role;
 revoke execute on function public.chart_person_place(text, text, text, text, boolean, boolean, boolean, boolean, boolean, boolean) from public, anon, authenticated;
 grant execute on function public.chart_person_place(text, text, text, text, boolean, boolean, boolean, boolean, boolean, boolean) to service_role, authenticated;
-revoke execute on function public.chart_visit_send(text, text, text, text, boolean, boolean) from public, anon, authenticated;
-grant execute on function public.chart_visit_send(text, text, text, text, boolean, boolean) to service_role, authenticated;
+revoke execute on function public.chart_visit_send(text, text, text, text, boolean, boolean, bigint) from public, anon, authenticated;
+grant execute on function public.chart_visit_send(text, text, text, text, boolean, boolean, bigint) to service_role, authenticated;
 revoke execute on function public.chart_doctor_send(text, bigint, boolean, boolean) from public, anon, authenticated;
 grant execute on function public.chart_doctor_send(text, bigint, boolean, boolean) to service_role, authenticated;
 
@@ -226,5 +273,44 @@ begin
                   $b$'by_name', public.chart_short(o.by_id), 'at', o.at, 'state', o.state, 'case_id', o.case_id,
          'patient', (select public.checkin_short_name(x.patient_name) from public.chart_cases x where x.id = o.case_id))$b$);
   if n = d then raise exception '0099: chart_order_mine text not found'; end if;
+  execute n;
+
+  -- §7b
+  d := pg_get_functiondef('public.chart_sv_leave(text,text[],text,boolean)'::regprocedure);
+  n := replace(d, $a$handback_note = 'Their nurse was moved by the Supervisor', handed_back_by = p_person,$a$,
+                  $b$handback_note = 'Their nurse was moved by the Supervisor', handed_back_by = p_person, lost_nurse = true, prioritised = true,$b$);
+  if n = d then raise exception '0099: chart_sv_leave text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_sv_sweep()'::regprocedure);
+  n := replace(d, $a$    update public.chart_orders o set state = 'expired' where o.state in ('sent', 'seen') and (public.chart_shift_of(o.person)).id is null;$a$,
+                  $b$    -- a visit to a patient follows them to their new room
+    for x in select v.id, v.person, b.room_id as now_room, c.patient_name from public.chart_visits v
+               join public.chart_cases c on c.id = v.case_id join public.chart_beds b on b.id = c.bed_id
+             where v.state in ('sent', 'on_way', 'arrived') and c.status = 'open' and b.room_id is distinct from v.room_id loop
+      update public.chart_visits set room_id = x.now_room where id = x.id;
+      perform public.chart_notice(x.person, format('%s moved to %s.', public.checkin_short_name(x.patient_name), public.chart_room_name(x.now_room)));
+      changed := true;
+    end loop;
+    update public.chart_orders o set state = 'expired' where o.state in ('sent', 'seen') and (public.chart_shift_of(o.person)).id is null;$b$);
+  if n = d then raise exception '0099: chart_sv_sweep text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_room_guard()'::regprocedure);
+  n := replace(d, $a$      perform public.chart_err('room_in_use', 'Move the patients out of the room first.');$a$,
+                  $b$      perform public.chart_err('room_has_patients', format('%s still has patients. Move them first.', public.chart_room_name(new.id)));$b$);
+  if n = d then raise exception '0099: chart_room_guard text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_room_set(text,text,text,boolean,text)'::regprocedure);
+  n := replace(d, $a$  perform public.chart_act('room_set', null,$a$,
+                  $b$  if p_closed and not r.closed then perform public.chart_room_cancel(r.id); end if;
+  perform public.chart_act('room_set', null,$b$);
+  if n = d then raise exception '0099: chart_room_set text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_map_apply(text)'::regprocedure);
+  n := replace(d, $a$    update public.chart_staff set offer_room_id = null
+    where offer_room_id in (select r.id from public.chart_rooms r where r.wing = 'er');$a$,
+                  $b$    update public.chart_staff set offer_room_id = null
+    where offer_room_id in (select r.id from public.chart_rooms r where r.wing = 'er');
+    perform public.chart_room_cancel(r.id, true) from public.chart_rooms r where r.wing = 'er' and r.active;$b$);
+  if n = d then raise exception '0099: chart_map_apply text not found'; end if;
   execute n;
 end $m$;

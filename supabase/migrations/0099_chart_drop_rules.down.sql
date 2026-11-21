@@ -9,11 +9,49 @@ begin
                   $a$'by_name', public.chart_short(o.by_id), 'at', o.at, 'state', o.state)$a$);
   if n = d then raise exception '0099 down: chart_order_mine text not found'; end if;
   execute n;
+  d := pg_get_functiondef('public.chart_sv_leave(text,text[],text,boolean)'::regprocedure);
+  n := replace(d, $b$handback_note = 'Their nurse was moved by the Supervisor', handed_back_by = p_person, lost_nurse = true, prioritised = true,$b$,
+                  $a$handback_note = 'Their nurse was moved by the Supervisor', handed_back_by = p_person,$a$);
+  if n = d then raise exception '0099 down: chart_sv_leave text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_sv_sweep()'::regprocedure);
+  n := replace(d, $b$    -- a visit to a patient follows them to their new room
+    for x in select v.id, v.person, b.room_id as now_room, c.patient_name from public.chart_visits v
+               join public.chart_cases c on c.id = v.case_id join public.chart_beds b on b.id = c.bed_id
+             where v.state in ('sent', 'on_way', 'arrived') and c.status = 'open' and b.room_id is distinct from v.room_id loop
+      update public.chart_visits set room_id = x.now_room where id = x.id;
+      perform public.chart_notice(x.person, format('%s moved to %s.', public.checkin_short_name(x.patient_name), public.chart_room_name(x.now_room)));
+      changed := true;
+    end loop;
+    update public.chart_orders o set state = 'expired' where o.state in ('sent', 'seen') and (public.chart_shift_of(o.person)).id is null;$b$,
+                  $a$    update public.chart_orders o set state = 'expired' where o.state in ('sent', 'seen') and (public.chart_shift_of(o.person)).id is null;$a$);
+  if n = d then raise exception '0099 down: chart_sv_sweep text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_room_guard()'::regprocedure);
+  n := replace(d, $b$      perform public.chart_err('room_has_patients', format('%s still has patients. Move them first.', public.chart_room_name(new.id)));$b$,
+                  $a$      perform public.chart_err('room_in_use', 'Move the patients out of the room first.');$a$);
+  if n = d then raise exception '0099 down: chart_room_guard text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_room_set(text,text,text,boolean,text)'::regprocedure);
+  n := replace(d, $b$  if p_closed and not r.closed then perform public.chart_room_cancel(r.id); end if;
+  perform public.chart_act('room_set', null,$b$,
+                  $a$  perform public.chart_act('room_set', null,$a$);
+  if n = d then raise exception '0099 down: chart_room_set text not found'; end if;
+  execute n;
+  d := pg_get_functiondef('public.chart_map_apply(text)'::regprocedure);
+  n := replace(d, $b$    update public.chart_staff set offer_room_id = null
+    where offer_room_id in (select r.id from public.chart_rooms r where r.wing = 'er');
+    perform public.chart_room_cancel(r.id, true) from public.chart_rooms r where r.wing = 'er' and r.active;$b$,
+                  $a$    update public.chart_staff set offer_room_id = null
+    where offer_room_id in (select r.id from public.chart_rooms r where r.wing = 'er');$a$);
+  if n = d then raise exception '0099 down: chart_map_apply text not found'; end if;
+  execute n;
 end $m$;
 
 drop function if exists public.chart_doctor_send(text, bigint, boolean, boolean);
 drop function if exists public.chart_person_place(text, text, text, text, boolean, boolean, boolean, boolean, boolean, boolean);
-drop function if exists public.chart_visit_send(text, text, text, text, boolean, boolean);
+drop function if exists public.chart_visit_send(text, text, text, text, boolean, boolean, bigint);
+drop function if exists public.chart_room_cancel(text, boolean);
 drop function if exists public.chart_send_check(text, boolean, boolean);
 
 create or replace function public.chart_person_place(p_person text, p_bed text, p_mode text default 'move', p_hand_to text default null,
@@ -92,3 +130,4 @@ delete from public.chart_orders where kind in ('patient', 'request');
 alter table public.chart_orders drop constraint if exists chart_orders_kind_check;
 alter table public.chart_orders add constraint chart_orders_kind_check check (kind in ('move', 'add', 'off', 'handover'));
 alter table public.chart_orders drop column if exists case_id;
+alter table public.chart_visits drop column if exists case_id;
