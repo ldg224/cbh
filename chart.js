@@ -986,13 +986,13 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const bedIcons = (p) => `${p.stage === 'queue' ? bell : ''}${flags(p, true)}`;
   const inits = (n) => String(n || '').replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const bedCell = (bed, short, mode, shared, narrow) => { const p = roomsInUse()[bed], o = ownerOf(bed);
-    const cls = `bed${S.bedAway[bed] ? ' away' : ''}${bedOff(bed) ? ' off' : ''}${p ? ' used' : ''}${p && p.stage === 'queue' ? ' hb' : ''}${p && codeFor(p) ? ' code' : ''}${o === 'me' ? ' mine' : ''}${S.moveFor && !p ? ' target' : ''}`;
+    const cls = `bed${S.bedAway[bed] ? ' away' : ''}${bedOff(bed) ? ' off' : ''}${p ? ' used' : ''}${p && p.stage === 'queue' ? ' hb needs' : ''}${p && codeFor(p) ? ' code' : ''}${o === 'me' ? ' mine' : ''}${S.moveFor && !p ? ' target' : ''}`;
     const placing = mode === 'super' && S.placeFor && !p ? (dropWhy(byId(S.placeFor), bed) ? ' no-drop' : ' fit') : '';
     if (placing === ' fit') return `<button type="button" class="${cls} fit" data-placebed="${esc(bed)}" aria-label="Place ${esc(byId(S.placeFor).name)} in ${esc(bed)}"><span class="bed-n">${esc(short)}</span><small class="free-l">Place</small></button>`;
     if (mode === 'super' && S.moveFor && !p && byId(S.moveFor) && !dropWhy(byId(S.moveFor), bed)) return `<button type="button" class="${cls} fit" data-mv-to="${esc(bed)}" aria-label="Move ${esc(byId(S.moveFor).name)} to ${esc(bed)}"><span class="bed-n">${esc(short)}</span><small class="free-l">Move here</small></button>`;
     if (mode === 'pick') { const on = pickSelNow().includes(bed), other = o && o !== 'me' ? o : null; return `<button type="button" class="${cls.replace(' mine', '')}${on ? ' mine picked' : ''} pickable" data-pickbed="${esc(bed)}" aria-pressed="${on}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}><span class="bed-n">${esc(short)}</span>${on ? `${face('me')}<b>Yours</b>` : other ? `${face(other)}<b>${esc(first(other))}</b>` : `<small class="free-l">${p ? `${esc(p.name)} waiting · nobody's` : bedOff(bed) ? 'Unavailable' : closedBed(bed) ? `Closed${S.roomCfg[roomIdOf(bed)].why ? ': ' + esc(S.roomCfg[roomIdOf(bed)].why) : ''}` : 'Free'}</small>`}</button>`; }
     return `<div class="${cls}${placing}" data-bed="${esc(bed)}"${p ? ` style="--u:${U(p.urgency).colour}" data-open="${p.id}"${mode === 'super' ? ` data-drag="${p.id}"` : ''} role="button" tabindex="0" aria-label="${esc(p.name)} in ${esc(bed)}${o ? ', ' + esc(nm(o)) + '\u2019s bed' : ''}. Enter opens the record${mode === 'super' ? ', M moves them' : ''}."` : ''}>
-      ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o, { drag: mode === 'super', room: roomIdOf(bed) }) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}">${esc(narrow ? p.name.split(' ')[0] : p.name)}</b>${narrow ? '' : `<small class="bed-st">${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}</small>`}<span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l">${bedOff(bed) ? 'Off' : narrow ? '' : 'Free'}</small>`}${tcAway(bed)}</div>`; };
+      ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o, { drag: mode === 'super', room: roomIdOf(bed) }) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Needs a nurse' : status(p))}">${esc(narrow ? p.name.split(' ')[0] : p.name)}</b>${narrow ? '' : `<small class="bed-st">${esc(p.stage === 'queue' ? 'Needs a nurse' : status(p))}</small>`}<span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l">${bedOff(bed) ? 'Off' : narrow ? '' : 'Free'}</small>`}${tcAway(bed)}</div>`; };
   const geo = (id) => FLOOR.rooms[id] || (erOn() ? ER.rooms[id] : null);
   const roomBox = (r, mode) => { const beds = D.BEDS.filter((b) => D.roomOfBed(b) === r), g = geo(r.id); if (!g) return '';
     const c = S.roomCfg[r.id], rd = S.roomDept[r.id], open = !beds.some(ownerOf);
@@ -1769,7 +1769,7 @@ ${nextBarHtml(p)}
   // the same card with OK → Arrived → Done; a bed holder gets a partner request (Accept / No, 60 s). The hover cards and
   // the Admins on shift box are Delta's chart-hover.js, fed by CBHChart.person / admins (below). The server decides.
   const SV = { place: 'chart_person_place', off: 'chart_person_off', orderOk: 'chart_order_ok', orderSeen: 'chart_order_seen', visitSend: 'chart_visit_send',
-    visitStep: 'chart_visit_step', visitRemove: 'chart_visit_remove', partner: 'chart_partner_answer' };
+    visitStep: 'chart_visit_step', visitRemove: 'chart_visit_remove', partner: 'chart_partner_answer', doctor: 'chart_doctor_send' };
   S.sInfo = {}; S.visits = []; S.order = null; S.myVisit = null; S.partner = null; S.partnerWait = null; S.sv = null; S.adminIds = []; S.orderSeen = new Set();
   const VREASON = { help: ['Help with patient', 'Help'], complaint: ['Patient complaint', 'Complaint'], check_staff: ['Check on staff', 'Staff check'],
     second_opinion: ['Second opinion', '2nd opinion'], medical: ['Medical request', 'Medical'], custom: ['Message', 'Visit'] };
@@ -1801,31 +1801,67 @@ ${nextBarHtml(p)}
   const roomDeptClash = (sid, room) => { const d = S.roomDept[room]; return d && d !== 'Any' && d !== 'Paediatric' && staffDept(sid) && d !== staffDept(sid) && !(S.roomCfg[room] || {}).kids ? d : ''; };
   const ptsLeft = (sid, keep) => mine(sid).filter((p) => p.room && p.room !== keep && bedsOf(sid).includes(p.room));
   // A face dropped on a bed or a room (desktop drag, or the face sheet's Move to / Send to visit).
+  // Every drop case (supervisor-v2.md §7, the user, 21 Nov 2026). A face onto a bed or a room:
+  //   closed room → refused · a room with a Trauma call → added to the call · on a break / at a trauma call → asked first
+  //   Room nurse: free bed → takes it · waiting patient, no nurse → takes the bed AND the patient · patient with a nurse →
+  //   sent to help (no picker) · bed held by someone, no patient → Share the room / Give this bed to them
+  //   On call doctor onto a patient → an accepted doctor request · admins (and doctors onto an empty bed) → a visit with a reason
+  const onBreakNow = (sid) => S.staffStatus[sid] === 'break' || S.staffRole[sid] === 'break';
+  const atTrauma = (sid) => { const t = S.staffCall[sid]; return !!(t && t.state !== 'declined' && callById(t.id)); };
+  const extra = (v) => ({ ...(v.force ? { p_anyway: true } : {}), ...(v.pull ? { p_pull: true } : {}) });   // only sent when used
+  // the server's refusals reopen the matching ask (0099)
+  const svHints = (v) => ({ dept_clash: () => { S.sv = { ...v, deptOk: false, step: 'clash' }; }, has_patients: () => { S.sv = { ...v, handTo: undefined, step: 'pts' }; },
+    on_break: () => { S.sv = { ...v, force: false, step: 'break' }; }, on_trauma: () => { S.sv = { ...v, pull: false, step: 'trauma' }; },
+    not_their_team: (e) => { S.sv = { ...v, step: 'team', teamMsg: e.message }; },
+    held: () => { S.sv = { ...v, kind: 'held', holder: ownerOf(v.bed) || v.holder, step: 'held' }; },
+    has_nurse: () => { S.sv = { ...v, kind: 'help' }; svNext(); render(); } });
   function svDrop(sid, room, bed) {
     if (sid === 'me') { toast('Pick your own bed from Pick your room.'); return; }
-    const role = S.staffRole[sid], who = esc(first(sid));
-    if (role !== 'room') {
-      if (canVisit(sid)) { S.sv = { kind: 'visit', sid, room, reason: null, note: '' }; return; }
-      toast(`${who} is on ${esc(ROLE_NAME[role] || 'another role')}. Only Room staff hold beds; admins and On call doctors can be sent to visit.`); return; }
-    const b = bed && roomIdOf(bed) === room ? bed : D.BEDS.find((x) => roomIdOf(x) === room && bedFree(x));
-    if (!b) { toast(`Every bed in ${esc(roomWord(room))} is taken or closed.`); return; }
-    if (ownerOf(b) === sid) { toast(`${who} already has ${esc(b)}.`); return; }
-    if (ownerOf(b)) { toast(`${esc(b)} is ${esc(nm(ownerOf(b)))}'s bed.`); return; }
-    const no = bedUsable(b); if (no) { toast(`${esc(no)}.`); return; }
-    S.sv = { kind: 'place', sid, room, bed: b, mode: bedsOf(sid).length ? null : 'move', deptOk: !roomDeptClash(sid, room), handTo: undefined };
-    svNext();
+    const who = esc(first(sid)), rc = S.roomCfg[room] || {};
+    if (rc.closed) { toast(`${esc(roomWord(room))} is closed${rc.why ? `: ${esc(rc.why)}` : ''}.`); return; }
+    if (S.calls.some((x) => x.room === room)) { tcDrop(sid, room); return; }   // the phone's Move to / Send to visit lands here too
+    const role = S.staffRole[sid] === 'break' ? 'room' : S.staffRole[sid];
+    const usable = D.BEDS.filter((x) => roomIdOf(x) === room && !bedUsable(x)), pt = (x) => roomsInUse()[x];
+    const b = bed && roomIdOf(bed) === room ? bed
+      : usable.find((x) => pt(x) && !pt(x).nurse) || usable.find((x) => !ownerOf(x) && !pt(x)) || usable.find((x) => pt(x)) || usable.find((x) => ownerOf(x) && ownerOf(x) !== sid) || null;
+    const p = b && pt(b);
+    let base = { sid, room, bed: b, pid: p ? p.id : null };
+    if (role === 'room') {
+      if (!b) { toast(`Every bed in ${esc(roomWord(room))} is closed or off.`); return; }
+      const no = bedUsable(b); if (no) { toast(`${esc(no)}.`); return; }
+      if (p && p.nurse === sid) { toast(`${who} already has ${esc(p.name)}.`); return; }
+      if (p && p.nurse) base = { ...base, kind: 'help' };   // the user: always help; to take over, take the nurse off first
+      else if (ownerOf(b) === sid && !p) { toast(`${who} already has ${esc(b)}.`); return; }
+      else if (ownerOf(b) && ownerOf(b) !== sid && !p) base = { ...base, kind: 'held', holder: ownerOf(b) };
+      else base = { ...base, kind: 'place', patient: p && !p.nurse ? p.name : null, mode: bedsOf(sid).length ? null : 'move', deptOk: !roomDeptClash(sid, room), handTo: undefined };
+    } else if (role === 'oncall' && p) base = { ...base, kind: 'doctor' };
+    else if (canVisit(sid)) base = { ...base, kind: 'visit', reason: null, note: '' };
+    else { toast(`${who} is on ${esc(ROLE_NAME[role] || 'another role')}. Only Room staff hold beds; admins and On call doctors can be sent to visit.`); return; }
+    S.sv = base; svNext();
   }
   // the next question, or send it
   function svNext() {
     const v = S.sv; if (!v) return;
+    if (['place', 'held', 'help', 'doctor', 'visit'].includes(v.kind)) {
+      if (onBreakNow(v.sid) && !v.force) { v.step = 'break'; return; }
+      if (atTrauma(v.sid) && !v.pull) { v.step = 'trauma'; return; }
+    }
+    if (v.kind === 'held') { v.step = 'held'; return; }   // Share the room / Give this bed to them
+    if (v.kind === 'visit') { v.step = 'visit'; return; }
+    if (v.kind === 'help') { S.sv = null;
+      call(SV.visitSend, { p_person: idOf(v.sid), p_room: v.room, p_reason: 'help', p_note: null, ...extra(v) }, `${esc(nm(v.sid))} sent to help in ${esc(roomWord(v.room))}.`, svHints(v)); return; }
+    if (v.kind === 'doctor') { S.sv = null; const p = byId(v.pid);
+      call(SV.doctor, { p_person: idOf(v.sid), p_case: v.pid, ...extra(v) }, `${esc(nm(v.sid))} is the doctor for ${esc(p ? p.name : 'the patient')}. They've been told.`, svHints(v)); return; }
     if (v.kind === 'place') {
       if (!v.deptOk) { v.step = 'clash'; return; }
       if (!v.mode) { v.step = 'how'; return; }
       if (v.mode === 'move' && v.handTo === undefined && ptsLeft(v.sid, v.bed).length) { v.step = 'pts'; return; }
       S.sv = null;
-      call(SV.place, { p_person: idOf(v.sid), p_bed: bedId(v.bed), p_mode: v.mode, p_hand_to: v.handTo ? idOf(v.handTo) : null, p_move_anyway: !!v.anyway, p_override_dept: !!v.override },
-        `${esc(nm(v.sid))} ${v.mode === 'add' ? 'also has' : 'is now in'} ${esc(v.bed)}. They've been told.`,
-        { dept_clash: () => { S.sv = { ...v, deptOk: false, step: 'clash' }; }, has_patients: () => { S.sv = { ...v, handTo: undefined, step: 'pts' }; } });
+      call(SV.place, { p_person: idOf(v.sid), p_bed: bedId(v.bed), p_mode: v.mode, p_hand_to: v.handTo ? idOf(v.handTo) : null, p_move_anyway: !!v.anyway, p_override_dept: !!v.override,
+        ...(v.share ? { p_share: true } : {}), ...(v.swap ? { p_swap: true } : {}), ...extra(v) },
+        (r) => (r.patient_waiting ? `${esc(nm(v.sid))} has ${esc(v.share ? 'a bed in ' + roomWord(v.room) : v.bed)}. ${esc(r.reason || 'The patient isn’t ready to be given out yet.')}`
+          : r.patient || v.patient ? `${esc(nm(v.sid))} now has ${esc(BED_LABEL[r.bed] || r.bed || v.bed)} and ${esc(r.patient || v.patient)}. They've been told.`
+          : `${esc(nm(v.sid))} ${v.share ? `shares ${esc(roomWord(v.room))} (${esc(BED_LABEL[r.bed] || r.bed || 'the other bed')})` : v.mode === 'add' ? 'also has ' + esc(v.bed) : 'is now in ' + esc(v.bed)}. They've been told.`), svHints(v));
       return; }
     if (v.kind === 'off') {
       if (!v.sure) { v.step = 'sure'; return; }
@@ -1840,7 +1876,14 @@ ${nextBarHtml(p)}
   function svPanel() {
     const v = S.sv; if (!v) return ''; const who = esc(first(v.sid)), x = '<button type="button" class="link" data-sv="cancel">Cancel</button>';
     let h = '';
-    if (v.kind === 'place' && v.step === 'clash') { const d = roomDeptClash(v.sid, v.room) || S.roomDept[v.room];
+    if (v.step === 'break') h = `<b>${who} is on a break</b><span>Send them anyway? Their break ends.</span><div class="row-btns"><button type="button" class="btn small" data-sv="force">Send anyway</button>${x}</div>`;
+    else if (v.step === 'trauma') h = `<b>${who} is at the trauma call</b><span>Pull them off it?</span><div class="row-btns"><button type="button" class="btn small warn" data-sv="pull">Pull them off</button>${x}</div>`;
+    else if (v.step === 'team') h = `<b>Not ${who}'s team</b><span>${esc(v.teamMsg || 'The patient needs another team.')}</span><div class="row-btns"><button type="button" class="btn small" data-sv="team">Give anyway</button>${x}</div>`;
+    else if (v.step === 'held') { const other = D.BEDS.find((y) => roomIdOf(y) === v.room && y !== v.bed && !ownerOf(y) && !bedUsable(y)), hn = esc(first(v.holder));
+      h = `<b>${esc(v.bed)} is ${hn}'s</b><span>No patient in it.</span>
+        <div class="row-btns"><button type="button" class="btn small" data-sv="share"${other ? '' : ` disabled title="No other free bed in ${esc(roomWord(v.room))}"`}>Share the room with ${hn}</button><button type="button" class="btn small ghost" data-sv="swap">Give this bed to ${who}</button>${x}</div>
+        ${other ? '' : `<small class="muted">No other free bed in ${esc(roomWord(v.room))} to share.</small>`}`; }
+    else if (v.kind === 'place' && v.step === 'clash') { const d = roomDeptClash(v.sid, v.room) || S.roomDept[v.room];
       h = `<b>${esc(roomWord(v.room))} is ${esc(d)}</b><span>Send ${who} (${esc(staffDept(v.sid))}) anyway?</span>
         <div class="row-btns"><button type="button" class="btn small" data-sv="anyway">Send anyway</button><button type="button" class="btn small ghost" data-sv="roomdept">Change room to ${esc(staffDept(v.sid))}</button>${x}</div>`; }
     else if (v.kind === 'place' && v.step === 'how') {
@@ -1882,8 +1925,13 @@ ${nextBarHtml(p)}
       case 'offyes': v.sure = true; svNext(); break;
       case 'unvisityes': S.sv = null; call(SV.visitRemove, { p_visit: v.id }, `${esc(nm(v.sid))}'s visit ended.`); break;
       case 'reason': v.reason = ds.svr; if (ds.svr === 'custom') setTimeout(() => { const i = $('#sv-note'); if (i) i.focus(); }, 0); break;
-      case 'visitgo': S.sv = null; call(SV.visitSend, { p_person: idOf(v.sid), p_room: v.room, p_reason: v.reason, p_note: v.reason === 'custom' ? v.note.trim() : null },
-        `${esc(nm(v.sid))} sent to ${esc(roomWord(v.room))}: ${esc(vWords(v))}.`); break;
+      case 'force': v.force = true; svNext(); break;
+      case 'pull': v.pull = true; svNext(); break;
+      case 'share': S.sv = { ...v, kind: 'place', share: true, step: null, mode: bedsOf(v.sid).length ? null : 'move', deptOk: !roomDeptClash(v.sid, v.room), handTo: undefined }; svNext(); break;
+      case 'swap': S.sv = { ...v, kind: 'place', swap: true, step: null, mode: bedsOf(v.sid).length ? null : 'move', deptOk: !roomDeptClash(v.sid, v.room), handTo: undefined }; svNext(); break;
+      case 'team': v.override = true; v.deptOk = true; v.step = null; svNext(); break;
+      case 'visitgo': S.sv = null; call(SV.visitSend, { p_person: idOf(v.sid), p_room: v.room, p_reason: v.reason, p_note: v.reason === 'custom' ? v.note.trim() : null, ...extra(v) },
+        `${esc(nm(v.sid))} sent to ${esc(roomWord(v.room))}: ${esc(vWords(v))}.`, svHints(v)); break;
       // the face sheet (phone and keyboard)
       case 'off': S.face = null; svOff(ds.svsid, ds.svroom || null); break;
       case 'unvisit': S.face = null; { const vi = visitOf(ds.svsid); if (vi) S.sv = { kind: 'unvisit', id: vi.id, sid: vi.sid, room: vi.room }; } break;
@@ -1932,6 +1980,8 @@ ${nextBarHtml(p)}
       if (o.kind === 'off') { big = `Off ${where}`; line = `${by} took you off ${bed && d && d.beds > 1 ? 'this bed' : room ? 'this room' : 'your beds'}.`; }
       else if (o.kind === 'handover') { big = where; line = `${by} handed you this bed and its patients.`; }
       else if (o.kind === 'add') { big = where; line = `${by} gave you this bed as well.`; }
+      else if (o.kind === 'patient') { big = where; line = `${o.patient || 'Your patient'} is waiting for you.`; }
+      else if (o.kind === 'request') { big = where; line = `${by} sent you as the doctor for ${String(o.patient || 'the patient').replace(/\.$/, '')}.`; }
       else { big = where; line = `${by} moved you here.`; } }
     else { lab = 'Visit'; big = roomWord(String(vi.room)); line = vWords(vi); btn = '<button type="button" class="btn big tc-yes" data-sv="vstep" data-svstep="on_way">OK</button>'; }
     return `<div class="tc-alert ord-alert" role="alertdialog" aria-modal="true" aria-labelledby="ord-al-h" aria-describedby="ord-al-d"><div class="tc-al-in">
@@ -1939,7 +1989,17 @@ ${nextBarHtml(p)}
       ${vi && !o ? `<p class="tc-al-sub">From ${esc(vi.by || 'the supervisor')}. You don't take a bed.</p>` : ''}<div class="tc-al-btns one">${btn}</div></div></div>`;
   }
   const W_SV = { ready: false, keys: new Set() };
+  const W_FOLLOW = {};   // what I'm on my way to help with -> the room it was in
+  function followWatch() {
+    const now = {};
+    if (S.myVisit && S.myVisit.state !== 'done') now['v' + S.myVisit.id] = { room: String(S.myVisit.room), what: null };
+    S.reqs.filter((r) => isOpenReq(r) && r.acceptedBy === 'me').forEach((r) => { const p = byId(r.pid); if (p && p.room) now['r' + r.id] = { room: roomIdOf(p.room), what: p.name, bed: p.room }; });
+    Object.entries(now).forEach(([k, x]) => { const was = W_FOLLOW[k];
+      if (was && was.room !== x.room) { tone('arrival'); toast(x.what ? `${esc(x.what)} moved to ${esc(roomWord(x.room))}${x.bed && D.roomOfBed(x.bed) && D.roomOfBed(x.bed).beds > 1 ? ` (${esc(x.bed)})` : ''}. Go there instead.` : `Your visit moved to ${esc(roomWord(x.room))}. Go there instead.`, 7000); } });
+    Object.keys(W_FOLLOW).forEach((k) => delete W_FOLLOW[k]); Object.assign(W_FOLLOW, now);
+  }
   function svWatch() {
+    followWatch();
     if (S.order && S.order.state !== 'seen' && looking() && !S.orderSeen.has(S.order.id)) { S.orderSeen.add(S.order.id); rpc(SV.orderSeen, { p_order: S.order.id }).catch(() => {}); }
     const now = new Set([S.order && S.order.state !== 'seen' ? 'o' + S.order.id : '', S.myVisit && S.myVisit.state === 'sent' ? 'v' + S.myVisit.id : '', S.partner ? 'p' + S.partner.id : ''].filter(Boolean));
     if (W_SV.ready) [...now].filter((k) => !W_SV.keys.has(k)).forEach((k) => {
