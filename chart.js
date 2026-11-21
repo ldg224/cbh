@@ -309,7 +309,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     }
     polling = false;
     if (pollAgain) { pollAgain = false; return poll(true); }
-    if (onPage && S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
+    // the open record: the desktop drawer, or the phone's patient screen (its Delete chart needs the record's 'can')
+    const recId = S.open || (isPhone() && (top() || {}).s === 'patient' ? (top() || {}).id : null);
+    if (onPage && recId && !(S.noRec && S.noRec.has(recId)) && (!RECS[recId] || RECS[recId].rev !== REV)) loadRec(recId);
     pollT = setTimeout(() => poll(), pollDelay());
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });   // back on the tab: straight away (any CBH page)
@@ -933,7 +935,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const personStatus = (sid) => { const r = S.staffRole[sid], rq = helping(sid), m = mine(sid), tc = S.staffCall[sid], tcc = tc && callById(tc.id);
     const vis = visitOf(sid); if (vis) return vis.state === 'arrived' ? [`Visiting ${roomName(vis.room)}: ${vWords(vis)}`, 'busy'] : [`On the way to ${roomName(vis.room)}`, 'go'];
     if (tcc && tc.state !== 'declined') return tc.state === 'arrived' ? [`At trauma · ${roomName(tcc.room)}`, 'busy'] : tc.state === 'on_way' ? [`Going to trauma · ${roomName(tcc.room)}`, 'go'] : ['Trauma call: not answered', 'go'];
-    if (rq) { const q = byId(rq.pid), rm = roomIdOf(q.room) || '?'; return rq.hereAt ? [`In ${rm} · ${RT[rq.type]}`, 'busy'] : [`Going to ${rm} · ${RT[rq.type]}`, 'go']; }
+    if (rq && byId(rq.pid)) { /* a request for a deleted chart is skipped */ const q = byId(rq.pid), rm = roomIdOf(q.room) || '?'; return rq.hereAt ? [`In ${rm} · ${RT[rq.type]}`, 'busy'] : [`Going to ${rm} · ${RT[rq.type]}`, 'go']; }
     if (r === 'break') return ['Break', 'off']; if (r === 'off') return ['Not on the Chart', 'off'];
     if (r === 'reception') return ['At the desk', 'ok'];
     if (r === 'road') return [S.incoming.some((i) => !i.done && i.by === sid) ? 'Bringing one in' : 'On the road', 'ok'];
@@ -1171,7 +1173,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       ${S.handbackFor === p.id ? `<div class="pane-pad" style="padding-bottom:0">${handbackBox(p)}</div>` : ''}${S.pd && S.pd.pid === p.id && !S.pd.bed && !isPhone() ? `<div class="pane-pad rq-pad">${pdPanel()}</div>` : ''}
       ${(S.reqMenu && canReq(p)) || reqBlock(p) ? `<div class="pane-pad rq-pad">${S.reqMenu && canReq(p) ? reqMenu(p) : ''}${reqBlock(p)}</div>` : ''}
       <div class="r-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${l}${k === 'orders' && p.orders.some((o) => !o.done) ? ` <i>${p.orders.filter((o) => !o.done).length}</i>` : ''}</button>`).join('')}</div>
-      <div class="r-body">${body}</div></div>`;
+      <div class="r-body">${body}${voidBlock(p)}</div></div>`;
   }
   const SECTIONS = { reception: [['desk', 'Front Desk']], room: [['myroom', 'My Room'], ['board', 'Ward Board']], oncall: [['reqs', 'Requests'], ['board', 'Ward Board']],
     road: [['road', 'Incoming'], ['board', 'Ward Board']], super: [['plan', 'Floor Plan'], ['desk', 'Front Desk'], ['reqs', 'Requests'], ['board', 'Ward Board']] };
@@ -1575,7 +1577,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
         <button type="button" class="cx-tile" data-pgo="p-did" data-pid="${p.id}"><b>Care given</b><span>${p.did.length ? p.did.length + ' recorded' : 'Nothing recorded yet'}</span></button>
         <button type="button" class="cx-tile" data-pgo="p-ord" data-pid="${p.id}"><b>Orders & results</b><span>${p.orders.length ? `${p.orders.length} asked${un ? ` · ${un} to do` : ''}` : 'None'}${p.diagnosis ? ' · ' + esc(p.diagnosis) : ''}</span></button>
         ${S.role === 'super' && !S.calls.some((c) => c.pid === p.id) ? `<button type="button" class="cx-tile tc-tile" data-tc="new" data-tcpid="${p.id}"><b>Trauma call</b><span>Call a team to ${esc(p.room || 'their bed')}</span></button>` : ''}${S.role === 'super' && p.room ? `<button type="button" class="cx-tile" data-pd="change" data-pdpid="${p.id}"><b>Change nurse</b><span>Now ${esc(first(p.nurse))}</span></button>` : ''}${S.role === 'super' ? `<button type="button" class="cx-tile navy" data-pgo="p-leave" data-pid="${p.id}"><b>Discharge</b><span>Or close the case: left or died</span></button>` : ''}
-        ${mineP ? `<button type="button" class="cx-tile ghost" data-hb="${p.id}"><b>Hand over</b><span>Back to the queue; they stay in their bed</span></button>` : ''}</div>${S.handbackFor === p.id ? handbackBox(p) : ''}`; }
+        ${mineP ? `<button type="button" class="cx-tile ghost" data-hb="${p.id}"><b>Hand over</b><span>Back to the queue; they stay in their bed</span></button>` : ''}</div>${S.handbackFor === p.id ? handbackBox(p) : ''}${voidBlock(p)}`; }
     if (t.s === 'p-urg' && p) h = `${phHead('Triage colour', p.colourConfirmed ? 'Confirmed' : 'Set at check-in: confirm or change')}${urgPicker(p.urgency, 'data-purg')}${p.colourConfirmed ? '' : `<button type="button" class="btn big" data-a="pconfirm">Confirm ${esc(U(p.urgency).name)}</button>`}`;
     if (t.s === 'p-num' && p) h = `${phHead('Vitals', 'Copy them from the monitor')}${vitalForm()}`;
     if (t.s === 'p-did' && p) h = `${phHead('Care given', 'Type it, then Add')}${fbox('did', 'did', '', 'e.g. bandaged left arm', 'Add')}${didList(p)}`;
@@ -2179,6 +2181,28 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
   }
   const admBox = () => { try { return window.CBHChart && typeof window.CBHChart.renderAdmins === 'function' ? window.CBHChart.renderAdmins() || '' : ''; } catch (e) { console.error('CBH Chart admins box:', e); return ''; } };
 
+  // ---------- delete a chart made by mistake (delete-chart.md; Bravo's 0104) ----------
+  // A quiet link at the end of the record: the Supervisor and execs any time (with a short reason); the person who made it
+  // while it's fresh (the server says why not). A confirm, then a 10 s "Undo" for the person who deleted it.
+  S.voidFor = null;
+  const voidCan = (p) => { const r = RECS[p.id], can = (r && r.can) || {}, boss = S.role === 'super' || !!window.execReal;
+    if (can.delete !== undefined) return { show: !!can.delete || !!can.delete_why || boss, ok: !!can.delete, why: can.delete_why || '', reason: can.delete_reason_needed != null ? !!can.delete_reason_needed : boss };
+    return { show: boss, ok: boss, why: '', reason: boss }; };
+  function voidBlock(p) {
+    const v = voidCan(p); if (!v.show) return '';
+    if (S.voidFor !== p.id) return `<div class="void-row"><button type="button" class="link void-link" data-void="${p.id}"${v.ok ? '' : ' disabled'}>Delete chart</button>${!v.ok && v.why ? `<small class="muted">${esc(v.why)}</small>` : ''}</div>`;
+    return `<div class="void-row"><div class="move-ask void-ask" role="alertdialog" aria-label="Delete chart"><b>Delete ${esc(p.name)}'s chart?</b><span>It comes off the Chart for everyone. A record stays in the log.</span>
+      ${v.reason ? `<input id="void-why" maxlength="120" placeholder="Why? e.g. checked in twice by mistake" autocomplete="off">` : ''}
+      <div class="row-btns"><button type="button" class="btn small warn" data-voidgo="${p.id}">Delete chart</button><button type="button" class="link" data-a="voidx">Cancel</button></div></div></div>`;
+  }
+  function voidGo(p) {
+    const v = voidCan(p), why = (($('#void-why') || {}).value || '').trim();
+    if (v.reason && why.length < 3) { toast('Say why in a few words (at least 3 letters).'); const i = $('#void-why'); if (i) i.focus(); return; }
+    const name = p.name, id = p.id; S.voidFor = null;
+    call('chart_case_void', { p_case: id, p_reason: why || null })
+      .then((r) => { if (!r) return; if (S.open === id) S.open = null; if (isPhone() && (top() || {}).id === id) S.ph = [S.ph[0]]; toast(`${esc(name)}'s chart deleted · <button type="button" class="toast-undo" data-unvoid="${id}">Undo</button>`, 10000); render(); });
+  }
+
   // ---------- render (keeps every scroll area and the focus) ----------
   const app = document.createElement('div'); app.className = 'chx'; app.id = 'chx';
   wireFpz();
@@ -2364,6 +2388,9 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     const home = () => { S.ph = [{ s: SECTIONS[S.role][0][0] }]; };
     const openP = (id) => { S.urgOpen = false; if (isPhone()) go('patient', { id }); else { S.open = id; S.tab = 'chart'; S.vopen = false; S.outcome = null; S.reqMenu = false; S.rq = null; } };
     const sure = (v, msg) => { if (String(v || '').trim()) return true; toast(msg); return false; };
+    if (ds.void) { S.voidFor = +ds.void; render(); setTimeout(() => { const i = $('#void-why'); if (i) i.focus(); }, 0); return; }
+    if (ds.voidgo) { const p = byId(+ds.voidgo); if (p) voidGo(p); return; }
+    if (ds.a === 'voidx') { S.voidFor = null; render(); return; }
     if (ds.tc) { tcClick(ds); return; }
     if (ds.sv) { svClick(ds); return; }
     if (ds.bay) { bayClick(ds); return; }
@@ -2575,6 +2602,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
   setInterval(() => app.querySelectorAll('[data-since]').forEach((el) => { el.textContent = ago(el.dataset.since); }), 20000);
   let wasPhone = isPhone();
   window.addEventListener('resize', () => { if (!app.isConnected) return; if (isPhone() !== wasPhone) { wasPhone = isPhone(); render(); } else if (!isPhone()) sizeBoard(); });
+  app.addEventListener('click', (e) => { const u = e.target.closest('[data-unvoid]'); if (!u) return; $('#chx-toast').hidden = true; call('chart_case_unvoid', { p_case: +u.dataset.unvoid }, 'Chart restored.'); });
   app.addEventListener('click', (e) => { const u = e.target.closest('[data-undocall]'); if (!u) return; const p = byId(+u.dataset.undocall); if (p) { $('#chx-toast').hidden = true; act.calledOut(p, true); } });
   if (window.ResizeObserver) new ResizeObserver(() => { if (!isPhone()) sizeBoard(); }).observe(app);
   // Test hook (prototype only): the room-rule self-test in the console uses these.

@@ -1186,3 +1186,11 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 
 /* the full screens on any CBH page (a Trauma call, a Supervisor order, a visit): only the alert, none of the Chart frame */
 .chx.cbh-global { position: static; display: contents; }
+
+/* delete a chart made by mistake: a quiet link at the end of the record, a small confirm */
+.chx .void-row { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 4px; justify-items: start; }
+.chx .void-link { color: #9f1d13; font-weight: 700; }
+.chx .void-link:disabled { color: var(--muted); cursor: default; }
+.chx .void-ask { width: 100%; margin: 0; background: #fff; border-color: #f3b3ad; }
+.chx .void-ask input { height: 38px; border-radius: 9px; border: 1px solid var(--line); padding: 0 10px; font: inherit; font-size: 13.5px; }
+.chx .phone-ui .void-row { margin-top: 6px; }
