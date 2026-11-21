@@ -22,6 +22,12 @@
   document.body.prepend(scrim, top, side);
   const sub = document.createElement('nav');   // the department's own menu, inside the window
   sub.className = 'win-sub'; sub.id = 'win-sub';
+  // Folded outer menu (Bravo, 21 Nov 2026; the user: "make the outer menu ... collapse down nicely like the inner menu
+  // does"): computers can fold the left menu to an icon rail like the Chart's, which opens over the page on hover.
+  // Remembered per device. Phones keep the drawer (desk.css scopes it all to wider screens).
+  const MINI_KEY = 'cbh.desk.mini';
+  let mini = (() => { try { return localStorage.getItem(MINI_KEY) === '1'; } catch { return false; } })();
+  document.body.classList.toggle('desk-mini', mini);
 
   // ---------- what this person can use ----------
   const hash = () => location.hash || '#';
@@ -111,6 +117,7 @@
     const b = deptBadge(d), here = isHere({ href: `#directors/${d.id}`, dept: true });
     return `<a class="ds-link ds-dept" href="#directors/${d.id}"${here ? ' aria-current="page"' : ''} style="--c:${d.color}"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lab">${esc(d.name)}</span>${b ? count(b) : ''}</a>`;
   }
+  const foldBtn = () => `<button class="ds-link ds-fold" type="button" data-desk="fold" aria-expanded="${!mini}" aria-controls="desk-side" title="${mini ? 'Expand the menu' : 'Collapse the menu'}"><span class="ds-i" style="${icon('double-left')}" aria-hidden="true"></span><span class="ds-lab">${mini ? 'Expand menu' : 'Collapse menu'}</span></button>`;
   const brand = `<a class="ds-brand" href="#"><img src="assets/cbh-icon.svg" alt="" width="30" height="30"><span class="ds-wm"><span class="wm-care">Care</span><span class="wm-beyond">Beyond</span></span></a>`;
   function drawSide() {
     const depts = myDepts();
@@ -128,6 +135,7 @@
         <div class="ds-cat">Help</div>
         ${HELP.map((it) => link(it)).join('')}
       </nav>
+      <div class="ds-foot">${foldBtn()}</div>
       <div class="ds-phone-only">${sessionCard()}</div>`;
     const nav = side.querySelector('.ds-nav');
     nav.scrollTop = keepTop;
@@ -240,6 +248,23 @@
     top.querySelector('[data-desk="drawer"]')?.setAttribute('aria-expanded', on);
     if (on) side.querySelector('a, button')?.focus();
   }
+  function setMini(on) {
+    mini = on;
+    const b = document.body;
+    b.classList.add('desk-folding');   // the window and the logo animate only while folding, not on page load
+    clearTimeout(setMini.t); setMini.t = setTimeout(() => b.classList.remove('desk-folding'), 260);
+    b.classList.toggle('desk-mini', on);
+    // just folded with the pointer still on the menu: don't open it again over the page until the pointer leaves
+    b.classList.toggle('desk-nopeek', on);
+    try { localStorage.setItem(MINI_KEY, on ? '1' : '0'); } catch { /* remembered for this visit only */ }
+    // update the button in place (redrawing it and focusing it from code would count as keyboard focus and open the rail)
+    const btn = side.querySelector('[data-desk="fold"]');
+    if (btn) {
+      btn.setAttribute('aria-expanded', !on); btn.title = on ? 'Expand the menu' : 'Collapse the menu';
+      btn.querySelector('.ds-lab').textContent = on ? 'Expand menu' : 'Collapse menu';
+    }
+  }
+  side.addEventListener('mouseleave', () => document.body.classList.remove('desk-nopeek'));
   function setYou(on) {
     const m = top.querySelector('.dt-menu'), b = top.querySelector('.dt-you');
     if (!m) return;
@@ -252,6 +277,7 @@
       const a = act.dataset.desk;
       if (a === 'drawer') return setDrawer(!document.body.classList.contains('desk-open'));
       if (a === 'close') return setDrawer(false);
+      if (a === 'fold') return setMini(!mini);
       if (a === 'you') return setYou(act.getAttribute('aria-expanded') !== 'true');
       if (a === 'logout') return $('logout').click();
       if (a === 'quiet') { act.disabled = true; await window.deskSetQuietNotes(act.checked); setYou(true); return; }
@@ -337,5 +363,5 @@
   window.deskRefresh = drawAll;   // after the session banner or access changes
   window.deskSub = drawSub;       // app.js route(): the window's department menu follows the page
   window.deskShift = () => shift;   // the current shift (or null), for chart.js
-  window.deskOff = () => { data = null; shift = null; sub.remove(); document.body.classList.remove('desk', 'desk-open', 'in-dept'); };
+  window.deskOff = () => { data = null; shift = null; sub.remove(); document.body.classList.remove('desk', 'desk-open', 'in-dept', 'desk-nopeek'); };
 })();

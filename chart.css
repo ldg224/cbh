@@ -13,14 +13,13 @@ body.in-chart .foot { display: none; }
 body.in-chart .win-sub { display: none; }
 .chx h1, .chx h2, .chx h3, .chx h4, .chx h5 { color: var(--text); text-transform: none; letter-spacing: -.01em; font-weight: 800; margin: 0; line-height: 1.25; }
 .chx h1 { font-size: clamp(24px, 3vw, 34px); } .chx h2 { font-size: 20px; } .chx h3 { font-size: 16px; } .chx h4 { font-size: 14px; } .chx h5 { font-size: 12px; }
-.chx { --top: var(--desk-top, 60px); --side: var(--desk-w, 232px); position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #fff; color: var(--text); }
+.chx { --top: var(--desk-top, 60px); --side: var(--desk-now, var(--desk-w, 232px)); position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #fff; color: var(--text); }
 @media (max-width: 860px) { body.desk.in-chart main { height: calc(100vh - var(--desk-top) - 8px); } .chx { --side: 0px; } }
 
 .chx {
   --frame: #E9F1FB; --panel: #fff; --text: #0B1E4A; --muted: #55688C; --line: #DBE4F0; --raised: #EEF4FB; --soft: #F6F9FD;
   --teal: #2ED3C6; --teal-ink: #0D7D74; --teal-wash: #E5F9F7; --blue: #3A82D0; --blue-deep: #22579F;
   --ok: #16A34A; --warn: #B45309; --bad: #D92D20;
-  --top: 60px; --side: 232px;
   font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 .chx * { box-sizing: border-box; }
@@ -659,6 +658,16 @@ body.dragging-p, body.dragging-p * { cursor: grabbing !important; user-select: n
 .chx { --code: #1D4ED8; --code-wash: #dbe6ff; }
 .chx .code-bar > div { background: var(--code); box-shadow: 0 8px 24px rgba(29, 78, 216, .35); }
 .chx .code-bar .btn { color: var(--code); }
+/* one line, never wrapped: CODE BLUE, the room and the time always show; only the patient's name shortens (Alpha, 21 Nov 2026) */
+.chx .code-bar > div { white-space: nowrap; min-width: 0; gap: 6px; }
+.chx .code-bar > div > b, .chx .code-bar .cb-room, .chx .code-bar .cb-t, .chx .code-bar .btn { flex: none; }
+.chx .code-bar > div > b { margin-right: 4px; }
+.chx .code-bar .cb-pt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chx .code-bar .btn { margin: 0 0 0 4px; align-self: center; }
+body.phone .chx .code-bar { left: 12px; right: 12px; transform: none; max-width: none; }
+body.phone .chx .code-bar > div { padding-left: 14px; font-size: 13.5px; }
+body.phone .chx .code-bar > div > b { letter-spacing: .1em; }
+body.phone .chx .code-bar .btn { margin-left: auto; }
 @keyframes codeFlash { 50% { background: var(--code-wash); box-shadow: 0 0 0 3px var(--code); } }
 @media (prefers-reduced-motion: reduce) {
 .chx .bed.code { box-shadow: 0 0 0 3px var(--code); }
@@ -1111,3 +1120,13 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .chx .tc-alert::before, .chx .tc-pulse { animation: none; }
 }
+
+/* ---------- "Click to turn on alarm sounds" (Alpha, 21 Nov 2026): while the browser keeps sound locked ---------- */
+.chx .snd-unlock { position: fixed; z-index: 70; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
+  padding: 10px 18px 10px 10px; border-radius: 999px; border: 2px solid #F0A530; background: #FFF4E5; color: var(--text); font: inherit; box-shadow: 0 12px 30px rgba(11, 30, 74, .22); cursor: pointer; }
+.chx .snd-unlock b { font-size: 14px; font-weight: 800; white-space: nowrap; }
+.chx .su-ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #F0A530; flex: none; }
+.chx .su-ic svg { width: 18px; height: 18px; fill: #fff; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.chx .su-ic svg path + path { fill: none; }
+.chx .snd-unlock:hover { background: #ffe9c7; }
+.chx.is-phone .snd-unlock { bottom: 76px; }

@@ -3,6 +3,23 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.46.0 (2026-11-21)
+
+**Added:**
+- **Collapsing side menu (computers).** A "Collapse menu" button at the foot of the left menu folds it to a slim icon rail, like the Chart's own menu: badges stay on the icons, hovering opens it over the page, and the page widens. Each device remembers the choice. Phones are unchanged.
+- **"Click to turn on alarm sounds"** strip when the browser is blocking sound; any click turns it on.
+- Reception now gets an alarm when a new patient needs calling in.
+
+**Changed:**
+- **Chart alarms are much louder** and each has its own pattern; Code Blue and the Trauma call are the most urgent. An alert that arrives while you're not looking at the tab repeats every 3–4 seconds until you look at it or click the page, and the tab title and icon flash until then.
+
+**Fixed:**
+- The Trauma call siren, flashing title and red tab icon now stop as soon as you answer (On my way, Can't come or Join), and when the call is cancelled, including in other open Chart tabs.
+- Phones: the Code Blue bar is one tidy full-width line instead of a tall block covering the role banner.
+- Browsers now load the latest Chart files straight after an update (cache tags were stuck on 0.43.0).
+
+Database change: no.
+
 ## 0.45.0 (2026-11-21)
 
 **Added:**
