@@ -1167,43 +1167,103 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const c = deptColour(S.rdept || 'Nursing'); return `background:linear-gradient(135deg,color-mix(in srgb,${c} 72%,white),color-mix(in srgb,${c} 88%,#0B1E4A))`; };
   const roleCard = (cls = '', extra = '') => `<div class="role-card ${cls}" style="${roleGrad()}" data-role="${S.role || ''}" data-dept="${esc(S.rdept || '')}"><span>You</span><b>${esc(roleLabel())}</b><small>${esc(roleSub())}</small>
     <div class="rc-alerts">${extra}<button type="button" class="snd-chip${A.on ? ' on' : ''}" data-a="sndtoggle" aria-pressed="${A.on}" title="${A.on ? 'Mute alert sounds' : 'Turn alert sounds on'}">${A.on ? 'Sounds on' : 'Muted'}</button><button type="button" class="snd-set" data-a="alertset" aria-expanded="${!!S.alertSet}" aria-label="Alert settings" title="Alert settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button></div></div>${S.alertSet ? alertSettings() : ''}`;
-  // ---------- ALERTS (owner, 19 Nov 2026): a ping when something is for you, a flashing tab title, desktop notifications ----------
-  const A = Object.assign({ on: true, vol: 0.6, desk: false, asked: false }, load('alerts', {}));
+  // ---------- ALERTS (owner, 19 Nov 2026; louder and repeating, the user 21 Nov 2026: "louder alarms so people know and make
+  // them play until they check the tab for everything all sounds") ----------
+  // Alarm-style two-tone patterns (square/saw through a filter and a compressor, near full gain). Code Blue and the Trauma
+  // call are the most urgent. An alert that arrives while the tab isn't being looked at repeats (urgent every 3 s, others
+  // every 5 s) and flashes the tab title and icon until the page is visible AND focused, or is clicked or tapped. One
+  // that arrives while it's being looked at plays once (urgent: twice). The Trauma call siren repeats until On my way or
+  // Can't come (tcTick) and ignores the mute; every other sound follows it.
+  const A = Object.assign({ on: true, vol: 0.8, desk: false, asked: false }, load('alerts', {}));
   const saveA = () => save('alerts', { on: A.on, vol: A.vol, desk: A.desk, asked: A.asked });
-  let actx = null, unseen = 0, lastTitle = '', flashT = null;
-  const arm = () => { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch { /* no audio */ } };
-  // Browsers only allow sound after the person has clicked the page once: the role screen click or Ready arms it.
-  document.addEventListener('pointerdown', arm, { capture: true });
-  const TONES = { patient: [[660, 0, .18], [880, .16, .26]], req: [[740, 0, .2], [988, .14, .22]], handback: [[523, 0, .18], [659, .15, .25]],
-    arrival: [[587, 0, .16]], trauma: [[988, 0, .16], [740, .2, .16], [988, .4, .16], [740, .6, .16], [988, .8, .16], [740, 1, .28]], code: [[880, 0, .12], [660, .14, .12], [880, .28, .12], [660, .42, .12], [880, .56, .2]] };
-  function tone(kind) { if ((!A.on && kind !== 'trauma') || !actx) return;   // a trauma call always sounds
-    const now = actx.currentTime, soft = kind === 'arrival' ? .45 : 1;
-    TONES[kind].forEach(([f, at, dur]) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = kind === 'code' || kind === 'trauma' ? 'square' : 'sine'; o.frequency.value = f;
-      const v = (kind === 'trauma' ? Math.max(A.vol, .5) : A.vol) * (kind === 'code' || kind === 'trauma' ? .18 : .35) * soft; g.gain.setValueAtTime(0, now + at); g.gain.linearRampToValueAtTime(v, now + at + .015); g.gain.exponentialRampToValueAtTime(.0001, now + at + dur);
-      o.connect(g).connect(actx.destination); o.start(now + at); o.stop(now + at + dur + .02); }); }
-  const baseTitle = 'CBH Chart · CareBeyond';
-  function flashTitle(label) { lastTitle = label; if (flashT) return; let on = false;
-    flashT = setInterval(() => { if (!unseen) { clearInterval(flashT); flashT = null; document.title = baseTitle; return; } on = !on; document.title = on ? `(${unseen}) ${lastTitle} – CBH Chart` : baseTitle; }, 1000); }
-  const seen = () => { if (document.hidden) return; unseen = 0; document.title = baseTitle; };
+  let actx = null, bus = null, flashT = null, flashTitle0 = null;
+  const audioOk = () => !!(actx && actx.state === 'running');
+  function arm() {
+    try {
+      if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; actx = new AC();
+        const comp = actx.createDynamicsCompressor(); comp.threshold.value = -12; comp.knee.value = 2; comp.ratio.value = 10; comp.attack.value = .002; comp.release.value = .12;
+        bus = actx.createGain(); bus.gain.value = 1.4; comp.connect(bus).connect(actx.destination); actx._in = comp;
+        actx.onstatechange = () => { if (audioOk() && $('.snd-unlock')) render(); }; }
+      if (actx.state === 'suspended') actx.resume().then(() => { if ($('.snd-unlock')) render(); }).catch(() => {});
+    } catch { /* no audio */ }
+  }
+  arm();   // made now (suspended until the first click where the browser asks for one), so we know whether to show the strip
+  // Browsers only allow sound after the person has clicked or typed on the page once: any click or key unlocks it.
+  ['pointerdown', 'keydown', 'touchend'].forEach((ev) => document.addEventListener(ev, arm, { capture: true }));
+  // [frequency, start s, length s] or [from, start, length, to] for a sweep
+  const TONES = {
+    arrival: { wave: 'triangle', lvl: .55, notes: [[784, 0, .16], [988, .2, .22]] },
+    patient: { wave: 'square', lvl: .7, notes: [[988, 0, .18], [740, .22, .18], [988, .44, .18], [740, .66, .28]] },
+    handback: { wave: 'square', lvl: .7, notes: [[880, 0, .2], [660, .24, .2], [880, .48, .3]] },
+    called: { wave: 'square', lvl: .7, notes: [[1046, 0, .16], [784, .2, .16], [1046, .4, .16], [784, .6, .26]] },
+    req: { wave: 'square', lvl: .65, notes: [[880, 0, .14], [1175, .18, .14], [880, .36, .14], [1175, .54, .22]] },
+    code: { wave: 'square', lvl: 1, notes: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => [i % 2 ? 784 : 1175, i * .15, .13]) },
+    trauma: { wave: 'sawtooth', lvl: 1, notes: [[650, 0, .45, 1300], [1300, .45, .45, 650], [650, .9, .45, 1300], [1300, 1.35, .5, 650]] },
+  };
+  const URGENT = { code: 1, trauma: 1 };
+  const SND = { plays: [] };   // the preview harness reads this (LOCAL only)
+  function tone(kind) {
+    const t = TONES[kind] || TONES.req; if ((!A.on && kind !== 'trauma') || !actx) return;
+    if (actx.state !== 'running') { arm(); return; }
+    const now = actx.currentTime + .02, vol = (kind === 'trauma' ? Math.max(A.vol, .7) : A.vol) * t.lvl * .9;
+    const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200; lp.connect(actx._in);
+    t.notes.forEach(([f, at, dur, to]) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = t.wave; o.frequency.setValueAtTime(f, now + at);
+      if (to) o.frequency.linearRampToValueAtTime(to, now + at + dur);
+      g.gain.setValueAtTime(0, now + at); g.gain.linearRampToValueAtTime(vol, now + at + .01); g.gain.setValueAtTime(vol, now + at + dur - .03); g.gain.linearRampToValueAtTime(0, now + at + dur);
+      o.connect(g).connect(lp); o.start(now + at); o.stop(now + at + dur + .02); });
+    if (LOCAL) SND.plays.push({ kind, at: Date.now() });
+  }
+  // The tab is being looked at: visible and focused.
+  const looking = () => !document.hidden && document.hasFocus();
+  const pending = new Map();   // key -> { kind, label, last }: alerts not seen yet
+  const RING = { code: 3000, trauma: 3000 }, RING_ROUTINE = 4000;
+  // tab title and favicon flash while anything is unseen
+  const favLink = () => document.querySelector('link[rel="icon"]');
+  let favHref0 = null;
+  const FAV_ALERT = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#D92D20"/><path d="M32 14v22" stroke="#fff" stroke-width="8" stroke-linecap="round"/><circle cx="32" cy="48" r="5" fill="#fff"/></svg>')}`;
+  function flashStart() {
+    if (flashT) return; let on = false; flashTitle0 = document.title; const fl = favLink(); favHref0 = fl ? fl.getAttribute('href') : null;
+    flashT = setInterval(() => {
+      if (!pending.size) { flashStop(); return; }
+      on = !on; const last = [...pending.values()].pop();
+      document.title = on ? `(${pending.size}) ${last.label} – CBH Chart` : flashTitle0;
+      const f = favLink(); if (f && favHref0) f.setAttribute('href', on ? FAV_ALERT : favHref0);
+    }, 900);
+  }
+  function flashStop() { if (!flashT) return; clearInterval(flashT); flashT = null; if (flashTitle0 != null) document.title = flashTitle0; const f = favLink(); if (f && favHref0) f.setAttribute('href', favHref0); }
+  // Seen: everything pending stops (the Trauma call siren carries on until it's answered).
+  const seen = () => { if (!looking()) return; pending.clear(); flashStop(); };
   window.addEventListener('focus', seen); document.addEventListener('visibilitychange', seen);
+  ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { pending.clear(); flashStop(); }, { capture: true }));
   function alertMe(kind, label, body, pid) {
-    tone(kind);
-    if (document.hidden || !document.hasFocus()) { unseen += 1; flashTitle(label); }
-    if (A.desk && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-      try { const n = new Notification(`${label} – CBH Chart`, { body, tag: `${kind}-${pid || ''}`, icon: 'assets/cbh-icon.svg' });
+    const urgent = !!URGENT[kind];
+    tone(kind); if (urgent && kind !== 'trauma' && looking()) setTimeout(() => tone(kind), 1600);   // the trauma siren then repeats from tcTick
+    if (!looking()) { pending.set(`${kind}:${pid || label}:${Date.now()}`, { kind, label, last: Date.now() }); flashStart(); }
+    if (A.desk && !looking() && 'Notification' in window && Notification.permission === 'granted') {
+      try { const n = new Notification(`${label} – CBH Chart`, { body, tag: `${kind}-${pid || ''}`, icon: 'assets/cbh-icon.svg', requireInteraction: urgent, renotify: true });
         n.onclick = () => { window.focus(); if (pid && byId(pid) && ['care', 'queue'].includes(byId(pid).stage)) { if (isPhone()) S.ph = [S.ph[0], { s: 'patient', id: pid }]; else S.open = pid; } n.close(); render(); }; } catch { /* fine */ } }
   }
+  // repeat what's unseen: urgent every 3 s, the rest every 5 s; one sound at a time, the most urgent first
+  setInterval(() => {
+    if (!pending.size) return; if (looking()) { seen(); return; }
+    const due = [...pending.values()].filter((x) => x.kind !== 'trauma' && Date.now() - x.last >= (RING[x.kind] || RING_ROUTINE)); if (!due.length) return;
+    const pick = due.find((x) => URGENT[x.kind]) || due[0]; tone(pick.kind); due.forEach((x) => { x.last = Date.now(); });
+  }, 500);
+  // "Click to turn on alarm sounds": once per page load, while the browser still has sound locked
+  const sndStrip = () => { if (audioOk()) S.sndStripGone = true; if (S.sndStripGone || !actx) return '';
+    return `<button type="button" class="snd-unlock" data-a="sndunlock"><span class="su-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></span><b>Click to turn on alarm sounds</b></button>`; };
   // Watch for things that are new since the last redraw, so every path (auto-assign, the supervisor, demo staff) alerts the same way.
-  const W = { ready: false, mine: new Set(), req: new Set(), code: new Set(), q: new Set() };
+  const W = { ready: false, mine: new Set(), req: new Set(), code: new Set(), q: new Set(), co: new Set() };
   function alertWatch() {
     const mineA = mine().filter((p) => p.phase === 'assigned'), reqs = S.role === 'oncall' || S.role === 'room' ? S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && canAccept(r)) : [];
-    const now = { mine: new Set(mineA.map((p) => p.id)), req: new Set(reqs.map((r) => `${r.id}:${r.chase || 0}`)), code: new Set(S.codes.map((c) => c.pid + '@' + +new Date(c.at))), q: new Set(S.role === 'super' ? upNext().map((p) => p.id) : []) };
+    const now = { mine: new Set(mineA.map((p) => p.id)), req: new Set(reqs.map((r) => `${r.id}:${r.chase || 0}`)), code: new Set(S.codes.map((c) => c.pid + '@' + +new Date(c.at))), q: new Set(S.role === 'super' ? upNext().map((p) => p.id) : []), co: new Set(S.deskBy === 'me' || (S.role === 'super' && !S.deskBy) ? callOuts().map((p) => p.id) : []) };
     if (W.ready) {
       S.codes.filter((c) => !W.code.has(c.pid + '@' + +new Date(c.at))).forEach((c) => { const p = byId(c.pid); alertMe('code', 'CODE BLUE', `${roomOf(p)} · ${p.name}`, p.id); });
       mineA.filter((p) => !W.mine.has(p.id)).forEach((p) => { if (!isPhone() && !S.open) { S.open = p.id; S.tab = 'chart'; setTimeout(render, 0); } });
       mineA.filter((p) => !W.mine.has(p.id)).forEach((p) => alertMe(p.handback ? 'handback' : 'patient', p.handback ? 'Handed over to you' : 'New patient', `${p.name} · ${U(p.urgency).name} · ${p.room || ''}. Accept within a minute.`, p.id));
       reqs.filter((r) => !W.req.has(`${r.id}:${r.chase || 0}`)).forEach((r) => { const p = byId(r.pid); alertMe('req', `${REQ[r.type][0]} request`, `${roomOf(p)} · ${p.name} · from ${title(r.by)}`, p.id); });
       upNext().filter((p) => S.role === 'super' && !W.q.has(p.id)).forEach((p) => alertMe('arrival', 'New in Up next', `${p.name} · ${U(p.urgency).name}`, p.id));
+      [...now.co].filter((id) => !W.co.has(id)).forEach((id) => { const p = byId(id); if (p) alertMe('called', 'Call a patient in', say(p), p.id); });
     }
     Object.assign(W, now, { ready: true });
     tcWatch();
@@ -1233,7 +1293,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (S.open && (!byId(S.open) || !['care', 'queue'].includes(byId(S.open).stage))) S.open = null;
     const allowed = SECTIONS[S.role]; if (!allowed.some((x) => x[0] === S.sec)) S.sec = allowed[0][0];
     const sec = { board: boardSection, desk: deskSection, myroom: myRoomSection, reqs: reqSection, road: roadSection, plan: planSection }[S.sec]();
-    return `${codeBar()}<div class="chart-wrap">${rail()}
+    return `${codeBar()}${sndStrip()}<div class="chart-wrap">${rail()}
       <div class="ch-main">${tcBars()}${chTop()}<section class="pane-sec" aria-label="${allowed.find((x) => x[0] === S.sec)[1]}">${sec}</section></div>
       </div>${tcSheet()}${tcAlert()}`;
   }
@@ -1475,7 +1535,7 @@ ${nextBarHtml(p)}
       oncall: [['reqs', 'Requests', openReqCount()], ['board', 'Ward Board', 0]], road: [['road', 'Incoming', 0], ['board', 'Ward Board', 0]],
       super: [['plan', 'Floor Plan', upNext().length], ['desk', 'Front Desk', deskCount()], ['reqs', 'Requests', openReqCount()], ['board', 'Board', 0]] };
     const nav = NAV[S.role];
-    return `${codeBar()}<div class="phone-ui"><div class="ph-screen">${tcBars()}${S.role === 'room' && t.s === 'myroom' ? mine().filter((x) => x.phase === 'assigned').map((x) => `<div class="gotit sticky" style="--u:${U(x.urgency).colour}"><span class="lab">${x.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(x.name)}${x.age ? ', ' + x.age : ''}</b>${upill(x.urgency)}<span>${esc(x.room)} · ${esc(x.symptoms.join(', ') || 'no symptoms given')}</span><button type="button" class="btn big" data-gotit="${x.id}">Accept patient <small class="gi-t">${countdown(x.assignedAt, 60)}</small></button></div>`).join('') : ''}${S.ph.length === 1 && !(S.role === 'room' && mine().some((x) => x.phase === 'assigned')) ? `<div class="ph-role">${roleCard('small', '<button type="button" class="rc-change" data-a="changerole">Change role</button>')}</div>` : ''}${h || phHead('Not here any more', 'That patient has moved on.')}</div><nav class="ph-nav" style="grid-template-columns:repeat(${nav.length}, 1fr)">${nav.map(([k, l, n]) => `<button type="button" class="${S.ph[0].s === k ? 'on' : ''}" data-proot="${k}">${l}${n ? ` <i>${n}</i>` : ''}</button>`).join('')}</nav></div>${S.fp ? fpView() : ''}${tcSheet()}${tcAlert()}`;
+    return `${codeBar()}${sndStrip()}<div class="phone-ui"><div class="ph-screen">${tcBars()}${S.role === 'room' && t.s === 'myroom' ? mine().filter((x) => x.phase === 'assigned').map((x) => `<div class="gotit sticky" style="--u:${U(x.urgency).colour}"><span class="lab">${x.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(x.name)}${x.age ? ', ' + x.age : ''}</b>${upill(x.urgency)}<span>${esc(x.room)} · ${esc(x.symptoms.join(', ') || 'no symptoms given')}</span><button type="button" class="btn big" data-gotit="${x.id}">Accept patient <small class="gi-t">${countdown(x.assignedAt, 60)}</small></button></div>`).join('') : ''}${S.ph.length === 1 && !(S.role === 'room' && mine().some((x) => x.phase === 'assigned')) ? `<div class="ph-role">${roleCard('small', '<button type="button" class="rc-change" data-a="changerole">Change role</button>')}</div>` : ''}${h || phHead('Not here any more', 'That patient has moved on.')}</div><nav class="ph-nav" style="grid-template-columns:repeat(${nav.length}, 1fr)">${nav.map(([k, l, n]) => `<button type="button" class="${S.ph[0].s === k ? 'on' : ''}" data-proot="${k}">${l}${n ? ` <i>${n}</i>` : ''}</button>`).join('')}</nav></div>${S.fp ? fpView() : ''}${tcSheet()}${tcAlert()}`;
   }
 
   // ---------- TRAUMA CALL (Alpha, 21 Nov 2026; Bravo's 0096 chart_call_*) ----------
@@ -1656,7 +1716,7 @@ ${nextBarHtml(p)}
   // the alert sound repeats every few seconds while the full-screen alert is up (even when Chart sounds are muted)
   let tcRing = 0;
   function tcTick() { if (!(S.myCall && S.myCall.state === 'called')) { tcRing = 0; return; }
-    if (Date.now() - tcRing >= 4000) { tcRing = Date.now(); arm(); tone('trauma'); try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]); } catch { /* fine */ } } }
+    if (Date.now() - tcRing >= 3000) { tcRing = Date.now(); arm(); tone('trauma'); try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]); } catch { /* fine */ } } }
   const tcStop = () => { tcRing = Date.now() + 60000; };
   const W_TC = { ready: false, called: new Set(), join: new Set() };
   function tcWatch() {
@@ -1858,6 +1918,7 @@ ${nextBarHtml(p)}
     else if (ds.a === 'sndtoggle') { A.on = !A.on; saveA(); arm(); if (A.on) tone('patient'); toast(A.on ? 'Alert sounds on.' : 'Alert sounds muted.'); }
     else if (ds.a === 'alertset') { S.alertSet = !S.alertSet; if (S.alertSet) S.railOpen = true; }
     else if (ds.a === 'sndtest') { arm(); const was = A.on; A.on = true; tone('patient'); A.on = was; }
+    else if (ds.a === 'sndunlock') { arm(); S.sndStripGone = true; setTimeout(() => { if (audioOk()) { tone('arrival'); toast('Alarm sounds are on.'); } }, 150); }
     else if (ds.a === 'sndtestcode') { arm(); const was = A.on; A.on = true; tone('code'); A.on = was; }
     else if (ds.a === 'desktoggle') { if (A.desk) { A.desk = false; saveA(); } else { askDesk(); return; } }
     else if (ds.a === 'deskyes') { askDesk(); return; }
@@ -2049,7 +2110,7 @@ ${nextBarHtml(p)}
   app.addEventListener('click', (e) => { const u = e.target.closest('[data-undocall]'); if (!u) return; const p = byId(+u.dataset.undocall); if (p) { $('#chx-toast').hidden = true; act.calledOut(p, true); } });
   if (window.ResizeObserver) new ResizeObserver(() => { if (!isPhone()) sizeBoard(); }).observe(app);
   // Test hook (prototype only): the room-rule self-test in the console uses these.
-  if (LOCAL) window.__cbh = { S, D, A, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
+  if (LOCAL) window.__cbh = { S, D, A, SND, pending, looking, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
   // ---------- hooks for the entry points outside chart.js (sidebar badge, shift card, phone tab) ----------
   window.CBHChart = Object.assign(window.CBHChart || {}, {
     summary: () => (!SNAP ? null : {

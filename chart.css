@@ -1111,3 +1111,13 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .chx .tc-alert::before, .chx .tc-pulse { animation: none; }
 }
+
+/* ---------- "Click to turn on alarm sounds" (Alpha, 21 Nov 2026): while the browser keeps sound locked ---------- */
+.chx .snd-unlock { position: fixed; z-index: 70; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
+  padding: 10px 18px 10px 10px; border-radius: 999px; border: 2px solid #F0A530; background: #FFF4E5; color: var(--text); font: inherit; box-shadow: 0 12px 30px rgba(11, 30, 74, .22); cursor: pointer; }
+.chx .snd-unlock b { font-size: 14px; font-weight: 800; white-space: nowrap; }
+.chx .su-ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #F0A530; flex: none; }
+.chx .su-ic svg { width: 18px; height: 18px; fill: #fff; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.chx .su-ic svg path + path { fill: none; }
+.chx .snd-unlock:hover { background: #ffe9c7; }
+.chx.is-phone .snd-unlock { bottom: 76px; }
