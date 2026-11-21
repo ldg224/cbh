@@ -132,9 +132,21 @@
       return `<button type="button" class="adm-chip${drag ? ' can-drag' : ''}${v ? (v.state === 'arrived' ? ' vis-here' : ' vis-going') : ''}" data-sid="${sid}" data-hsid="${sid}"`
         + `${drag ? ` data-dragsid="${sid}"` : ''} aria-label="${h(nameOf(p.name))}, ${h(line)}">${faceHtml(p, 28)}`
         + `<span><b>${h(nameOf(p.name))}</b><small>${h(line)}</small></span></button>`; };
-    return `<section class="adm-box" aria-label="Admins on shift"><span class="ps-l">Admins on shift <i>${xs.length}</i></span>`
-      + `<div class="adm-list">${xs.map(chip).join('')}</div></section>`;
+    // Folded by default to one slim row (the user, 21 Nov 2026: "a little toggleable box to expand it if we need").
+    const stack = xs.slice(0, 3).map((p) => faceHtml(p, 20)).join('') + (xs.length > 3 ? `<span class="adm-more">+${xs.length - 3}</span>` : '');
+    return `<section class="adm-box${admOpen ? ' open' : ''}" aria-label="Admins on shift">`
+      + `<button type="button" class="adm-tg" aria-expanded="${admOpen}" aria-controls="adm-list">`
+      + `<span class="ps-l">Admins on shift <i>${xs.length}</i></span><span class="adm-stack" aria-hidden="true">${stack}</span><span class="adm-chev" aria-hidden="true"></span></button>`
+      + `<div class="adm-fold"><div class="adm-list" id="adm-list">${xs.map(chip).join('')}</div></div></section>`;
   }
+  // Open or closed is kept per device. The toggle is direct (no redraw); the next redraw draws the same state.
+  let admOpen = (() => { try { return localStorage.getItem('cbh-chart-admins-open') === '1'; } catch { return false; } })();
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest && e.target.closest('.adm-tg'); if (!t) return;
+    e.stopPropagation(); admOpen = !admOpen; try { localStorage.setItem('cbh-chart-admins-open', admOpen ? '1' : '0'); } catch { /* fine */ }
+    document.querySelectorAll('.chx .adm-box').forEach((b) => { b.classList.toggle('open', admOpen);
+      b.querySelector('.adm-tg').setAttribute('aria-expanded', String(admOpen)); });
+  });
 
   window.CBHHover = { reasonLabel, visitLine, hide, REASONS };
   window.CBHChart = Object.assign(window.CBHChart || {}, { renderAdmins });
