@@ -1849,7 +1849,7 @@ ${nextBarHtml(p)}
     if (v.kind === 'held') { v.step = 'held'; return; }   // Share the room / Give this bed to them
     if (v.kind === 'visit') { v.step = 'visit'; return; }
     if (v.kind === 'help') { S.sv = null;
-      call(SV.visitSend, { p_person: idOf(v.sid), p_room: v.room, p_reason: 'help', p_note: null, ...extra(v) }, `${esc(nm(v.sid))} sent to help in ${esc(roomWord(v.room))}.`, svHints(v)); return; }
+      call(SV.visitSend, { p_person: idOf(v.sid), p_room: v.room, p_reason: 'help', p_note: null, ...(v.pid ? { p_case: v.pid } : {}), ...extra(v) }, `${esc(nm(v.sid))} sent to help in ${esc(roomWord(v.room))}.`, svHints(v)); return; }
     if (v.kind === 'doctor') { S.sv = null; const p = byId(v.pid);
       call(SV.doctor, { p_person: idOf(v.sid), p_case: v.pid, ...extra(v) }, `${esc(nm(v.sid))} is the doctor for ${esc(p ? p.name : 'the patient')}. They've been told.`, svHints(v)); return; }
     if (v.kind === 'place') {
