@@ -3,6 +3,22 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.48.0 (2026-11-21)
+
+**Added:**
+- **Smarter Supervisor drag and drop.** Every case is handled: dropping a nurse onto a waiting patient gives them the bed AND the patient ("Max R. is waiting for you"); onto someone else's patient sends them to help; onto a bed someone holds asks "Share the room / Give this bed to… / Cancel"; On call doctors become the accepted doctor for that patient; closed rooms are refused with the reason; people on a break or at a trauma call are asked about first.
+- **Dragging patients.** Drop an Up next patient on a free bed (marked "Needs a nurse" if nobody can take them yet), onto a bed another nurse holds ("Hand to… / Keep their nurse"), or drag an incoming ambulance onto a bed to **reserve** it ("Reserved: Zoe R. · ambulance 4 min"). **Change nurse** in the record, or drop a nurse's face onto the patient.
+- **Trauma call, start to finish.** A call for an incoming patient reserves its bay, and the patient goes straight in on arrival; "Place in Trauma Bay 1" for a call with no patient yet; patients can be dropped onto the red bay; the first Nursing team member to arrive (or the bay's nurse) becomes their nurse; the call follows the patient if they're moved and ends if they leave.
+- **Orders, visits and trauma calls reach you on any CBH page** while you're on shift, not just on the Chart.
+- An adult can be sent into a children's room after a "Send anyway?" question.
+
+**Fixed:**
+- A nurse still on "Pick your room" can no longer undo the Supervisor's placement: the Supervisor wins.
+- Discharging a patient now ends helpers' visits and doctors' orders for them; only a person's newest order stands; a Supervisor placement cancels their own partner request; a nurse handed a patient can press Got it; ending a session frees beds, orders and visits.
+- The Admins on shift box was invisible when the People list was folded down.
+
+Database change: yes (0098–0102, already applied; additive).
+
 ## 0.47.1 (2026-11-21)
 
 **Changed:**
