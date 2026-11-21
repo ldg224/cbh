@@ -389,7 +389,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       hereAt: r.here_at, sentTo: r.sent_to ? person(r.sent_to) : null, auto: !!r.auto, chase: r.chased || 0, red: !!r.red, reopened: r.reopened || 0 }));
     else S.reqs = (s.cases || []).flatMap((c) => Object.entries(c.tags || {}).filter(([, t]) => t && t !== 'done').map(([k, t]) => ({ id: `t${c.id}${k}`, type: k, pid: c.id, at: c.queued_at, acceptedBy: t === 'accepted' || t === 'here' ? 'tag' : null, acceptedAt: c.queued_at, hereAt: t === 'here' ? c.queued_at : null })));
     S.codes = (s.codes || []).map((c) => ({ pid: c.case_id, by: c.by_name, at: c.at }));
-    syncDesk(); tcIngest(s);
+    syncDesk(); tcIngest(s); svIngest(s);
   }
   async function loadRec(id) {
     if (loadingRec === id) return; loadingRec = id;
@@ -542,14 +542,20 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (sel.includes(bed)) { const p = roomsInUse()[bed]; if (p && p.nurse === 'me') { toast('You have a patient in that bed.'); return; } S.pickSel = sel.filter((b) => b !== bed); return; }
     if (o && o !== 'me') { toast(`${esc((staff(o) || {}).name || 'Someone')} has ${esc(bed)}.`); return; }
     const no = bedUsable(bed); if (no) { toast(`${esc(no)}.`); return; }
-    if (sel.length >= D.LIMIT) { toast(`You can have ${D.LIMIT} beds. Tap one of yours to let it go first.`); return; }
-    S.pickSel = [...sel, bed]; if (kidsOnly(bed)) toast(`${esc(bed)} is Paediatric: you'll get patients under 18 there.`);
+    // one bed each (Supervisor v2): tapping another bed swaps to it
+    if (sel.some((b) => { const p = roomsInUse()[b]; return p && p.nurse === 'me'; })) { toast('You have a patient in your bed. Hand over or finish first.'); return; }
+    S.pickSel = [bed];
+    const mate = D.BEDS.find((b) => b !== bed && roomIdOf(b) === roomIdOf(bed) && ownerOf(b) && ownerOf(b) !== 'me');
+    if (mate) toast(`${esc(first(ownerOf(mate)))} has ${esc(mate)}. When you press Done they're asked to share ${esc(roomWord(roomIdOf(bed)))} (1 minute).`);
+    else if (kidsOnly(bed)) toast(`${esc(bed)} is Paediatric: you'll get patients under 18 there.`);
   }
   async function pickDone() {
     const want = (S.pickSel || []).slice(), have = bedsOf('me');
     if (!want.length) { toast('Pick at least one bed.'); return; }
     if (want.length === have.length && want.every((b) => have.includes(b))) { S.pick = false; S.pickSel = null; render(); return; }
-    try { if (have.length) await rpc('chart_leave_beds', {}); await rpc('chart_take_beds', { p_beds: want.map(bedId) }); S.pick = false; S.pickSel = null; toast(`Your room: ${esc(want.join(', '))}. Press Ready when you're free.`); }
+    try { if (have.length) await rpc('chart_leave_beds', {}); const r = await rpc('chart_take_beds', { p_beds: want.map(bedId) }) || {}; S.pick = false; S.pickSel = null;
+      const mate = D.BEDS.find((b) => b !== want[0] && roomIdOf(b) === roomIdOf(want[0]) && ownerOf(b) && ownerOf(b) !== 'me');
+      toast(r.partner_pending ? `Asked ${esc(mate ? first(ownerOf(mate)) : 'them')} to share ${esc(roomWord(roomIdOf(want[0])))}. You get ${esc(want[0])} if they say yes.` : `Your bed: ${esc(want.join(', '))}. Press Ready when you're free.`); }
     catch (e) { toast(esc(e.message)); }
     await poll(true);
   }
@@ -691,7 +697,8 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   }
   // ---------- small shared pieces for the roles ----------
   const initial = (sid) => (staff(sid) ? nm(sid).replace('Dr. ', '')[0] : '?');
-  const face = (sid) => (sid ? `<span class="face${sid === 'me' ? ' me' : ''}" title="${esc(nm(sid))}" style="--dc:${deptColour(staffDept(sid))}">${esc(initial(sid))}</span>` : '');
+  const face = (sid, o = {}) => { if (!sid) return ''; const pic = avatarSrc(sid, 64);
+    return `<span class="face${sid === 'me' ? ' me' : ''}${pic ? ' pic' : ''}${o.cls ? ' ' + o.cls : ''}" data-hsid="${esc(sid)}"${o.drag ? ` data-dragsid="${esc(sid)}" data-svface="${esc(o.room || '')}"` : ''} role="img" aria-label="${esc(nm(sid))}" style="--dc:${deptColour(staffDept(sid))}${pic ? `;background-image:url(&quot;${esc(pic)}&quot;)` : ''}">${pic ? '' : esc(initial(sid))}</span>`; };
   // Request tags: full words; short forms only on the compact floor-plan beds, with the full word on hover.
   const RT = { doctor: 'Doctor', surgery: 'Surgery', imaging: 'Imaging', help: 'Assist' }, RTS = { doctor: 'Dr', surgery: 'Surg', imaging: 'Img', help: 'Assist' };
   const flags = (p, short) => [...reqsFor(p).map((r) => { const ok = !!r.acceptedBy, lv = reqLevel(r);
@@ -770,7 +777,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       ${rest.length ? `<h3 class="care-h">Your patient${rest.length === 1 ? '' : 's'}</h3><div class="care-list">${rest.map(careCard).join('')}</div>` : ''}
       ${card}
       ${S.hadPatient || m.length ? (S.hadPatient = true, deskOffer) : ''}
-      ${S.offer ? `<div class="offer-card" style="--u:#f0a530"><div><b>${bell}Nobody has room ${esc(S.offer.room)}${S.offer.waiting ? `: ${S.offer.waiting} waiting` : ''}</b><span>Take it over to look after ${S.offer.waiting > 1 ? 'them' : 'them'}.</span></div><button type="button" class="btn small ghost" data-takeover="1">Take over ${esc(S.offer.room)}</button></div>` : ''}
+      ${S.offer ? `<div class="offer-card" style="--u:#f0a530"><div><b>${bell}Nobody has ${esc(roomWord(String(S.offer.room)))}${S.offer.waiting ? `: ${S.offer.waiting} waiting` : ''}</b><span>Take it over to look after them.</span></div><button type="button" class="btn small ghost" data-takeover="1">Take ${esc((S.offer.beds || []).length === 1 ? BED_LABEL[S.offer.beds[0]] || S.offer.beds[0] : roomWord(String(S.offer.room)))}</button></div>` : ''}
       ${!S.session || S.npcOk ? (S.npc ? npcForm() : `<div class="npc-row"><button type="button" class="btn ghost" data-a="npc"${cap > 0 ? '' : ' disabled'}>+ NPC patient</button><span class="muted small">${S.session ? 'The supervisor has allowed NPC patients this session.' : 'No session is running, so NPC patients can be charted.'} They count towards your ${D.LIMIT}.</span></div>`) : ''}
       ${!S.deskBy && S.session ? (S.npOpen ? newPatient() : '<div class="npc-row"><button type="button" class="btn ghost" data-a="npopen">+ Walk-in patient</button><span class="muted small">Nobody is on Reception. A walk-in goes through the queue like anyone else.</span></div>') : ''}
       <button type="button" class="btn ghost end-btn" data-a="endshift">End my shift</button>${S.endShift ? endShiftPanel() : ''}</div>`;
@@ -781,7 +788,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     <div class="f"><span>Which bed? Tap one to log them</span><div class="chips">${freeBedsOf('me').map((b) => `<button type="button" class="chip" data-npcbed="${esc(b)}">${esc(b)}</button>`).join('')}</div></div></section>`;
   function pickSection() {
     const n = pickSelNow().length;
-    return `<div class="pane-pad rooms-pad"><div class="pane-head"><div><h2>${n ? 'Your room' : 'Pick your room'}</h2><p class="muted">Tap beds to take them, up to ${D.LIMIT}: a 2-bed room, any two 1-bed rooms, or one bed in a shared room. ${esc(S.rdept || '')} rooms are outlined. You stay in it for the shift.</p></div>${n ? `<button type="button" class="btn" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>
+    return `<div class="pane-pad rooms-pad"><div class="pane-head"><div><h2>${n ? 'Your room' : 'Pick your room'}</h2><p class="muted">Tap a bed to take it. ${esc(S.rdept || '')} rooms are outlined. A bed in a shared room asks the other nurse first.</p></div>${n ? `<button type="button" class="btn" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>
       ${isPhone() ? fpzBlock('pick') + '<h4 class="ph-sub ph-or">Or pick from the list</h4>' : ''}${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${esc(roomName(r.id))} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), 'pick')).join('')}</div>`).join('')
         : `<div class="floor-wrap${erOn() ? ' er' : ''}"><div class="floor pick${erOn() ? ' er' : ''}" aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
   }
@@ -873,6 +880,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     return `<div class="move-ask"><div class="ma-h">${face(sid)}<b>${esc(x.name)}</b><span class="muted small">${esc(x.dept)} · ${esc(ROLE_NAME[cur])}${bedsOf(sid).length ? ' · ' + esc(bedsOf(sid).join(', ')) : ''} · ${m.length} patient${m.length === 1 ? '' : 's'}</span><button type="button" class="link" data-a="facex">Close</button></div>
       <div class="chips">${roles.map(([k, l]) => `<button type="button" class="chip${cur === k ? ' on' : ''}" data-setrole="${k}"${k === 'reception' && !S.recOpen ? ' disabled' : ''}>${l}</button>`).join('')}${cur === 'room' ? `<button type="button" class="chip${isReady(sid) ? ' on' : ''}" data-setready="${sid}">${isReady(sid) ? 'Ready' : 'Not ready'}</button>` : ''}</div>
       ${S.roleAsk ? `<div class="sendbox"><b>${esc(first(sid))} has ${m.length} patient${m.length > 1 ? 's' : ''}. Hand them back and change to ${esc(ROLE_NAME[S.roleAsk])}?</b><span class="row-btns"><button type="button" class="btn small" data-a="roleyes">Hand back and change</button><button type="button" class="btn small ghost" data-a="roleno">Cancel</button></span></div>` : ''}
+      ${svFaceActs(sid)}
       <div class="row-btns"><button type="button" class="btn small warn" data-gone="${sid}">They've gone</button><span class="muted small">Left the game or closed the site: their patients go back first in line, marked Lost nurse.</span></div></div>`; }
   function whoPanel() { if (!S.who) return ''; const p = byId(S.who.pid), bed = S.who.bed;
     const fits = (x) => mine(x.id).length < D.LIMIT && bedsOf(x.id).length < D.LIMIT;
@@ -890,6 +898,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const shortBed = (b) => (roomIdOf(b) === 'MT' ? 'Triage ' + b.slice(-1) : isEr(roomIdOf(b)) ? roomIdOf(b) : b.replace(' Bed ', ''));
   const helping = (sid) => S.reqs.find((x) => isOpenReq(x) && x.acceptedBy === sid && x.type !== 'imaging');
   const personStatus = (sid) => { const r = S.staffRole[sid], rq = helping(sid), m = mine(sid), tc = S.staffCall[sid], tcc = tc && callById(tc.id);
+    const vis = visitOf(sid); if (vis) return vis.state === 'arrived' ? [`Visiting ${roomName(vis.room)}: ${vWords(vis)}`, 'busy'] : [`On the way to ${roomName(vis.room)}`, 'go'];
     if (tcc && tc.state !== 'declined') return tc.state === 'arrived' ? [`At trauma · ${roomName(tcc.room)}`, 'busy'] : tc.state === 'on_way' ? [`Going to trauma · ${roomName(tcc.room)}`, 'go'] : ['Trauma call: not answered', 'go'];
     if (rq) { const q = byId(rq.pid), rm = roomIdOf(q.room) || '?'; return rq.hereAt ? [`In ${rm} · ${RT[rq.type]}`, 'busy'] : [`Going to ${rm} · ${RT[rq.type]}`, 'go']; }
     if (r === 'break') return ['Break', 'off']; if (r === 'off') return ['Not on the Chart', 'off'];
@@ -912,7 +921,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const mapSwitch = () => (S.canSuper ? `<div class="map-sw" role="group" aria-label="Map">${[['main', 'Main ward'], ['main_er', 'With Emergency']].map(([k, l]) =>
     `<button type="button" data-map="${k}" aria-pressed="${S.map === k}"${S.session ? '' : ' disabled title="The map can change while a session is running"'}>${l}</button>`).join('')}</div>` : '');
   function planSection() {
-    const q = upNext(), ppl = D.STAFF.filter((x) => !x.you), nReq = S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging').length;
+    const q = upNext(), ppl = D.STAFF.filter((x) => !x.you && !isAdminOnly(x.id)), nReq = S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging').length;
     const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
     if (!S.session) S.endSess = false;
     const asks = `${S.endSess ? endSessionPanel() : ''}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}`, open = pplOpen();
@@ -920,9 +929,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       <div class="plan-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span><div class="pq-row">${incomingChips()}${q.length ? q.map((p) => `<button type="button" class="q-chip" style="--u:${U(p.urgency).colour}" data-drag="${p.id}" data-open="${p.id}" title="${esc(p.name)} · ${esc(U(p.urgency).name)}${isChild(p) ? ' · child' : ''}${p.room ? ' · waiting in ' + esc(p.room) : ''} · ${ago(p.queuedAt)}. Press to read their record; drag onto a bed or a person.">${p.room ? bell : ''}<b>${esc(p.name)}</b>${teamChips(p)}${flags(p)}${p.lost ? '<span class="rq-ic rt rt-wait">Needs a new nurse</span>' : ''}<small>${ago(p.queuedAt)}</small></button>`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>${nReq ? `<button type="button" class="link pq-req" data-sec="reqs">${nReq} request${nReq > 1 ? 's' : ''}</button>` : ''}</div>
       <div class="plan-h"><b>${erOn() ? 'Main ward and Emergency' : 'Main ward'}</b><span class="muted small">${bedsInUse()}</span>${mapSwitch()}</div>
       <div class="plan-grid${open ? '' : ' shut'}"><div class="floor-wrap${erOn() ? ' er' : ''}"><div class="floor${erOn() ? ' er' : ''}" aria-label="${erOn() ? 'Main ward and Emergency floor plan' : 'Main ward floor plan'}">${floorInner('super')}</div></div>
-        <aside class="plan-s" aria-label="People on shift"><div class="ps-h"><h3>People</h3><button type="button" class="link" data-a="pplx" aria-expanded="${open}" title="${open ? 'Make the People list narrow' : 'Show the People list'}">${open ? 'Hide' : '‹'}</button></div>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('')}</aside></div>
+        <aside class="plan-s" aria-label="People on shift"><div class="ps-h"><h3>People</h3><button type="button" class="link" data-a="pplx" aria-expanded="${open}" title="${open ? 'Make the People list narrow' : 'Show the People list'}">${open ? 'Hide' : '‹'}</button></div>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('')}${admBox()}</aside></div>
       ${S.roomPanel ? `<div class="room-pop" data-room="${S.roomPanel}" role="dialog" aria-label="${esc(roomWord(S.roomPanel))} settings">${roomPanel()}</div>` : ''}
-      ${S.face ? `<div class="popover" data-anchor="${S.face}" role="dialog" aria-label="${esc(nm(S.face))}">${facePanel()}</div>` : ''}</div>`;
+      ${S.face ? `<div class="popover" data-anchor="${S.face}" role="dialog" aria-label="${esc(nm(S.face))}">${facePanel()}</div>` : ''}${svPop()}</div>`;
   }
   // The main ward floor plan, roughly to scale with the owner's map (chart/maps/main-ward.png). Units are ~studs:
   // corridors are 20 wide and run all round the Central Hub (one building: the nurses' & doctors' station, break room,
@@ -974,16 +983,16 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (mode === 'super' && S.moveFor && !p && byId(S.moveFor) && !dropWhy(byId(S.moveFor), bed)) return `<button type="button" class="${cls} fit" data-mv-to="${esc(bed)}" aria-label="Move ${esc(byId(S.moveFor).name)} to ${esc(bed)}"><span class="bed-n">${esc(short)}</span><small class="free-l">Move here</small></button>`;
     if (mode === 'pick') { const on = pickSelNow().includes(bed), other = o && o !== 'me' ? o : null; return `<button type="button" class="${cls.replace(' mine', '')}${on ? ' mine picked' : ''} pickable" data-pickbed="${esc(bed)}" aria-pressed="${on}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}><span class="bed-n">${esc(short)}</span>${on ? `${face('me')}<b>Yours</b>` : other ? `${face(other)}<b>${esc(first(other))}</b>` : `<small class="free-l">${p ? `${esc(p.name)} waiting · nobody's` : bedOff(bed) ? 'Unavailable' : closedBed(bed) ? `Closed${S.roomCfg[roomIdOf(bed)].why ? ': ' + esc(S.roomCfg[roomIdOf(bed)].why) : ''}` : 'Free'}</small>`}</button>`; }
     return `<div class="${cls}${placing}" data-bed="${esc(bed)}"${p ? ` style="--u:${U(p.urgency).colour}" data-open="${p.id}"${mode === 'super' ? ` data-drag="${p.id}"` : ''} role="button" tabindex="0" aria-label="${esc(p.name)} in ${esc(bed)}${o ? ', ' + esc(nm(o)) + '\u2019s bed' : ''}. Enter opens the record${mode === 'super' ? ', M moves them' : ''}."` : ''}>
-      ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}">${esc(narrow ? p.name.split(' ')[0] : p.name)}</b>${narrow ? '' : `<small class="bed-st">${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}</small>`}<span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l">${bedOff(bed) ? 'Off' : narrow ? '' : 'Free'}</small>`}${tcAway(bed)}</div>`; };
+      ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o, { drag: mode === 'super', room: roomIdOf(bed) }) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}">${esc(narrow ? p.name.split(' ')[0] : p.name)}</b>${narrow ? '' : `<small class="bed-st">${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}</small>`}<span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l">${bedOff(bed) ? 'Off' : narrow ? '' : 'Free'}</small>`}${tcAway(bed)}</div>`; };
   const geo = (id) => FLOOR.rooms[id] || (erOn() ? ER.rooms[id] : null);
   const roomBox = (r, mode) => { const beds = D.BEDS.filter((b) => D.roomOfBed(b) === r), g = geo(r.id); if (!g) return '';
     const c = S.roomCfg[r.id], rd = S.roomDept[r.id], open = !beds.some(ownerOf);
     const owners = [...new Set(beds.map(ownerOf).filter(Boolean))];
     const helpers = S.reqs.filter((x) => isOpenReq(x) && x.acceptedBy && x.type !== 'imaging' && beds.includes((byId(x.pid) || {}).room));
-    const people = [...owners, ...helpers.map((x) => x.acceptedBy)];
-    const who = mode === 'pick' ? '' : `<span class="rh-who">${owners.map((o) => `${face(o)}${g[2] >= 100 ? `<i>${esc(o === 'me' ? 'You' : first(o).replace('Dr. ', 'Dr '))}</i>` : ''}`).join('')}${helpers.map((x) => `<span class="face helper${x.hereAt ? '' : ' going'}" style="--dc:${deptColour(staffDept(x.acceptedBy))}" title="${esc(nm(x.acceptedBy))} ${x.hereAt ? 'is here' : 'is on the way'} (${esc(REQ[x.type][0].toLowerCase())})">${esc(initial(x.acceptedBy))}</span>`).join('')}</span>`;
+    const people = [...owners, ...helpers.map((x) => x.acceptedBy), ...S.visits.filter((v) => v.room === r.id).map((v) => v.sid)];
+    const who = mode === 'pick' ? '' : `<span class="rh-who">${owners.map((o) => `${face(o, { drag: mode === 'super', room: r.id })}${g[2] >= 100 ? `<i>${esc(o === 'me' ? 'You' : first(o).replace('Dr. ', 'Dr '))}</i>` : ''}`).join('')}${helpers.map((x) => `<span class="face helper${x.hereAt ? '' : ' going'}" style="--dc:${deptColour(staffDept(x.acceptedBy))}" title="${esc(nm(x.acceptedBy))} ${x.hereAt ? 'is here' : 'is on the way'} (${esc(REQ[x.type][0].toLowerCase())})">${esc(initial(x.acceptedBy))}</span>`).join('')}${svVisitors(r.id, mode)}</span>`;
     return `<div class="fp-room${c.kids ? ' ped' : ''}${c.closed ? ' closed' : ''}${open ? ' open' : ''}${mode === 'pick' && rd === S.rdept ? ' mydept' : ''}${g[2] > g[3] * 1.3 ? ' wide' : ''}${r.beds > 1 && g[2] <= g[3] * 1.3 ? ' stack' : ''}${g[3] <= 55 ? ' short' : ''}${isEr(r.id) ? ' er-room' : ''}${mode !== 'pick' && S.calls.some((x) => x.room === r.id) ? ' tc-on' : ''}${S.face && people.includes(S.face) ? ' hl' : ''}" data-room="${r.id}" data-people="${people.join(' ')}" title="${esc(roomWord(r.id))} ·${esc(rd)}${c.kids ? ' · children only' : ''}${c.closed ? ' · closed' : ''}" style="${box(g)};--dc:${deptColour(rd)}">
-      <div class="fp-rh"><b>${esc(roomName(r.id))}</b>${g[2] >= 100 || mode === 'pick' ? `<span class="rd-tag">${esc(rd)}</span>` : ''}${c.kids ? '<span class="ped-tag">Paediatric</span>' : ''}${c.adults ? '<span class="ad-tag">Adults</span>' : ''}${who}${mode === 'super' ? `<button type="button" class="rh-edit" data-roomcfg="${r.id}" aria-label="${esc(roomWord(r.id))} settings" title="${esc(roomWord(r.id))} settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button>` : ''}</div>
+      <div class="fp-rh"><b>${esc(roomName(r.id))}</b>${g[2] >= 100 || mode === 'pick' ? `<span class="rd-tag">${esc(rd)}</span>` : ''}${c.kids ? '<span class="ped-tag">Paediatric</span>' : ''}${c.adults ? '<span class="ad-tag">Adults</span>' : ''}${who}${svTag(r.id, mode)}${mode === 'super' ? `<button type="button" class="rh-edit" data-roomcfg="${r.id}" aria-label="${esc(roomWord(r.id))} settings" title="${esc(roomWord(r.id))} settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button>` : ''}</div>
       ${tcBayBtn(r, mode)}${c.closed ? `<div class="cl-why"><b>Closed</b>${c.why ? `<span>${esc(c.why)}</span>` : ''}</div>` : ''}
       ${(mode !== 'pick' && tcBay(r)) || `<div class="fp-beds">${beds.map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), mode, owners.length > 1, mode !== 'pick' && !(g[2] > g[3] * 1.3))).join('')}</div>`}</div>`; };
   // The Emergency wing's fixed parts: the ambulance bay outside along the top, the corridor's name, Dispatch and storage
@@ -1197,6 +1206,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     handback: { wave: 'square', lvl: .7, notes: [[880, 0, .2], [660, .24, .2], [880, .48, .3]] },
     called: { wave: 'square', lvl: .7, notes: [[1046, 0, .16], [784, .2, .16], [1046, .4, .16], [784, .6, .26]] },
     req: { wave: 'square', lvl: .65, notes: [[880, 0, .14], [1175, .18, .14], [880, .36, .14], [1175, .54, .22]] },
+    order: { wave: 'square', lvl: .6, notes: [[784, 0, .15], [988, .19, .15], [784, .38, .15], [988, .57, .24]] },   // a supervisor order or visit: softer than the Trauma call
     code: { wave: 'square', lvl: 1, notes: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => [i % 2 ? 784 : 1175, i * .15, .13]) },
     trauma: { wave: 'sawtooth', lvl: 1, notes: [[650, 0, .45, 1300], [1300, .45, .45, 650], [650, .9, .45, 1300], [1300, 1.35, .5, 650]] },
   };
@@ -1278,7 +1288,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       [...now.co].filter((id) => !W.co.has(id)).forEach((id) => { const p = byId(id); if (p) alertMe('called', 'Call a patient in', say(p), p.id); });
     }
     Object.assign(W, now, { ready: true });
-    tcWatch();
+    tcWatch(); svWatch();
   }
   const alertSettings = () => `<div class="alert-pop" role="dialog" aria-label="Alert settings"><div class="ma-h"><b>Alerts</b><button type="button" class="link" data-a="alertset">Done</button></div>
     <button type="button" class="dm-t${A.on ? ' on' : ''}" data-a="sndtoggle" aria-pressed="${A.on}">Sounds</button>
@@ -1399,12 +1409,12 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const fpLaunch = (a, t, sub) => `<button type="button" class="fp-launch" data-a="${a}"><span class="floor mini${erOn() ? ' er' : ''}" aria-hidden="true">${miniFloor()}</span><span class="fp-go"><b>${t}</b><small>${sub}</small></span></button>`;
   function fpView() {
     const pick = S.fp === 'pick', q = upNext(), n = pick ? pickSelNow().length : 0;
-    const sheet = pick ? '' : `${S.endSess ? endSessionPanel() : ''}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}${bedActPanel()}${S.roomPanel ? roomPanel() : ''}${S.face ? facePanel() : ''}`;
-    const ppl = D.STAFF.filter((x) => !x.you);
+    const sheet = pick ? '' : `${S.endSess ? endSessionPanel() : ''}${svPanel()}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}${bedActPanel()}${S.roomPanel ? roomPanel() : ''}${S.face ? facePanel() : ''}`;
+    const ppl = D.STAFF.filter((x) => !x.you && !isAdminOnly(x.id));
     const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
-    const side = pick ? `<div class="fpx-pick"><b>${n ? `${n} bed${n > 1 ? 's' : ''} picked` : 'Tap beds to take them'}</b><span>Up to ${D.LIMIT}: a 2-bed room, any two 1-bed rooms, or one bed in a shared room.${S.rdept ? ` ${esc(S.rdept)} rooms are outlined.` : ''}</span>${n ? `<button type="button" class="btn big" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>`
+    const side = pick ? `<div class="fpx-pick"><b>${n ? `${esc(pickSelNow()[0])} picked` : 'Tap a bed to take it'}</b><span>One bed each.${S.rdept ? ` ${esc(S.rdept)} rooms are outlined.` : ''}</span>${n ? `<button type="button" class="btn big" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>`
       : sheet ? `<div class="fpx-sheet">${sheet}</div>`
-      : `<div class="fpx-ppl plan-s"><span class="ps-l fpx-h">People</span>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('') || '<p class="muted small">Nobody else is on the Chart.</p>'}</div>`;
+      : `<div class="fpx-ppl plan-s"><span class="ps-l fpx-h">People</span>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('') || '<p class="muted small">Nobody else is on the Chart.</p>'}${admBox()}</div>`;
     const bar = pick ? '<b class="fpx-t">Pick your room</b>'
       : `<div class="fpx-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span>${q.length ? q.map((p) => `<button type="button" class="q-chip${S.placeFor === p.id ? ' sel' : ''}" style="--u:${U(p.urgency).colour}" data-place="${p.id}" aria-pressed="${S.placeFor === p.id}">${p.room ? bell : ''}<b>${esc(p.name)}</b><small>${ago(p.queuedAt)}</small></button>`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>`;
     const hint = S.placeFor && !pick && !sheet && byId(S.placeFor) ? `<div class="fpx-hint"><b>Place ${esc(byId(S.placeFor).name)}</b><span>Tap a lit bed.</span><button type="button" class="link" data-place="${S.placeFor}">Cancel</button></div>` : '';
@@ -1471,7 +1481,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   ['resize', 'orientationchange'].forEach((ev) => window.addEventListener(ev, () => { if ($('.fpz')) fpzApply(); }));
   }
   // the asks, a bed's actions, room settings and a person: a sheet over the bottom of the phone screen
-  const phSheet = () => { const h = `${S.endSess ? endSessionPanel() : ''}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}${bedActPanel()}${S.roomPanel ? roomPanel() : ''}${S.face ? facePanel() : ''}`;
+  const phSheet = () => { const h = `${S.endSess ? endSessionPanel() : ''}${svPanel()}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}${bedActPanel()}${S.roomPanel ? roomPanel() : ''}${S.face ? facePanel() : ''}`;
     return h ? `<div class="fpx-sheet fpz-sheet" role="dialog" aria-label="Floor plan">${h}</div>` : ''; };
 
   // ---------- PHONE (staff): one thing per screen ----------
@@ -1484,7 +1494,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const t = top(), p = t.id && byId(t.id); let h = '';
     const plist = (list, attrs, extra) => `<ul class="ph-list">${list.map((x) => `<li style="--u:${x.urgency ? U(x.urgency).colour : '#9aa9c4'}"><button type="button" class="ph-row" ${attrs(x)}><span class="ubar"></span><span><b>${esc(x.name)}</b><small>${extra(x)}</small></span></button></li>`).join('')}</ul>`;
     if (S.fp && (S.fp === 'pick' ? !S.pick : S.role !== 'super')) S.fp = false;
-    if (t.s === 'plan') { const q = upNext(), ppl = D.STAFF.filter((x) => !x.you);
+    if (t.s === 'plan') { const q = upNext(), ppl = D.STAFF.filter((x) => !x.you && !isAdminOnly(x.id));
       const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
       h = `${phHead('Floor Plan', `${erOn() ? 'Main ward and Emergency' : 'Main ward'} · ${bedsInUse()}`)}${mapSwitch()}
       <details class="ph-sess"${S.phSess ? ' open' : ''}><summary data-a="phsess">Session settings</summary><div class="ph-sess-in">
@@ -1495,7 +1505,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       <div class="fpx-q fpz-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span>${q.length ? q.map((p) => `<button type="button" class="q-chip${S.placeFor === p.id ? ' sel' : ''}" style="--u:${U(p.urgency).colour}" data-place="${p.id}" aria-pressed="${S.placeFor === p.id}">${p.room ? bell : ''}<b>${esc(p.name)}</b><small>${ago(p.queuedAt)}</small></button>`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>
       ${S.placeFor && byId(S.placeFor) ? `<div class="fpx-hint"><b>Place ${esc(byId(S.placeFor).name)}</b><span>Tap a lit bed.</span><button type="button" class="link" data-place="${S.placeFor}">Cancel</button></div>` : ''}
       ${fpzBlock('super')}
-      <div class="fpx-ppl fpz-ppl plan-s">${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('') || '<p class="muted small">Nobody else is on the Chart.</p>'}</div>
+      <div class="fpx-ppl fpz-ppl plan-s">${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('') || '<p class="muted small">Nobody else is on the Chart.</p>'}${admBox()}</div>
       ${S.fp ? '' : phSheet()}`; }
     if (t.s === 'myroom') h = myRoomSection();
     if (t.s === 'reqs') h = reqSection();
@@ -1612,7 +1622,7 @@ ${nextBarHtml(p)}
 
   // the bars at the top of every Chart screen: going / arrived / an open call to join / the supervisor's calls
   function tcBars() {
-    let h = '';
+    let h = svCards();
     const mc = S.myCall && callById(S.myCall.id);
     if (mc && S.myCall.state === 'on_way') h += `<div class="tc-bar going" role="status"><span class="tc-pulse" aria-hidden="true"></span><div><b>Going to ${esc(tcAt(mc))}</b><small>Trauma call${tcWhat(mc) ? ' · ' + esc(tcWhat(mc)) : ''} · ${tcComing(mc)} of ${tcSum(mc.want)} coming</small></div><button type="button" class="btn" data-tc="arrived" data-tcid="${mc.id}">Arrived</button></div>`;
     if (mc && S.myCall.state === 'arrived') h += `<div class="tc-bar here" role="status"><span class="tc-ic" aria-hidden="true">+</span><div><b>At the trauma call · ${esc(tcAt(mc))}</b><small>${tcComing(mc)} of ${tcSum(mc.want)} here or on the way</small></div></div>`;
@@ -1743,6 +1753,196 @@ ${nextBarHtml(p)}
     Object.assign(W_TC, { ready: true, called, join });
   }
 
+  // ---------- SUPERVISOR v2 (Alpha, 21 Nov 2026; Plans/CareBeyond/chart/supervisor-v2.md, Bravo's 0097) ----------
+  // One bed per person (the Supervisor can give a second). Drag a face onto a bed or room: Room staff are placed (asked:
+  // department clash, Move / Give this bed too, patients still there); admins and On call doctors are sent to VISIT with
+  // a reason. Double-click a face on a room to take them off. The person moved gets an orange order card; a visitor gets
+  // the same card with OK → Arrived → Done; a bed holder gets a partner request (Accept / No, 60 s). The hover cards and
+  // the Admins on shift box are Delta's chart-hover.js, fed by CBHChart.person / admins (below). The server decides.
+  const SV = { place: 'chart_person_place', off: 'chart_person_off', orderOk: 'chart_order_ok', orderSeen: 'chart_order_seen', visitSend: 'chart_visit_send',
+    visitStep: 'chart_visit_step', visitRemove: 'chart_visit_remove', partner: 'chart_partner_answer' };
+  S.sInfo = {}; S.visits = []; S.order = null; S.myVisit = null; S.partner = null; S.partnerWait = null; S.sv = null; S.adminIds = []; S.orderSeen = new Set();
+  const VREASON = { help: ['Help with patient', 'Help'], complaint: ['Patient complaint', 'Complaint'], check_staff: ['Check on staff', 'Staff check'],
+    second_opinion: ['Second opinion', '2nd opinion'], medical: ['Medical request', 'Medical'], custom: ['Message', 'Visit'] };
+  const vWords = (v) => (v.reason === 'custom' ? v.note || 'Visit' : (VREASON[v.reason] || ['Visit'])[0]);
+  function svIngest(s) {
+    const me = s.me || {};
+    S.sInfo = {};
+    (s.staff || []).forEach((x) => { const sid = sidOf(x.discord_id); S.sInfo[sid] = { avatar: x.avatar_url || '', rank: x.rank || '', admin: !!x.admin, since: x.shift_started_at || null }; });
+    // admins, execs and Directors on shift (some have no Chart role, so they're only here): they can be sent to visit
+    S.adminIds = (s.admins || []).map((x) => { const sid = person(x.discord_id, x.name, x.shift_department), o = S.sInfo[sid] || {};
+      S.sInfo[sid] = Object.assign(o, { avatar: x.avatar_url || o.avatar || '', rank: x.rank || o.rank || '', admin: true, adminKind: x.admin_kind || 'admin', since: x.shift_started_at || o.since || null });
+      if (sid !== 'me' && !S.staffRole[sid]) S.staffRole[sid] = x.role ? ROLE_IN[x.role] || 'off' : 'off';
+      return sid; });
+    S.sInfo.me = Object.assign(S.sInfo.me || {}, { avatar: me.avatar_url || (S.sInfo.me || {}).avatar || '', rank: me.rank || '', admin: !!me.admin, since: me.shift_started_at || null });
+    S.visits = (s.visits || []).map((v) => { const sid = person(v.person, v.name); if (v.avatar_url && !(S.sInfo[sid] || {}).avatar) (S.sInfo[sid] = S.sInfo[sid] || {}).avatar = v.avatar_url;
+      return { id: v.id, sid, room: String(v.room), reason: v.reason, note: v.note || '', state: v.state, at: v.sent_at, arrivedAt: v.arrived_at, by: v.by_name || '' }; });
+    S.order = me.order || null; S.myVisit = me.visit || null; S.partner = me.partner_ask || null; S.partnerWait = me.partner_wait || null;
+  }
+  const info = (sid) => S.sInfo[sid] || {};
+  const visitOf = (sid) => S.visits.find((v) => v.sid === sid);
+  const canVisit = (sid) => !!info(sid).admin || S.staffRole[sid] === 'oncall';
+  const avatarSrc = (sid, size) => { const a = info(sid).avatar; return a ? a.replace(/\?size=\d+$/, '') + (/cdn\.discordapp\.com/.test(a) ? `?size=${size || 64}` : '') : ''; };
+  const isAdminOnly = (sid) => S.adminIds.includes(sid) && (!S.staffRole[sid] || S.staffRole[sid] === 'off');   // shown only in Delta's Admins box
+
+  // ----- the asks (small popovers by the room; a sheet on phones) -----
+  const bedFree = (b) => !ownerOf(b) && !bedUsable(b);
+  const roomDeptClash = (sid, room) => { const d = S.roomDept[room]; return d && d !== 'Any' && staffDept(sid) && d !== staffDept(sid) && !(S.roomCfg[room] || {}).kids ? d : ''; };
+  const ptsLeft = (sid, keep) => mine(sid).filter((p) => p.room && p.room !== keep && bedsOf(sid).includes(p.room));
+  // A face dropped on a bed or a room (desktop drag, or the face sheet's Move to / Send to visit).
+  function svDrop(sid, room, bed) {
+    if (sid === 'me') { toast('Pick your own bed from Pick your room.'); return; }
+    const role = S.staffRole[sid], who = esc(first(sid));
+    if (role !== 'room') {
+      if (canVisit(sid)) { S.sv = { kind: 'visit', sid, room, reason: null, note: '' }; return; }
+      toast(`${who} is on ${esc(ROLE_NAME[role] || 'another role')}. Only Room staff hold beds; admins and On call doctors can be sent to visit.`); return; }
+    const b = bed && roomIdOf(bed) === room ? bed : D.BEDS.find((x) => roomIdOf(x) === room && bedFree(x));
+    if (!b) { toast(`Every bed in ${esc(roomWord(room))} is taken or closed.`); return; }
+    if (ownerOf(b) === sid) { toast(`${who} already has ${esc(b)}.`); return; }
+    if (ownerOf(b)) { toast(`${esc(b)} is ${esc(nm(ownerOf(b)))}'s bed.`); return; }
+    const no = bedUsable(b); if (no) { toast(`${esc(no)}.`); return; }
+    S.sv = { kind: 'place', sid, room, bed: b, mode: bedsOf(sid).length ? null : 'move', deptOk: !roomDeptClash(sid, room), handTo: undefined };
+    svNext();
+  }
+  // the next question, or send it
+  function svNext() {
+    const v = S.sv; if (!v) return;
+    if (v.kind === 'place') {
+      if (!v.deptOk) { v.step = 'clash'; return; }
+      if (!v.mode) { v.step = 'how'; return; }
+      if (v.mode === 'move' && v.handTo === undefined && ptsLeft(v.sid, v.bed).length) { v.step = 'pts'; return; }
+      S.sv = null;
+      call(SV.place, { p_person: idOf(v.sid), p_bed: bedId(v.bed), p_mode: v.mode, p_hand_to: v.handTo ? idOf(v.handTo) : null, p_move_anyway: !!v.anyway, p_override_dept: !!v.override },
+        `${esc(nm(v.sid))} ${v.mode === 'add' ? 'also has' : 'is now in'} ${esc(v.bed)}. They've been told.`,
+        { dept_clash: () => { S.sv = { ...v, deptOk: false, step: 'clash' }; }, has_patients: () => { S.sv = { ...v, handTo: undefined, step: 'pts' }; } });
+      return; }
+    if (v.kind === 'off') {
+      if (!v.sure) { v.step = 'sure'; return; }
+      if (v.handTo === undefined && ptsLeft(v.sid, null).some((p) => v.beds.includes(p.room))) { v.step = 'pts'; return; }
+      S.sv = null;
+      call(SV.off, { p_person: idOf(v.sid), p_bed: v.beds.length === 1 ? bedId(v.beds[0]) : null, p_hand_to: v.handTo ? idOf(v.handTo) : null, p_move_anyway: !!v.anyway },
+        `${esc(nm(v.sid))} is off ${esc(v.beds.join(' and '))}.`, { has_patients: () => { S.sv = { ...v, handTo: undefined, step: 'pts' }; } });
+    }
+  }
+  const handToChips = (v) => { const xs = D.STAFF.filter((x) => !x.you && x.id !== v.sid && S.staffRole[x.id] === 'room');
+    return `<div class="chips">${xs.map((x) => `<button type="button" class="chip" data-sv="handto" data-svsid="${x.id}">${face(x.id)} ${esc(first(x.id))} · ${mine(x.id).length} of ${D.LIMIT}</button>`).join('') || '<span class="muted small">Nobody else is on Room.</span>'}</div>`; };
+  function svPanel() {
+    const v = S.sv; if (!v) return ''; const who = esc(first(v.sid)), x = '<button type="button" class="link" data-sv="cancel">Cancel</button>';
+    let h = '';
+    if (v.kind === 'place' && v.step === 'clash') { const d = roomDeptClash(v.sid, v.room) || S.roomDept[v.room];
+      h = `<b>${esc(roomWord(v.room))} is ${esc(d)}</b><span>Send ${who} (${esc(staffDept(v.sid))}) anyway?</span>
+        <div class="row-btns"><button type="button" class="btn small" data-sv="anyway">Send anyway</button><button type="button" class="btn small ghost" data-sv="roomdept">Change room to ${esc(staffDept(v.sid))}</button>${x}</div>`; }
+    else if (v.kind === 'place' && v.step === 'how') {
+      h = `<b>${who} has ${esc(bedsOf(v.sid).join(' and '))}</b><span>And ${esc(v.bed)}?</span>
+        <div class="row-btns"><button type="button" class="btn small" data-sv="move">Move ${who} here</button><button type="button" class="btn small ghost" data-sv="add">Give ${who} this bed too</button>${x}</div>`; }
+    else if (v.step === 'pts') { const ps = v.kind === 'off' ? ptsLeft(v.sid, null).filter((p) => v.beds.includes(p.room)) : ptsLeft(v.sid, v.bed);
+      h = `<b>${who} has ${ps.length > 1 ? `${ps.length} patients` : 'a patient'} in ${esc([...new Set(ps.map((p) => p.room))].join(' and ') || 'their bed')}</b>${ps.length ? `<span>${esc(ps.map((p) => p.name).join(', '))}</span>` : ''}
+        ${v.handPick ? `<span class="muted small">Hand the bed and patients to:</span>${handToChips(v)}` : ''}
+        <div class="row-btns"><button type="button" class="btn small" data-sv="anyway">${v.kind === 'off' ? 'Take off anyway' : 'Move anyway'}</button>${v.handPick ? '' : '<button type="button" class="btn small ghost" data-sv="handpick">Hand them to…</button>'}${x}</div>
+        <small class="muted">Anyway: they go back to Up next, still in their bed.</small>`; }
+    else if (v.kind === 'off' && v.step === 'sure') {
+      h = `<b>Take ${who} off ${esc(v.beds.join(' and '))}?</b><div class="row-btns"><button type="button" class="btn small warn" data-sv="offyes">Take off</button>${x}</div>`; }
+    else if (v.kind === 'unvisit') {
+      h = `<b>End ${who}'s visit to ${esc(roomWord(v.room))}?</b><div class="row-btns"><button type="button" class="btn small warn" data-sv="unvisityes">End visit</button>${x}</div>`; }
+    else if (v.kind === 'visit') {
+      h = `<b>Send ${who} to visit ${esc(roomWord(v.room))}</b><span class="muted small">They don't take a bed. Why?</span>
+        <div class="chips">${Object.entries(VREASON).filter(([k]) => k !== 'custom').map(([k, [l]]) => `<button type="button" class="chip${v.reason === k ? ' on' : ''}" aria-pressed="${v.reason === k}" data-sv="reason" data-svr="${k}">${l}</button>`).join('')}
+          <button type="button" class="chip${v.reason === 'custom' ? ' on' : ''}" aria-pressed="${v.reason === 'custom'}" data-sv="reason" data-svr="custom">Message…</button></div>
+        ${v.reason === 'custom' ? `<input id="sv-note" maxlength="120" placeholder="e.g. Talk to the family in 102" value="${esc(v.note)}" autocomplete="off">` : ''}
+        <div class="row-btns"><button type="button" class="btn small" data-sv="visitgo"${v.reason && (v.reason !== 'custom' || v.note.trim()) ? '' : ' disabled'}>Send</button>${x}</div>`; }
+    return h ? `<div class="move-ask sv-ask" role="dialog" aria-label="Supervisor">${h}</div>` : '';
+  }
+  // desktop: the ask sits beside the room it's about
+  const svPop = () => { const v = S.sv; if (!v || isPhone()) return ''; const h = svPanel(); return h ? `<div class="sv-pop" data-room="${esc(v.room || '')}">${h}</div>` : ''; };
+  function placeSvPop() { const pop = $('.sv-pop'), plan = $('.plan'); if (!pop || !plan) return; const a = $(`.fp-room[data-room="${CSS.escape(pop.dataset.room)}"]`); if (!a) return;
+    const r = a.getBoundingClientRect(), pr = plan.getBoundingClientRect(), w = pop.offsetWidth, right = r.right - pr.left + 10;
+    pop.style.left = Math.max(8, Math.min(right + w < plan.clientWidth ? right : r.left - pr.left - w - 10, plan.clientWidth - w - 8)) + 'px';
+    pop.style.top = Math.max(8, Math.min(r.top - pr.top, plan.clientHeight - pop.offsetHeight - 8, innerHeight - pr.top - pop.offsetHeight - 12)) + 'px'; }   // stays on screen
+  function svClick(ds) {
+    const v = S.sv;
+    switch (ds.sv) {
+      case 'cancel': S.sv = null; break;
+      case 'anyway': if (v.step === 'clash') { v.deptOk = true; v.override = true; } else { v.handTo = null; v.anyway = true; } svNext(); break;
+      case 'roomdept': { v.deptOk = true; roomSet(v.room, { p_department: staffDept(v.sid) }).then((r) => { if (r && S.sv === v) { svNext(); render(); } }); break; }
+      case 'move': v.mode = 'move'; svNext(); break;
+      case 'add': v.mode = 'add'; svNext(); break;
+      case 'handpick': v.handPick = true; break;
+      case 'handto': v.handTo = ds.svsid; svNext(); break;
+      case 'offyes': v.sure = true; svNext(); break;
+      case 'unvisityes': S.sv = null; call(SV.visitRemove, { p_visit: v.id }, `${esc(nm(v.sid))}'s visit ended.`); break;
+      case 'reason': v.reason = ds.svr; if (ds.svr === 'custom') setTimeout(() => { const i = $('#sv-note'); if (i) i.focus(); }, 0); break;
+      case 'visitgo': S.sv = null; call(SV.visitSend, { p_person: idOf(v.sid), p_room: v.room, p_reason: v.reason, p_note: v.reason === 'custom' ? v.note.trim() : null },
+        `${esc(nm(v.sid))} sent to ${esc(roomWord(v.room))}: ${esc(vWords(v))}.`); break;
+      // the face sheet (phone and keyboard)
+      case 'off': S.face = null; svOff(ds.svsid, ds.svroom || null); break;
+      case 'unvisit': S.face = null; { const vi = visitOf(ds.svsid); if (vi) S.sv = { kind: 'unvisit', id: vi.id, sid: vi.sid, room: vi.room }; } break;
+      // the person's own cards
+      case 'orderok': { const o = S.order; S.order = null; svSilence(); if (o) call(SV.orderOk, { p_order: o.id }); break; }
+      case 'vstep': { const vi = S.myVisit; if (vi) { svSilence(); S.myVisit = ds.svstep === 'done' ? null : { ...vi, state: ds.svstep }; call(SV.visitStep, { p_visit: vi.id, p_step: ds.svstep }, ds.svstep === 'done' ? 'Visit done.' : ds.svstep === 'arrived' ? 'Marked as arrived.' : `On your way to ${esc(roomWord(String(vi.room)))}.`); } break; }
+      case 'partner': { const pa = S.partner; S.partner = null; svSilence(); if (pa) call(SV.partner, { p_ask: pa.id, p_yes: ds.svyes === '1' }, (r) => (r.taken === false ? esc(r.reason || 'They can’t take it any more.') : ds.svyes === '1' ? `You're sharing ${esc(roomWord(String(pa.room)))} with ${esc((pa.from || {}).name || 'them')}.` : 'Said no. They’ll pick another bed.')); break; }
+      default: return;
+    }
+    render();
+  }
+  // double-click a face on a room: take them off (owner) or end their visit (visitor)
+  function svOff(sid, room) {
+    const vi = visitOf(sid); if (vi && (!room || vi.room === room) && !bedsOf(sid).some((b) => roomIdOf(b) === room)) { S.sv = { kind: 'unvisit', id: vi.id, sid, room: vi.room }; return; }
+    const beds = bedsOf(sid).filter((b) => !room || roomIdOf(b) === room); if (!beds.length) return;
+    S.sv = { kind: 'off', sid, room: roomIdOf(beds[0]), beds, sure: false, handTo: undefined }; svNext();
+  }
+  // the face sheet's moves (phone, keyboard): Move to a free bed, Send to visit, Take off, End visit
+  const svFaceActs = (sid) => { if (S.role !== 'super') return ''; const role = S.staffRole[sid], beds = bedsOf(sid), vi = visitOf(sid);
+    const free = D.BEDS.filter((b) => bedFree(b));
+    return `<div class="sv-acts">${role === 'room' ? `<select data-svmv="${sid}" aria-label="Move ${esc(first(sid))} to a bed"><option value="">${beds.length ? 'Move to a bed…' : 'Give a bed…'}</option>${free.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join('')}</select>` : ''}
+      ${canVisit(sid) ? `<select data-svvis="${sid}" aria-label="Send ${esc(first(sid))} to visit a room"><option value="">Send to visit…</option>${D.ROOMS.map((r) => `<option value="${r.id}">${esc(roomWord(r.id))}</option>`).join('')}</select>` : ''}
+      ${beds.length ? `<button type="button" class="btn small ghost" data-sv="off" data-svsid="${sid}">Take off ${esc(beds.map(shortBed).join(' and '))}</button>` : ''}
+      ${vi ? `<button type="button" class="btn small ghost" data-sv="unvisit" data-svsid="${sid}">End visit</button>` : ''}</div>`; };
+
+  // ----- the orange card (orders and visits), the partner request and your own wait: the top of every Chart screen -----
+  function svCards() {
+    let h = '';
+    const o = S.order;
+    if (o) { const bed = o.bed ? BED_LABEL[o.bed] || o.bed_label || o.bed : null, d = bed && D.roomOfBed(bed), by = esc(o.by_name || 'The supervisor');
+      const where = `${esc(roomWord(String(o.room)))}${bed && d && d.beds > 1 ? ` (${esc(unitOf(String(o.room)))} ${esc(bed.slice(-1))})` : ''}`;
+      const t = o.kind === 'off' ? `${by} took you off ${esc(bed || roomWord(String(o.room)))}` : o.kind === 'handover' ? `${by} handed you ${where} and its patients` : o.kind === 'add' ? `${by} gave you ${where} as well` : `${by} sent you to ${where}`;
+      h += `<div class="ord-card" role="alert"><span class="oc-ic" aria-hidden="true">${o.kind === 'off' ? '←' : '→'}</span><div><b>${t}</b><small>${o.at ? ago(o.at) + ' ago' : 'Just now'}</small></div><button type="button" class="btn" data-sv="orderok">OK</button></div>`; }
+    const vi = S.myVisit;
+    if (vi) { const step = { sent: ['on_way', 'OK'], on_way: ['arrived', 'Arrived'], arrived: ['done', 'Done'] }[vi.state] || ['done', 'Done'];
+      h += `<div class="ord-card" role="${vi.state === 'sent' ? 'alert' : 'status'}"><span class="oc-ic" aria-hidden="true">${vi.state === 'arrived' ? '✓' : '→'}</span><div><b>${vi.state === 'arrived' ? 'Visiting' : 'Visit'} ${esc(roomWord(String(vi.room)))}: ${esc(vWords(vi))}</b><small>${vi.state === 'sent' ? 'From the supervisor. You don’t take a bed.' : vi.state === 'on_way' ? 'On your way' : 'Press Done when you’ve finished'}</small></div><button type="button" class="btn" data-sv="vstep" data-svstep="${step[0]}">${step[1]}</button></div>`; }
+    const pa = S.partner;
+    if (pa) h += `<div class="ord-card" role="alert"><span class="oc-ic" aria-hidden="true">+</span><div><b>${esc((pa.from || {}).name || 'Someone')} wants to partner with you in ${esc(roomWord(String(pa.room)))}</b><small>${pa.expires_at ? `<span class="cd" data-cd="${new Date(pa.expires_at).toISOString()}" data-secs="0">${mmss(new Date(pa.expires_at) - Date.now() - SKEW)}</span> to answer` : 'Answer within a minute'}</small></div><button type="button" class="btn" data-sv="partner" data-svyes="1">Accept</button><button type="button" class="btn ghost" data-sv="partner" data-svyes="0">No</button></div>`;
+    const pw = S.partnerWait;
+    if (pw) h += `<div class="ord-card wait" role="status"><span class="oc-ic" aria-hidden="true">…</span><div><b>Waiting for ${esc((pw.holder || {}).name || 'them')} to share ${esc(roomWord(String(pw.room)))}</b><small>${pw.expires_at ? `<span class="cd" data-cd="${new Date(pw.expires_at).toISOString()}" data-secs="0">${mmss(new Date(pw.expires_at) - Date.now() - SKEW)}</span> left` : 'Up to a minute'} · if they say no, pick another bed</small></div></div>`;
+    return h;
+  }
+  const W_SV = { ready: false, keys: new Set() };
+  function svWatch() {
+    if (S.order && S.order.state !== 'seen' && looking() && !S.orderSeen.has(S.order.id)) { S.orderSeen.add(S.order.id); rpc(SV.orderSeen, { p_order: S.order.id }).catch(() => {}); }
+    const now = new Set([S.order && S.order.state !== 'seen' ? 'o' + S.order.id : '', S.myVisit && S.myVisit.state === 'sent' ? 'v' + S.myVisit.id : '', S.partner ? 'p' + S.partner.id : ''].filter(Boolean));
+    if (W_SV.ready) [...now].filter((k) => !W_SV.keys.has(k)).forEach((k) => {
+      if (k[0] === 'o') alertMe('order', 'Supervisor order', `Go to ${roomWord(String(S.order.room))}`);
+      else if (k[0] === 'v') alertMe('order', 'Visit', `${roomWord(String(S.myVisit.room))}: ${vWords(S.myVisit)}`);
+      else alertMe('req', 'Partner request', `${(S.partner.from || {}).name || 'Someone'} · ${roomWord(String(S.partner.room))}`); });
+    Object.assign(W_SV, { ready: true, keys: now });
+  }
+  const svSilence = () => { [...pending].forEach(([k, x]) => { if (x.kind === 'order') pending.delete(k); }); unflash(); };
+
+  // ----- the room: visitor faces and one short reason tag -----
+  const svVisitors = (room, mode) => (mode === 'pick' ? '' : S.visits.filter((v) => v.room === room).map((v) => face(v.sid, { cls: `vis ${v.state === 'arrived' ? 'here' : 'going'}`, drag: mode === 'super', room })).join(''));
+  const svTag = (room, mode) => { const vs = S.visits.filter((v) => v.room === room); if (!vs.length || mode === 'pick') return '';
+    const v = vs[0]; return `<span class="vis-tag" title="${esc(vs.map((y) => `${nm(y.sid)}: ${vWords(y)}`).join(' · '))}">${esc(VREASON[v.reason] ? VREASON[v.reason][1] : 'Visit')}${vs.length > 1 ? ` +${vs.length - 1}` : ''}</span>`; };
+
+  // ----- for Delta's hover cards and Admins box (chart-hover.js) -----
+  function personData(id) {
+    const sid = id === 'me' || String(id) === String(ME_ID) ? 'me' : String(id), x = staff(sid); if (!x) return null;
+    const i = info(sid), role = sid === 'me' ? S.role : S.staffRole[sid] || null, vi = visitOf(sid), ps = sid === 'me' ? ['', 'ok'] : personStatus(sid);
+    return { sid, discord_id: idOf(sid), you: sid === 'me', name: x.name, avatar_url: avatarSrc(sid, 128) || null, rank: i.rank || '', department: staffDept(sid) || '', colour: deptColour(staffDept(sid)),
+      role, role_name: ROLE_NAME[role] || (i.admin ? 'Admin on shift' : ''), beds: bedsOf(sid), where: bedsOf(sid).length ? bedsOf(sid).join(', ') : null, patients: mine(sid).length, status: ps[0], tone: ps[1],
+      visit: vi ? { room: vi.room, room_name: roomWord(vi.room), reason: vi.reason, note: vi.note, reason_words: vWords(vi), state: vi.state } : null,
+      admin: !!i.admin, admin_kind: i.adminKind || (i.admin ? 'admin' : null), shift_started_at: i.since || null };
+  }
+  const admBox = () => { try { return window.CBHChart && typeof window.CBHChart.renderAdmins === 'function' ? window.CBHChart.renderAdmins() || '' : ''; } catch (e) { console.error('CBH Chart admins box:', e); return ''; } };
+
   // ---------- render (keeps every scroll area and the focus) ----------
   const app = document.createElement('div'); app.className = 'chx'; app.id = 'chx';
   wireFpz();
@@ -1771,7 +1971,7 @@ ${nextBarHtml(p)}
     AREAS.forEach((sel) => { const e = $(sel), b = before[sel]; if (e && b && b[1] === areaKey(sel)) e.scrollTop = b[0]; });
     se.scrollTop = before.page[1] === areaKey('page') ? before.page[0] : 0;
     render.keys = { page: areaKey('page'), ...Object.fromEntries(AREAS.map((sel) => [sel, areaKey(sel)])) };
-    if (!isPhone()) { sizeBoard(); placePop(); }
+    if (!isPhone()) { sizeBoard(); placePop(); placeSvPop(); }
     if (S.fp) { sizeFp(); requestAnimationFrame(sizeFp); }
     if ($('.fpz')) fpzApply();
     const fw1 = $('.plan .floor-wrap'); if (fw1 && fwS) { fw1.scrollLeft = fwS[0]; fw1.scrollTop = fwS[1]; }
@@ -1815,6 +2015,7 @@ ${nextBarHtml(p)}
     else if (t.id === 'd-roblox') S.draft.roblox = t.value;
     else if (t.id === 'd-age') S.draft.age = t.value;
     else if (t.id === 'd-care') S.draft.care = t.value;
+    else if (t.id === 'sv-note' && S.sv) { S.sv.note = t.value; const b = app.querySelector('[data-sv="visitgo"]'); if (b) b.disabled = !t.value.trim(); }
     else if (t.id === 'npc-name') S.npc.name = t.value;
     else if (/^i-(name|age|what|hr|bp)$/.test(t.id)) { const k = t.id.slice(2); S.inc[k] = t.value; if (k === 'name') { const b = app.querySelector('[data-a="incgo"]'); if (b) b.disabled = !(t.value.trim() && S.inc.urgency); } }
     else if (t.id === 'pd-name') { S.pdraft.name = t.value; const b = app.querySelector('[data-a="pdgo"]'); if (b) b.disabled = !(t.value.trim() && S.pdraft.said); }
@@ -1829,6 +2030,8 @@ ${nextBarHtml(p)}
   app.addEventListener('change', (e) => {
     if (e.target.id === 'p-notes') { const p = byId(S.open), v = e.target.value.trim(), last = ((RECS[S.open] || {}).p || {}).notes || ''; if (p && v && v !== last) chartIt(p, 'note', { text: v }, 'Note saved.'); return; }
     if (e.target.id === 'dth-by') { S.dth.by = e.target.value; return; }
+    if (e.target.dataset.svmv) { const sid = e.target.dataset.svmv, b = e.target.value; S.face = null; if (b) svDrop(sid, roomIdOf(b), b); render(); return; }
+    if (e.target.dataset.svvis) { const sid = e.target.dataset.svvis, r = e.target.value; S.face = null; if (r) svDrop(sid, r); render(); return; }
     if (e.target.id === 'tc-room') { if (S.tcd && e.target.value) { S.tcd.room = e.target.value; S.tcd.bed = null; } render(); return; }
     if (e.target.id !== 'p-room') return;
     const bed = e.target.value.replace(' (children only)', '');
@@ -1869,7 +2072,7 @@ ${nextBarHtml(p)}
     e.preventDefault();
     drag.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    const tg = el && (drag.pid ? (el.closest('.bed[data-bed]') || el.closest('.staff-drop[data-sid]')) : el.closest('.fp-room[data-room]'));
+    const tg = el && (drag.pid ? (el.closest('.bed[data-bed]') || el.closest('.staff-drop[data-sid]')) : (el.closest('.bed[data-bed]') || el.closest('.fp-room[data-room]')));
     if (drag.pid && !drag.marked) { drag.marked = true; const dp = byId(drag.pid); app.querySelectorAll('.bed[data-bed]').forEach((x) => { const why = dp.room === x.dataset.bed ? '' : dropWhy(dp, x.dataset.bed); if (why) { x.classList.add('no-drop'); x.dataset.why = why; } }); }
     if (drag.over && drag.over !== tg) drag.over.classList.remove('drop-over');
     if (tg && !tg.classList.contains('no-drop') && (!drag.pid || tg.dataset.sid || byId(drag.pid).room !== tg.dataset.bed)) { tg.classList.add('drop-over'); drag.over = tg; } else drag.over = null;
@@ -1883,11 +2086,13 @@ ${nextBarHtml(p)}
     justDragged = true; setTimeout(() => { justDragged = false; }, 0);
     if (!d.over) return;
     d.over.classList.remove('drop-over');
-    if (d.sid) { if (!tcDrop(d.sid, d.over.dataset.room)) giveRoom(d.sid, d.over.dataset.room); }
+    if (d.sid) { const rm = (d.over.closest('.fp-room') || d.over).dataset.room, bd = d.over.dataset.bed; if (!tcDrop(d.sid, rm)) svDrop(d.sid, rm, bd); }
     else if (d.over.dataset.sid) dropOnPerson(d.pid, d.over.dataset.sid);
     else dropOnBed(d.pid, d.over.dataset.bed);
     render();
   });
+  // double-click a face on a room: take them off, or end their visit (Supervisor)
+  app.addEventListener('dblclick', (e) => { if (S.role !== 'super') return; const f = e.target.closest('[data-svface]'); if (!f) return; e.preventDefault(); svOff(f.dataset.dragsid, f.dataset.svface || null); render(); });
   const hl = (sid, on) => app.querySelectorAll('.fp-room[data-people]').forEach((r) => { if (r.dataset.people.split(' ').includes(sid)) r.classList.toggle('hl', on || S.face === sid); });
   app.addEventListener('mouseover', (e) => { const x = e.target.closest('.plan-s .staff-drop'); if (x && !drag) hl(x.dataset.sid, true); });
   app.addEventListener('mouseout', (e) => { const x = e.target.closest('.plan-s .staff-drop'); if (x && !x.contains(e.relatedTarget)) hl(x.dataset.sid, false); });
@@ -1896,6 +2101,7 @@ ${nextBarHtml(p)}
   document.addEventListener('keydown', (e) => { if (e.key !== 'Escape' || !app.isConnected) return;
     if (S.fp) { fpClose(); render(); return; }
     if (S.tcd) { S.tcd = null; render(); return; }
+    if (S.sv) { S.sv = null; render(); return; }
     if (S.sessMenu || S.face || S.railOpen) { S.sessMenu = false; S.face = null; S.roleAsk = null; S.railOpen = false; }
     else if (S.teamWarn || S.who || S.pendRoom || S.roomPanel || S.endSess || S.moveFor || S.pending) Object.assign(S, { teamWarn: null, who: null, pendRoom: null, roomPanel: null, endSess: false, moveFor: null, pending: null });
     else if (S.open && !isPhone()) { S.open = null; S.reqMenu = false; S.handbackFor = null; } else return;
@@ -1908,6 +2114,7 @@ ${nextBarHtml(p)}
     if (S.sessMenu && !e.target.closest('.sess-m')) { S.sessMenu = false; closed = true; }
     if (S.face && !e.target.closest('.popover, .staff-drop, .fpx-sheet')) { S.face = null; S.roleAsk = null; closed = true; }
     if (S.roomPanel && !e.target.closest('.room-pop, .rh-edit, .fpx-sheet')) { S.roomPanel = null; closed = true; }
+    if (S.sv && !e.target.closest('.sv-pop, .fpx-sheet, [data-sv]')) { S.sv = null; closed = true; }
     if (S.railOpen && !e.target.closest('.rail')) { S.railOpen = false; S.alertSet = false; closed = true; }
     const b = e.target.closest('button, tr[data-open], li[data-open], div[data-open]'); if (!b || b.disabled) { if (closed) render(); return; }
     S.lastAct = Date.now();
@@ -1916,6 +2123,7 @@ ${nextBarHtml(p)}
     const openP = (id) => { S.urgOpen = false; if (isPhone()) go('patient', { id }); else { S.open = id; S.tab = 'chart'; S.vopen = false; S.outcome = null; S.reqMenu = false; S.rq = null; } };
     const sure = (v, msg) => { if (String(v || '').trim()) return true; toast(msg); return false; };
     if (ds.tc) { tcClick(ds); return; }
+    if (ds.sv) { svClick(ds); return; }
     // the phone floor plan (full screen)
     if (ds.a === 'fpopen' || ds.a === 'fppick' || ds.fpplace) { fpOpen(ds.a === 'fppick' ? 'pick' : 'super', ds.fpplace ? +ds.fpplace : null); render(); return; }
     if (ds.a === 'fpclose') { fpClose(); render(); return; }
@@ -1966,7 +2174,7 @@ ${nextBarHtml(p)}
     else if (ds.gotit) { const p = byId(+ds.gotit); if (p && p.phase === 'assigned') { act.gotIt(p); openP(p.id); } }
     else if (ds.withpt) { const p = byId(+ds.withpt); if (p) { act.withPatient(p); if (!isPhone()) openP(p.id); } }
     else if (ds.noshow) { act.noShow(byId(+ds.noshow)); if (isPhone()) home(); }
-    else if (ds.takeover) call('chart_offer_take', {}, 'You took over the room.');
+    else if (ds.takeover) call('chart_offer_take', {}, `You took ${esc((S.offer && (S.offer.beds || []).length === 1 ? BED_LABEL[S.offer.beds[0]] || S.offer.beds[0] : 'the room'))}.`);
     else if (ds.a === 'pick') { S.pick = true; S.pickSel = bedsOf('me').slice(); }
     else if (ds.a === 'pickdone') pickDone();
     else if (ds.pickbed) pickBed(ds.pickbed);
@@ -2125,7 +2333,7 @@ ${nextBarHtml(p)}
   app.addEventListener('click', (e) => { const u = e.target.closest('[data-undocall]'); if (!u) return; const p = byId(+u.dataset.undocall); if (p) { $('#chx-toast').hidden = true; act.calledOut(p, true); } });
   if (window.ResizeObserver) new ResizeObserver(() => { if (!isPhone()) sizeBoard(); }).observe(app);
   // Test hook (prototype only): the room-rule self-test in the console uses these.
-  if (LOCAL) window.__cbh = { S, D, A, SND, pending, looking, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
+  if (LOCAL) window.__cbh = { S, D, A, SND, pending, looking, svDrop, svOff, render, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
   // ---------- hooks for the entry points outside chart.js (sidebar badge, shift card, phone tab) ----------
   window.CBHChart = Object.assign(window.CBHChart || {}, {
     summary: () => (!SNAP ? null : {
@@ -2136,6 +2344,7 @@ ${nextBarHtml(p)}
       queue: upNext().length, codes: S.codes.length }),
     open: (id) => { S.open = +id; S.tab = 'chart'; if (location.hash !== '#chart') location.hash = '#chart'; else render(); },
     URG: D.URGENCY, COLOUR_QUESTIONS: D.COLOUR_QUESTIONS,
+    person: (id) => personData(id), admins: () => S.adminIds.map(personData).filter(Boolean), canDrag: () => S.role === 'super' && !isPhone(),
   });
   // ---------- the site page (#chart) ----------
   PAGES.push({ id: 'chart', aud: 'chart', title: 'CBH Chart', icon: 'stethoscope', layout: 'chart' });
