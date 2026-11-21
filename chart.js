@@ -1825,6 +1825,8 @@ ${nextBarHtml(p)}
     const b = bed && roomIdOf(bed) === room ? bed
       : usable.find((x) => pt(x) && !pt(x).nurse) || usable.find((x) => !ownerOf(x) && !pt(x)) || usable.find((x) => pt(x)) || usable.find((x) => ownerOf(x) && ownerOf(x) !== sid) || null;
     const p = b && pt(b);
+    // dropped on a room where they already hold a bed: only a waiting patient there is news; otherwise nothing to do
+    if (!bed && role === 'room' && !(p && !p.nurse) && usable.some((x) => ownerOf(x) === sid)) { toast(`${who} is already in ${esc(roomWord(room))}.`); return; }
     let base = { sid, room, bed: b, pid: p ? p.id : null };
     if (role === 'room') {
       if (!b) { toast(`Every bed in ${esc(roomWord(room))} is closed or off.`); return; }
@@ -1833,6 +1835,7 @@ ${nextBarHtml(p)}
       if (p && p.nurse) base = { ...base, kind: 'help' };   // the user: always help; to take over, take the nurse off first
       else if (ownerOf(b) === sid && !p) { toast(`${who} already has ${esc(b)}.`); return; }
       else if (ownerOf(b) && ownerOf(b) !== sid && !p) base = { ...base, kind: 'held', holder: ownerOf(b) };
+      else if (ownerOf(b) === sid) base = { ...base, kind: 'place', patient: p.name, mode: 'add', deptOk: true, handTo: undefined };   // their own bed: just take the patient waiting in it (Delta, A5)
       else base = { ...base, kind: 'place', patient: p && !p.nurse ? p.name : null, mode: bedsOf(sid).length ? null : 'move', deptOk: !roomDeptClash(sid, room), handTo: undefined };
     } else if (role === 'oncall' && p) base = { ...base, kind: 'doctor' };
     else if (canVisit(sid)) base = { ...base, kind: 'visit', reason: null, note: '' };
