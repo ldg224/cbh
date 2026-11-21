@@ -982,10 +982,10 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const helpers = S.reqs.filter((x) => isOpenReq(x) && x.acceptedBy && x.type !== 'imaging' && beds.includes((byId(x.pid) || {}).room));
     const people = [...owners, ...helpers.map((x) => x.acceptedBy)];
     const who = mode === 'pick' ? '' : `<span class="rh-who">${owners.map((o) => `${face(o)}${g[2] >= 100 ? `<i>${esc(o === 'me' ? 'You' : first(o).replace('Dr. ', 'Dr '))}</i>` : ''}`).join('')}${helpers.map((x) => `<span class="face helper${x.hereAt ? '' : ' going'}" style="--dc:${deptColour(staffDept(x.acceptedBy))}" title="${esc(nm(x.acceptedBy))} ${x.hereAt ? 'is here' : 'is on the way'} (${esc(REQ[x.type][0].toLowerCase())})">${esc(initial(x.acceptedBy))}</span>`).join('')}</span>`;
-    return `<div class="fp-room${c.kids ? ' ped' : ''}${c.closed ? ' closed' : ''}${open ? ' open' : ''}${mode === 'pick' && rd === S.rdept ? ' mydept' : ''}${g[2] > g[3] * 1.3 ? ' wide' : ''}${r.beds > 1 && g[2] <= g[3] * 1.3 ? ' stack' : ''}${g[3] <= 55 ? ' short' : ''}${isEr(r.id) ? ' er-room' : ''}${S.calls.some((x) => x.room === r.id) ? ' tc-on' : ''}${S.face && people.includes(S.face) ? ' hl' : ''}" data-room="${r.id}" data-people="${people.join(' ')}" title="${esc(roomWord(r.id))} ·${esc(rd)}${c.kids ? ' · children only' : ''}${c.closed ? ' · closed' : ''}" style="${box(g)};--dc:${deptColour(rd)}">
+    return `<div class="fp-room${c.kids ? ' ped' : ''}${c.closed ? ' closed' : ''}${open ? ' open' : ''}${mode === 'pick' && rd === S.rdept ? ' mydept' : ''}${g[2] > g[3] * 1.3 ? ' wide' : ''}${r.beds > 1 && g[2] <= g[3] * 1.3 ? ' stack' : ''}${g[3] <= 55 ? ' short' : ''}${isEr(r.id) ? ' er-room' : ''}${mode !== 'pick' && S.calls.some((x) => x.room === r.id) ? ' tc-on' : ''}${S.face && people.includes(S.face) ? ' hl' : ''}" data-room="${r.id}" data-people="${people.join(' ')}" title="${esc(roomWord(r.id))} ·${esc(rd)}${c.kids ? ' · children only' : ''}${c.closed ? ' · closed' : ''}" style="${box(g)};--dc:${deptColour(rd)}">
       <div class="fp-rh"><b>${esc(roomName(r.id))}</b>${g[2] >= 100 || mode === 'pick' ? `<span class="rd-tag">${esc(rd)}</span>` : ''}${c.kids ? '<span class="ped-tag">Paediatric</span>' : ''}${c.adults ? '<span class="ad-tag">Adults</span>' : ''}${who}${mode === 'super' ? `<button type="button" class="rh-edit" data-roomcfg="${r.id}" aria-label="${esc(roomWord(r.id))} settings" title="${esc(roomWord(r.id))} settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button>` : ''}</div>
-      ${mode === 'pick' ? '' : tcBay(r) || tcBayBtn(r, mode)}${c.closed ? `<div class="cl-why"><b>Closed</b>${c.why ? `<span>${esc(c.why)}</span>` : ''}</div>` : ''}
-      <div class="fp-beds">${beds.map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), mode, owners.length > 1, mode !== 'pick' && !(g[2] > g[3] * 1.3))).join('')}</div></div>`; };
+      ${tcBayBtn(r, mode)}${c.closed ? `<div class="cl-why"><b>Closed</b>${c.why ? `<span>${esc(c.why)}</span>` : ''}</div>` : ''}
+      ${(mode !== 'pick' && tcBay(r)) || `<div class="fp-beds">${beds.map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), mode, owners.length > 1, mode !== 'pick' && !(g[2] > g[3] * 1.3))).join('')}</div>`}</div>`; };
   // The Emergency wing's fixed parts: the ambulance bay outside along the top, the corridor's name, Dispatch and storage
   // (grey labelled blocks with no beds, like the Family Restroom), the ground outside the building, and its walls.
   const erParts = () => (erOn() ? `${ER.out.map((o) => `<i class="fp-out" style="${box(o)}"></i>`).join('')}<div class="fp-amb" style="${box(ER.amb)}"><b>Ambulance parking and drop off</b></div>
@@ -1503,6 +1503,7 @@ ${nextBarHtml(p)}
   const callById = (id) => S.calls.find((c) => c.id === +id);
   const tcDeptOf = (sid) => staffDept(sid);   // the department they're working this shift
   const tcClinical = (sid) => TC_DEPTS.includes(tcDeptOf(sid));
+  const tcJoinable = () => (S.myCall ? [] : S.canJoin.map(callById).filter((c) => c && !c.members.some((m) => m.sid === 'me' && m.state === 'declined')));
   const tcLive = (c) => c.members.filter((m) => m.state !== 'declined');
   const tcIn = (c, k) => c.members.filter((m) => m.dept === k && (m.state === 'on_way' || m.state === 'arrived')).length;
   const tcComing = (c) => c.members.filter((m) => m.state === 'on_way' || m.state === 'arrived').length;
@@ -1522,10 +1523,15 @@ ${nextBarHtml(p)}
   const tcFace = (m) => `<span class="face tc-f ${TC_ST[m.state][1]}" style="--dc:${deptColour(m.dept || staffDept(m.sid))}" title="${esc(nm(m.sid))} · ${esc(m.dept || '')} · ${TC_ST[m.state][0]}">${esc(initial(m.sid))}</span>`;
 
   // the bay on the floor plan
+  // The call takes over the whole room (the user, 21 Nov 2026): TRAUMA CALL, what's coming, a row per department in its
+  // colour (here or on the way / wanted), then the faces. The room's beds are hidden while it runs.
   const tcBay = (r) => { const c = S.calls.find((x) => x.room === r.id); if (!c) return '';
     const order = ['arrived', 'on_way', 'called'], live = tcLive(c).sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state));
-    const inner = `<b>Trauma call · ${tcComing(c)} of ${tcSum(c.want)}</b><span class="tc-dcs">${tcCounts(c)}</span><span class="tc-faces">${live.map(tcFace).join('')}</span>`;
-    return S.role === 'super' ? `<button type="button" class="tc-bay" data-tc="edit" data-tcid="${c.id}" aria-label="Trauma call in ${esc(roomWord(r.id))}: ${tcComing(c)} of ${tcSum(c.want)} coming. Manage the call">${inner}</button>` : `<div class="tc-bay">${inner}</div>`; };
+    const rows = TC_DEPTS.filter((k) => c.want[k] > 0).map((k) => `<span class="tc-r-row${tcIn(c, k) >= c.want[k] ? ' full' : ''}" style="--dc:${deptColour(k)}"><i><span class="tc-lg">${k}</span><span class="tc-sh" aria-hidden="true">${{ Medical: 'Med', Surgical: 'Surg', Paramedicine: 'Para', Nursing: 'Nurs' }[k]}</span></i><b>${tcIn(c, k)}/${c.want[k]}</b></span>`).join('');
+    const inner = `<span class="tc-r-h"><span class="tc-r-l">Trauma call</span><b class="tc-r-n">${tcComing(c)} of ${tcSum(c.want)}</b></span>${tcWhat(c) ? `<small class="tc-r-what">${esc(tcWhat(c))}</small>` : ''}
+      <span class="tc-r-rows">${rows}</span><span class="tc-faces">${live.map(tcFace).join('')}</span>`;
+    const g = geo(r.id) || [0, 0, 0, 200], sz = g[3] >= 120 ? '' : g[3] >= 75 ? ' mid' : ' small';   // what fits: by the room's height on the plan
+    return S.role === 'super' ? `<button type="button" class="tc-room${sz}" data-tc="edit" data-tcid="${c.id}" aria-label="Trauma call in ${esc(roomWord(r.id))}: ${tcComing(c)} of ${tcSum(c.want)} coming. Manage the call">${inner}</button>` : `<div class="tc-room${sz}">${inner}</div>`; };
   const tcBayBtn = (r, mode) => (mode === 'super' && S.role === 'super' && /^TB\d$/.test(r.id) && !S.calls.some((x) => x.room === r.id) ? `<button type="button" class="tc-start" data-tc="new" data-tcroom="${r.id}">Trauma call</button>` : '');
   const tcAway = (bed) => (S.bedAway[bed] ? '<span class="tc-away">Away: at trauma</span>' : '');
 
@@ -1535,7 +1541,7 @@ ${nextBarHtml(p)}
     const mc = S.myCall && callById(S.myCall.id);
     if (mc && S.myCall.state === 'on_way') h += `<div class="tc-bar going" role="status"><span class="tc-pulse" aria-hidden="true"></span><div><b>Going to ${esc(tcAt(mc))}</b><small>Trauma call${tcWhat(mc) ? ' · ' + esc(tcWhat(mc)) : ''} · ${tcComing(mc)} of ${tcSum(mc.want)} coming</small></div><button type="button" class="btn" data-tc="arrived" data-tcid="${mc.id}">Arrived</button></div>`;
     if (mc && S.myCall.state === 'arrived') h += `<div class="tc-bar here" role="status"><span class="tc-ic" aria-hidden="true">+</span><div><b>At the trauma call · ${esc(tcAt(mc))}</b><small>${tcComing(mc)} of ${tcSum(mc.want)} here or on the way</small></div></div>`;
-    if (!S.myCall && S.role !== 'super') S.canJoin.map(callById).filter((c) => c && !S.tcLater.has(c.id)).forEach((c) => {
+    if (S.role !== 'super') tcJoinable().filter((c) => !S.tcLater.has(c.id)).forEach((c) => {
       h += `<div class="tc-bar open" role="alert"><span class="tc-ic" aria-hidden="true">+</span><div><b>Trauma call · ${esc(tcAt(c))}</b><small>Needs ${esc(tcList(c.open))}${tcWhat(c) ? ' · ' + esc(tcWhat(c)) : ''}</small></div><button type="button" class="btn" data-tc="join" data-tcid="${c.id}">Join</button><button type="button" class="link" data-tc="later" data-tcid="${c.id}">Not now</button></div>`; });
     if (S.role === 'super') S.calls.forEach((c) => { const no = c.members.filter((m) => m.state === 'declined').length, open = tcSum(c.open);
       h += `<div class="tc-bar sup" role="status"><span class="tc-ic" aria-hidden="true">+</span><div><b>Trauma call · ${esc(tcAt(c))} · ${tcComing(c)} of ${tcSum(c.want)}</b><small>${[tcWhat(c), open ? `${tcList(c.open)} open` : '', no ? `${no} can’t come` : ''].filter(Boolean).map(esc).join(' · ') || 'Everyone is called'}</small></div><span class="tc-dcs">${tcCounts(c)}</span><button type="button" class="btn small" data-tc="edit" data-tcid="${c.id}">Manage</button></div>`; });
@@ -1626,6 +1632,20 @@ ${nextBarHtml(p)}
     }
     render();
   }
+  function tcFocus() {
+    const onPlan = S.role === 'super' && (isPhone() ? !S.fp && (top() || {}).s === 'plan' : S.sec === 'plan');
+    if (!onPlan) { S.tcFocused = new Set(); return; }
+    const done = S.tcFocused || (S.tcFocused = new Set()), c = S.calls.find((x) => x.room && !done.has(x.id)); if (!c) return;
+    const el = app.querySelector(`.fp-room[data-room="${CSS.escape(c.room)}"]`); if (!el) return;
+    done.add(c.id);
+    const fz = el.closest('.fpz'), er = el.getBoundingClientRect();
+    if (fz) { const r = fpzView(), inr = fz.querySelector('.fpz-in').getBoundingClientRect(), k0 = (S.fpz && S.fpz.k) || 1; if (!r) return;
+      const k = Math.min(FZMAX, Math.max(fitK(r.w, r.h), r.h / FZH)), ox = (er.left - inr.left) / k0, oy = (er.top - inr.top) / k0;
+      S.fpz = { k, x: r.w / 2 - (ox + er.width / k0 / 2) * k, y: r.h / 2 - (oy + er.height / k0 / 2) * k, fit: false, auto: false }; fpzApply();
+      try { fz.scrollIntoView({ block: 'nearest' }); } catch { /* fine */ } return; }
+    const w = el.closest('.floor-wrap'); if (!w) return; const wr = w.getBoundingClientRect();
+    w.scrollLeft += (er.left - wr.left) - (wr.width - er.width) / 2; w.scrollTop += (er.top - wr.top) - (wr.height - er.height) / 2;
+  }
   // a face dragged onto a room (desktop supervisor): into the open sheet's names, or onto a bay with a live call
   function tcDrop(sid, room) {
     if (S.tcd) { if (!tcClinical(sid)) { toast(`${esc(nm(sid))} isn't working a care department.`); return true; } if (!S.tcd.id && !S.tcd.room) S.tcd.room = room; tcAdd(sid); return true; }
@@ -1640,7 +1660,7 @@ ${nextBarHtml(p)}
   const tcStop = () => { tcRing = Date.now() + 60000; };
   const W_TC = { ready: false, called: new Set(), join: new Set() };
   function tcWatch() {
-    const called = new Set(S.myCall && S.myCall.state === 'called' ? [S.myCall.id] : []), join = new Set(S.myCall ? [] : S.canJoin);
+    const called = new Set(S.myCall && S.myCall.state === 'called' ? [S.myCall.id] : []), join = new Set(tcJoinable().map((c) => c.id));
     if (W_TC.ready) {
       [...called].filter((id) => !W_TC.called.has(id)).forEach((id) => { const c = callById(id); if (c) { alertMe('trauma', 'TRAUMA CALL', `${tcAt(c)}${tcWhat(c) ? ' · ' + tcWhat(c) : ''}`, c.pid); tcRing = Date.now(); } });
       [...join].filter((id) => !W_TC.join.has(id)).forEach((id) => { const c = callById(id); if (c && S.role !== 'super') alertMe('req', 'Trauma call', `${tcAt(c)} needs ${tcList(c.open)}`, c.pid); });
@@ -1661,6 +1681,7 @@ ${nextBarHtml(p)}
     const se = document.scrollingElement;
     const K0 = render.keys || {}, before = { page: [se.scrollTop, K0.page], ...Object.fromEntries(AREAS.map((sel) => { const e = $(sel); return [sel, e ? [e.scrollTop, K0[sel]] : null]; })) };
     const focusSig = sig(document.activeElement), keep = document.activeElement && document.activeElement.id;
+    const fw0 = $('.plan .floor-wrap'), fwS = fw0 ? [fw0.scrollLeft, fw0.scrollTop] : null;
     // The page redraws into #view; the record drawer lives in #dhost and STAYS mounted (owner, 19 Nov 2026: no flash on
     // every click). It slides in only when a different patient opens; otherwise only its content is swapped, and only
     // when something in it actually changed (ticking timers don't count), keeping its scroll and focus.
@@ -1678,6 +1699,8 @@ ${nextBarHtml(p)}
     if (!isPhone()) { sizeBoard(); placePop(); }
     if (S.fp) { sizeFp(); requestAnimationFrame(sizeFp); }
     if ($('.fpz')) fpzApply();
+    const fw1 = $('.plan .floor-wrap'); if (fw1 && fwS) { fw1.scrollLeft = fwS[0]; fw1.scrollTop = fwS[1]; }
+    tcFocus();
     try { const el = keep ? document.getElementById(keep) : focusSig && app.querySelector(focusSig); if (el) { el.focus({ preventScroll: true }); if (keep && el.setSelectionRange && el.type === 'text') el.setSelectionRange(el.value.length, el.value.length); } } catch { /* fine */ }
   }
   function placePop() { placeRoomPop(); const pop = $('.popover'), plan = $('.plan'); if (!pop || !plan) return;
