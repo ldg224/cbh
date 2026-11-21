@@ -1179,3 +1179,7 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 .chx .fp-room.tc-on.drop-over { box-shadow: 0 0 0 4px var(--tc), 0 0 0 8px rgba(217, 45, 32, .25) !important; }
 .chx .tc-r-pt { font-size: 10.5px; font-weight: 800; color: var(--text); background: #fff; border-radius: 4px; padding: 1px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chx .tc-chip.bay-place { background: var(--tc); color: #fff; }
+
+/* a bed reserved for an incoming ambulance (supervisor-v2 §8b Q11): quiet, not alarming */
+.chx .bed .free-l.res-l { display: block; color: #8a4b00; font-weight: 700; font-style: normal; white-space: normal; line-height: 1.25; font-size: 10.5px; }
+.chx .q-chip.inc[data-drag] { cursor: grab; }
