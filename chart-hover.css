@@ -75,7 +75,9 @@
 .chx .adm-chip.on-role b { color: var(--muted); font-weight: 600; }
 .chx .adm-chip.on-role small { color: #8191aa; }
 /* the narrow People rail (collapsed list or a record docked beside the plan): faces only, like the role groups */
-.chx .plan-grid.shut .adm-box, .chx .docked-view .plan-grid .adm-box { padding: 6px 0; background: none; border: 0; justify-items: center; }
+.chx .plan-grid.shut .adm-box, .chx .docked-view .plan-grid .adm-box { padding: 6px 0; background: none; border: 0; justify-items: center;
+  /* size containment would shrink the box to 0 wide in the centred rail, hiding every admin face */
+  container-type: normal; justify-self: stretch; }
 .chx .plan-grid.shut .adm-box .ps-l, .chx .docked-view .plan-grid .adm-box .ps-l { display: none; }
 /* the rail has no fold: its faces always show */
 .chx .plan-grid.shut .adm-tg, .chx .docked-view .plan-grid .adm-tg { display: none; }
