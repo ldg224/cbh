@@ -6,7 +6,8 @@
 --   chart_poll_cache  the parts of the reply that are the same for every viewer (ops, rooms, beds, both forms of every
 --                     patient card, queue, codes, calls, visits, admins, staff, the desk lists, incoming) are built once
 --                     per Chart revision by chart_poll_shared (the same expressions, copied) and reused by everyone; the
---                     first poller after a change builds them while others wait for it (up to 2 s)
+--                     first poller after a change builds them (single try-lock); the others re-check the cache
+--                     every 50 ms without holding any lock (up to 2 s, then build their own unstored copy)
 --   chart_whoami      no longer writes the caller's Chart row on every poll when nothing changed
 -- The reply is unchanged (proved by comparing old and new output for several viewers on a busy test floor). chart_poll is
 -- replaced whole and chart_whoami patched by exact text replacement; the down file restores both exactly.
@@ -63,27 +64,34 @@ language sql stable security definer set search_path = '' as $$
     'incoming', coalesce((select jsonb_agg(c.id order by c.eta_at) from public.chart_cases c where c.status = 'open' and c.state = 'incoming'), '[]'))
 $$;
 
--- The shared parts for the current revision: from the cache, or built by the first poller after a change while the
--- others wait for it (up to 2 s, then build their own). Returns them with 'rev' set to the revision they belong to.
+-- The shared parts for the current revision: from the cache, or built by the first poller after a change. Nobody waits on a
+-- lock (Alpha's review): the builder takes the cache lock with a single try; everyone else re-checks the cache every 50 ms
+-- for up to 2 s, then builds their own copy (not stored). So after a change the polls run side by side, not one at a time.
+-- Returns the parts with 'rev' set to the revision they belong to (the current one or newer).
 create or replace function public.chart_poll_cached(p_rev bigint) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
-declare d jsonb; r bigint; prev text := current_setting('lock_timeout');
+declare d jsonb; r bigint; k int;
 begin
-  select x.data into d from public.chart_poll_cache x where x.id = 1 and x.rev = p_rev;
+  select x.data into d from public.chart_poll_cache x where x.id = 1 and x.rev >= p_rev;
   if d is not null then return d; end if;
-  begin
-    perform set_config('lock_timeout', '2s', true);
-    perform pg_advisory_xact_lock(hashtext('cbh_chart_poll_cache'));
-  exception when lock_not_available then null;
-  end;
-  perform set_config('lock_timeout', prev, true);
-  r := public.chart_rev();
-  select x.data into d from public.chart_poll_cache x where x.id = 1 and x.rev = r;
-  if d is not null then return d; end if;
-  d := public.chart_poll_shared() || jsonb_build_object('rev', r);
-  insert into public.chart_poll_cache as x (id, rev, built_at, data) values (1, r, now(), d)
-  on conflict (id) do update set rev = excluded.rev, built_at = excluded.built_at, data = excluded.data where x.rev < excluded.rev;
-  return d;
+  if pg_try_advisory_xact_lock(hashtext('cbh_chart_poll_cache')) then
+    -- the builder: store it for everyone
+    r := public.chart_rev();
+    select x.data into d from public.chart_poll_cache x where x.id = 1 and x.rev >= r;
+    if d is not null then return d; end if;
+    d := public.chart_poll_shared() || jsonb_build_object('rev', r);
+    insert into public.chart_poll_cache as x (id, rev, built_at, data) values (1, r, now(), d)
+    on conflict (id) do update set rev = excluded.rev, built_at = excluded.built_at, data = excluded.data where x.rev < excluded.rev;
+    return d;
+  end if;
+  -- someone else is building it: look again every 50 ms (each look is a fresh snapshot), holding no lock
+  for k in 1..40 loop
+    perform pg_sleep(0.05);
+    select x.data into d from public.chart_poll_cache x where x.id = 1 and x.rev >= p_rev;
+    if d is not null then return d; end if;
+  end loop;
+  -- still nothing after 2 s: build our own and don't store it (storing could wait on the builder's row)
+  return public.chart_poll_shared() || jsonb_build_object('rev', public.chart_rev());
 end $$;
 
 revoke execute on function public.chart_poll_shared() from public, anon, authenticated;
