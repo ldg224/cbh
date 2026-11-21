@@ -306,7 +306,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     polling = false;
     if (pollAgain) { pollAgain = false; return poll(true); }
     if (onPage && S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
-    pollT = setTimeout(() => poll(), onPage && !document.hidden ? 3000 : 15000);
+    pollT = setTimeout(() => poll(), onPage && (!document.hidden || (S.myCall && S.myCall.state === 'called')) ? 3000 : 15000);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && app.isConnected) poll(); });
   document.addEventListener('focusout', () => { if (dirty && !drag && app.isConnected) { dirty = false; setTimeout(render, 0); } });
@@ -1221,18 +1221,30 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const favLink = () => document.querySelector('link[rel="icon"]');
   let favHref0 = null;
   const FAV_ALERT = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#D92D20"/><path d="M32 14v22" stroke="#fff" stroke-width="8" stroke-linecap="round"/><circle cx="32" cy="48" r="5" fill="#fff"/></svg>')}`;
+  const FAV0 = (favLink() || { getAttribute: () => null }).getAttribute('href');   // the page's own icon, taken once
+  let flashShown = null;
+  const setFav = (href) => { const f = favLink(); if (!f || !href || f.getAttribute('href') === href) return; const n = f.cloneNode(); n.setAttribute('href', href); f.replaceWith(n); };
   function flashStart() {
-    if (flashT) return; let on = false; flashTitle0 = document.title; const fl = favLink(); favHref0 = fl ? fl.getAttribute('href') : null;
+    if (flashT) return; let on = false; if (!/ – CBH Chart$/.test(document.title)) flashTitle0 = document.title;
     flashT = setInterval(() => {
       if (!pending.size) { flashStop(); return; }
       on = !on; const last = [...pending.values()].pop();
-      document.title = on ? `(${pending.size}) ${last.label} – CBH Chart` : flashTitle0;
-      const f = favLink(); if (f && favHref0) f.setAttribute('href', on ? FAV_ALERT : favHref0);
+      flashShown = `(${pending.size}) ${last.label} – CBH Chart`; document.title = on ? flashShown : flashTitle0;
+      setFav(on ? FAV_ALERT : FAV0);
     }, 900);
   }
-  function flashStop() { if (!flashT) return; clearInterval(flashT); flashT = null; if (flashTitle0 != null) document.title = flashTitle0; const f = favLink(); if (f && favHref0) f.setAttribute('href', favHref0); }
+  // Back to the page's own title and icon. Safe to call any time (also when nothing is flashing).
+  function flashStop() {
+    if (flashT) { clearInterval(flashT); flashT = null; }
+    if (flashTitle0 != null && (document.title === flashShown || / – CBH Chart$/.test(document.title))) document.title = flashTitle0;
+    setFav(FAV0);
+  }
+  // Nothing left unseen: stop flashing. Called from every path that empties the list.
+  const unflash = () => { if (!pending.size) flashStop(); };
   // Seen: everything pending stops (the Trauma call siren carries on until it's answered).
   const seen = () => { if (!looking()) return; pending.clear(); flashStop(); };
+  // A Trauma call answered or over: its alarm stops everywhere (siren, pending list, title and icon).
+  const tcSilence = () => { [...pending].forEach(([k, x]) => { if (x.kind === 'trauma') pending.delete(k); }); unflash(); };
   window.addEventListener('focus', seen); document.addEventListener('visibilitychange', seen);
   ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { pending.clear(); flashStop(); }, { capture: true }));
   function alertMe(kind, label, body, pid) {
@@ -1556,6 +1568,9 @@ ${nextBarHtml(p)}
       want: tcNums(c.want), open: tcNums(c.open), by: c.started_by ? person(c.started_by.discord_id, c.started_by.name) : null, at: c.started_at,
       members: (c.members || []).map((m) => ({ sid: person(m.discord_id, m.name, m.department), dept: m.department || m.kind, named: !!m.named, state: m.state, at: m.arrived_at || m.answered_at || m.called_at })) }));
     S.myCall = me.call || null; S.canJoin = (me.can_join || []).map(Number);
+    // an answer just given wins over a poll that left before the server had it (for up to 20 s)
+    const ans = S.tcAnswered; if (ans && Date.now() - ans.at < 20000 && S.myCall && S.myCall.id === ans.id && S.myCall.state === 'called') S.myCall = ans.state === 'declined' ? null : { ...S.myCall, state: ans.state };
+    if (!(S.myCall && S.myCall.state === 'called')) tcSilence();
     S.staffCall = {}; (s.staff || []).forEach((x) => { S.staffCall[sidOf(x.discord_id)] = x.call || null; });
     S.bedAway = {}; (s.beds || []).forEach((b) => { if (b.away) S.bedAway[BED_LABEL[b.id] || b.id] = true; });
     if (S.tcd && S.tcd.id && !S.calls.some((c) => c.id === S.tcd.id)) S.tcd = null;   // ended elsewhere
@@ -1684,8 +1699,8 @@ ${nextBarHtml(p)}
       case 'send': case 'save': tcSave(); return;
       case 'finish': call('chart_call_end', { p_call: id, p_cancel: false }, 'Trauma call finished. Everyone is free again.').then((r) => { if (r) { S.tcd = null; render(); } }); return;
       case 'cancel': call('chart_call_end', { p_call: id, p_cancel: true }, 'Trauma call cancelled.').then((r) => { if (r) { S.tcd = null; render(); } }); return;
-      case 'going': case 'join': tcStop(); call('chart_call_answer', { p_call: id, p_coming: true }, ds.tc === 'join' ? 'You joined the trauma call. Press Arrived when you get there.' : 'On your way. Press Arrived when you get there.'); return;
-      case 'cant': tcStop(); call('chart_call_answer', { p_call: id, p_coming: false }, 'Thanks. The supervisor has been told.'); return;
+      case 'going': case 'join': tcStop(id, 'on_way'); render(); call('chart_call_answer', { p_call: id, p_coming: true }, ds.tc === 'join' ? 'You joined the trauma call. Press Arrived when you get there.' : 'On your way. Press Arrived when you get there.'); return;
+      case 'cant': tcStop(id, 'declined'); render(); call('chart_call_answer', { p_call: id, p_coming: false }, 'Thanks. The supervisor has been told.'); return;
       case 'arrived': call('chart_call_arrived', { p_call: id, p_person: null }, 'Marked as arrived.'); return;
       case 'later': S.tcLater.add(id); break;
       default: return;
@@ -1717,7 +1732,7 @@ ${nextBarHtml(p)}
   let tcRing = 0;
   function tcTick() { if (!(S.myCall && S.myCall.state === 'called')) { tcRing = 0; return; }
     if (Date.now() - tcRing >= 3000) { tcRing = Date.now(); arm(); tone('trauma'); try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]); } catch { /* fine */ } } }
-  const tcStop = () => { tcRing = Date.now() + 60000; };
+  const tcStop = (id, state) => { tcRing = Date.now() + 60000; if (id) { S.tcAnswered = { id: +id, state, at: Date.now() }; if (S.myCall && S.myCall.id === +id) S.myCall = state === 'declined' ? null : { ...S.myCall, state }; } tcSilence(); };
   const W_TC = { ready: false, called: new Set(), join: new Set() };
   function tcWatch() {
     const called = new Set(S.myCall && S.myCall.state === 'called' ? [S.myCall.id] : []), join = new Set(tcJoinable().map((c) => c.id));
