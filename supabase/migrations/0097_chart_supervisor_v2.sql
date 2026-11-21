@@ -1,6 +1,6 @@
 -- 0097 (Bravo, 21 Nov 2026): Chart Supervisor v2 (Plans/CareBeyond/chart/supervisor-v2.md; every rule is the user's answer).
 -- Additive.
---   One bed per person      self-pick, the Open-room offer, chart_give_room and chart_assign into an unheld bed take one
+--   One bed per person      (picking a bed switches to it; the old one goes only when the new one is taken) self-pick, the Open-room offer, chart_give_room and chart_assign into an unheld bed take one
 --                           bed; the Supervisor gives a second with chart_person_place(.., 'add') (cap 2)
 --   Partner requests        chart_take_beds on a free bed in a room someone else holds asks that person
 --                           (chart_partner_asks); chart_partner_answer; no answer in 60 s = no (tick)
@@ -222,6 +222,12 @@ begin
     if p_hand_to = p_person then perform public.chart_err('bad_input', 'Pick someone else to hand them to.'); end if;
     if t.role is distinct from 'room' then perform public.chart_err('wrong_role', format('%s isn''t working Room.', public.chart_pname(p_hand_to))); end if;
     if public.chart_on_break(p_hand_to) then perform public.chart_err('wrong_role', format('%s is on a break.', public.chart_pname(p_hand_to))); end if;
+    -- the patient limit (2) counts what they'd be handed
+    if public.chart_load(p_hand_to) + (select count(*) from public.chart_cases c where c.status = 'open' and c.owner_id = p_person
+           and c.state in ('assigned', 'called', 'in_care') and (c.bed_id is null or c.bed_id = any (p_beds))) > 2 then
+      perform public.chart_err('limit', format('%s already has %s: hand the patients to someone else.', public.chart_pname(p_hand_to),
+        case public.chart_load(p_hand_to) when 1 then 'a patient' else public.chart_load(p_hand_to) || ' patients' end));
+    end if;
     -- beds with patients go to them with the patients; the others are just let go
     select coalesce(array_agg(distinct c.bed_id), '{}') into hb from public.chart_cases c where c.status = 'open' and c.state is not null and c.bed_id = any (p_beds);
     update public.chart_cases set owner_id = p_hand_to,
@@ -263,7 +269,9 @@ begin
   if b.owner_id = p_person then return public.chart_done(jsonb_build_object('unchanged', true)); end if;
   if b.owner_id is not null then perform public.chart_err('not_bed_owner', format('%s is %s''s bed: take them off it first.', b.label, public.chart_pname(b.owner_id))); end if;
   select * into r from public.chart_rooms x where x.id = b.room_id;
-  if r.department is distinct from s.department and not coalesce(p_override_dept, false) then
+  -- a room with no department, 'Any', or the children's rooms (Paediatric) never clashes, so it's never re-departmented
+  if r.department is not null and r.department not in ('Any', 'Paediatric') and r.department is distinct from s.department
+     and not coalesce(p_override_dept, false) then
     perform public.chart_err('dept_clash', format('Room %s is %s and %s is working %s.', r.id, coalesce(r.department, 'no department'),
                              public.chart_pname(p_person), coalesce(s.department, 'no department')));
   end if;
@@ -279,7 +287,7 @@ begin
   update public.chart_staff set offer_room_id = null where discord_id = p_person and offer_room_id is not null;
   oid := public.chart_order(p_person, p_mode, b.id);
   perform public.chart_act('person_place', null, jsonb_build_object('bed', b.id, 'mode', p_mode, 'hand_to', p_hand_to, 'anyway', p_move_anyway,
-          'override_dept', p_override_dept and r.department is distinct from s.department), b.room_id, null, p_person);
+          'override_dept', coalesce(p_override_dept, false) and r.department not in ('Any', 'Paediatric') and r.department is distinct from s.department), b.room_id, null, p_person);
   return public.chart_done(jsonb_build_object('order_id', oid));
 end $$;
 
@@ -449,6 +457,11 @@ begin
   n := replace(d, $a$if total > 2 then return 'limit|You can hold 2 beds at most.'; end if;$a$,
                   $b$if total > 1 then return 'limit|You can hold one bed: the Supervisor can give you a second.'; end if;$b$);
   if n = d then raise exception '0097: chart_own_ok limit text not found'; end if;
+  d := n;
+  -- a single pick is a switch: the bed they hold now doesn't count against it (it's let go only when the take happens)
+  n := replace(d, $a$  select array_agg(b.id) into keep from public.chart_beds b where b.owner_id = p_person and not b.id = any (p_beds);$a$,
+                  $b$  select array_agg(b.id) into keep from public.chart_beds b where b.owner_id = p_person and not b.id = any (p_beds) and cardinality(p_beds) > 1;$b$);
+  if n = d then raise exception '0097: chart_own_ok keep text not found'; end if;
   execute n;
 
   -- one bed: placing a patient in an unheld bed for someone who holds one already
@@ -463,7 +476,8 @@ begin
   -- one bed: the Open-room offer takes one bed
   d := pg_get_functiondef('public.chart_offer_take()'::regprocedure);
   n := replace(d, $a$select array_agg(b.id order by b.id) into bs from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null;$a$,
-                  $b$select array_agg(y.id) into bs from (select b.id from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null order by b.id limit 1) y;$b$);
+                  $b$if exists (select 1 from public.chart_beds x where x.owner_id = me.discord_id) then perform public.chart_err('limit', 'You already hold a bed.'); end if;
+  select array_agg(y.id) into bs from (select b.id from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null order by b.id limit 1) y;$b$);
   if n = d then raise exception '0097: chart_offer_take text not found'; end if;
   execute n;
 

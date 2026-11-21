@@ -12,6 +12,10 @@ begin
   n := replace(d, $b$if total > 1 then return 'limit|You can hold one bed: the Supervisor can give you a second.'; end if;$b$,
                   $a$if total > 2 then return 'limit|You can hold 2 beds at most.'; end if;$a$);
   if n = d then raise exception '0097 down: chart_own_ok limit text not found'; end if;
+  d := n;
+  n := replace(d, $b$  select array_agg(b.id) into keep from public.chart_beds b where b.owner_id = p_person and not b.id = any (p_beds) and cardinality(p_beds) > 1;$b$,
+                  $a$  select array_agg(b.id) into keep from public.chart_beds b where b.owner_id = p_person and not b.id = any (p_beds);$a$);
+  if n = d then raise exception '0097 down: chart_own_ok keep text not found'; end if;
   execute n;
 
   -- one bed: placing a patient in an unheld bed for someone who holds one already
@@ -25,7 +29,8 @@ begin
 
   -- one bed: the Open-room offer takes one bed
   d := pg_get_functiondef('public.chart_offer_take()'::regprocedure);
-  n := replace(d, $b$select array_agg(y.id) into bs from (select b.id from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null order by b.id limit 1) y;$b$,
+  n := replace(d, $b$if exists (select 1 from public.chart_beds x where x.owner_id = me.discord_id) then perform public.chart_err('limit', 'You already hold a bed.'); end if;
+  select array_agg(y.id) into bs from (select b.id from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null order by b.id limit 1) y;$b$,
                   $a$select array_agg(b.id order by b.id) into bs from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null;$a$);
   if n = d then raise exception '0097 down: chart_offer_take text not found'; end if;
   execute n;
