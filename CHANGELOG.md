@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.49.0 (2026-11-21)
+
+**Added:**
+- **Delete a chart made by mistake.** "Delete chart" at the end of a patient's record (and under the phone patient sheet). Supervisors and executives can delete any open chart, with a short reason; whoever made it can delete their own while it's fresh (no notes, care or requests yet, under 10 minutes). It comes off the Chart for everyone, frees the bed and clears requests, orders, visits and any trauma call; a record stays in the log. **Undo** for 10 seconds puts it back.
+
+Database change: yes (0104: delete and undo a chart; additive).
+
 ## 0.48.1 (2026-11-21)
 
 **Changed:**
