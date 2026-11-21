@@ -1317,7 +1317,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const sec = { board: boardSection, desk: deskSection, myroom: myRoomSection, reqs: reqSection, road: roadSection, plan: planSection }[S.sec]();
     return `${codeBar()}${sndStrip()}<div class="chart-wrap">${rail()}
       <div class="ch-main">${tcBars()}${chTop()}<section class="pane-sec" aria-label="${allowed.find((x) => x[0] === S.sec)[1]}">${sec}</section></div>
-      </div>${tcSheet()}${tcAlert()}`;
+      </div>${tcSheet()}${svAlert()}${tcAlert()}`;
   }
   // The Chart's own menu is a slim rail while you work (owner, 19 Nov 2026): the role as a coloured chip; it opens on
   // hover or click to show the role card, Change role and the demo. The views are tabs across the top instead.
@@ -1557,7 +1557,7 @@ ${nextBarHtml(p)}
       oncall: [['reqs', 'Requests', openReqCount()], ['board', 'Ward Board', 0]], road: [['road', 'Incoming', 0], ['board', 'Ward Board', 0]],
       super: [['plan', 'Floor Plan', upNext().length], ['desk', 'Front Desk', deskCount()], ['reqs', 'Requests', openReqCount()], ['board', 'Board', 0]] };
     const nav = NAV[S.role];
-    return `${codeBar()}${sndStrip()}<div class="phone-ui"><div class="ph-screen">${tcBars()}${S.role === 'room' && t.s === 'myroom' ? mine().filter((x) => x.phase === 'assigned').map((x) => `<div class="gotit sticky" style="--u:${U(x.urgency).colour}"><span class="lab">${x.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(x.name)}${x.age ? ', ' + x.age : ''}</b>${upill(x.urgency)}<span>${esc(x.room)} · ${esc(x.symptoms.join(', ') || 'no symptoms given')}</span><button type="button" class="btn big" data-gotit="${x.id}">Accept patient <small class="gi-t">${countdown(x.assignedAt, 60)}</small></button></div>`).join('') : ''}${S.ph.length === 1 && !(S.role === 'room' && mine().some((x) => x.phase === 'assigned')) ? `<div class="ph-role">${roleCard('small', '<button type="button" class="rc-change" data-a="changerole">Change role</button>')}</div>` : ''}${h || phHead('Not here any more', 'That patient has moved on.')}</div><nav class="ph-nav" style="grid-template-columns:repeat(${nav.length}, 1fr)">${nav.map(([k, l, n]) => `<button type="button" class="${S.ph[0].s === k ? 'on' : ''}" data-proot="${k}">${l}${n ? ` <i>${n}</i>` : ''}</button>`).join('')}</nav></div>${S.fp ? fpView() : ''}${tcSheet()}${tcAlert()}`;
+    return `${codeBar()}${sndStrip()}<div class="phone-ui"><div class="ph-screen">${tcBars()}${S.role === 'room' && t.s === 'myroom' ? mine().filter((x) => x.phase === 'assigned').map((x) => `<div class="gotit sticky" style="--u:${U(x.urgency).colour}"><span class="lab">${x.inRoom ? 'Waiting in your room' : 'New patient'}</span><b>${esc(x.name)}${x.age ? ', ' + x.age : ''}</b>${upill(x.urgency)}<span>${esc(x.room)} · ${esc(x.symptoms.join(', ') || 'no symptoms given')}</span><button type="button" class="btn big" data-gotit="${x.id}">Accept patient <small class="gi-t">${countdown(x.assignedAt, 60)}</small></button></div>`).join('') : ''}${S.ph.length === 1 && !(S.role === 'room' && mine().some((x) => x.phase === 'assigned')) ? `<div class="ph-role">${roleCard('small', '<button type="button" class="rc-change" data-a="changerole">Change role</button>')}</div>` : ''}${h || phHead('Not here any more', 'That patient has moved on.')}</div><nav class="ph-nav" style="grid-template-columns:repeat(${nav.length}, 1fr)">${nav.map(([k, l, n]) => `<button type="button" class="${S.ph[0].s === k ? 'on' : ''}" data-proot="${k}">${l}${n ? ` <i>${n}</i>` : ''}</button>`).join('')}</nav></div>${S.fp ? fpView() : ''}${tcSheet()}${svAlert()}${tcAlert()}`;
   }
 
   // ---------- TRAUMA CALL (Alpha, 21 Nov 2026; Bravo's 0096 chart_call_*) ----------
@@ -1901,19 +1901,31 @@ ${nextBarHtml(p)}
   // ----- the orange card (orders and visits), the partner request and your own wait: the top of every Chart screen -----
   function svCards() {
     let h = '';
-    const o = S.order;
-    if (o) { const bed = o.bed ? BED_LABEL[o.bed] || o.bed_label || o.bed : null, d = bed && D.roomOfBed(bed), by = esc(o.by_name || 'The supervisor');
-      const where = `${esc(roomWord(String(o.room)))}${bed && d && d.beds > 1 ? ` (${esc(unitOf(String(o.room)))} ${esc(bed.slice(-1))})` : ''}`;
-      const t = o.kind === 'off' ? `${by} took you off ${esc(bed || roomWord(String(o.room)))}` : o.kind === 'handover' ? `${by} handed you ${where} and its patients` : o.kind === 'add' ? `${by} gave you ${where} as well` : `${by} sent you to ${where}`;
-      h += `<div class="ord-card" role="alert"><span class="oc-ic" aria-hidden="true">${o.kind === 'off' ? '←' : '→'}</span><div><b>${t}</b><small>${o.at ? ago(o.at) + ' ago' : 'Just now'}</small></div><button type="button" class="btn" data-sv="orderok">OK</button></div>`; }
     const vi = S.myVisit;
-    if (vi) { const step = { sent: ['on_way', 'OK'], on_way: ['arrived', 'Arrived'], arrived: ['done', 'Done'] }[vi.state] || ['done', 'Done'];
+    if (vi && vi.state !== 'sent') { const step = { on_way: ['arrived', 'Arrived'], arrived: ['done', 'Done'] }[vi.state] || ['done', 'Done'];
       h += `<div class="ord-card" role="${vi.state === 'sent' ? 'alert' : 'status'}"><span class="oc-ic" aria-hidden="true">${vi.state === 'arrived' ? '✓' : '→'}</span><div><b>${vi.state === 'arrived' ? 'Visiting' : 'Visit'} ${esc(roomWord(String(vi.room)))}: ${esc(vWords(vi))}</b><small>${vi.state === 'sent' ? 'From the supervisor. You don’t take a bed.' : vi.state === 'on_way' ? 'On your way' : 'Press Done when you’ve finished'}</small></div><button type="button" class="btn" data-sv="vstep" data-svstep="${step[0]}">${step[1]}</button></div>`; }
     const pa = S.partner;
     if (pa) h += `<div class="ord-card" role="alert"><span class="oc-ic" aria-hidden="true">+</span><div><b>${esc((pa.from || {}).name || 'Someone')} wants to partner with you in ${esc(roomWord(String(pa.room)))}</b><small>${pa.expires_at ? `<span class="cd" data-cd="${new Date(pa.expires_at).toISOString()}" data-secs="0">${mmss(new Date(pa.expires_at) - Date.now() - SKEW)}</span> to answer` : 'Answer within a minute'}</small></div><button type="button" class="btn" data-sv="partner" data-svyes="1">Accept</button><button type="button" class="btn ghost" data-sv="partner" data-svyes="0">No</button></div>`;
     const pw = S.partnerWait;
     if (pw) h += `<div class="ord-card wait" role="status"><span class="oc-ic" aria-hidden="true">…</span><div><b>Waiting for ${esc((pw.holder || {}).name || 'them')} to share ${esc(roomWord(String(pw.room)))}</b><small>${pw.expires_at ? `<span class="cd" data-cd="${new Date(pw.expires_at).toISOString()}" data-secs="0">${mmss(new Date(pw.expires_at) - Date.now() - SKEW)}</span> left` : 'Up to a minute'} · if they say no, pick another bed</small></div></div>`;
     return h;
+  }
+  // A supervisor order or a new visit: an orange full-screen takeover (the Trauma call's is red) until OK. The softer
+  // "order" alarm repeats until the tab is seen.
+  function svAlert() {
+    const o = S.order, vi = S.myVisit && S.myVisit.state === 'sent' ? S.myVisit : null; if (!o && !vi) return '';
+    let lab, big, line, btn;
+    if (o) { const bed = o.bed ? BED_LABEL[o.bed] || o.bed_label || o.bed : null, room = o.room ? String(o.room) : bed ? roomIdOf(bed) : null, d = bed && D.roomOfBed(bed), by = o.by_name || 'The supervisor';
+      const where = `${room ? roomWord(room) : 'Your beds'}${bed && d && d.beds > 1 ? ` · ${unitOf(room)} ${bed.slice(-1)}` : ''}`;
+      lab = 'Supervisor order'; btn = '<button type="button" class="btn big tc-yes" data-sv="orderok">OK</button>';
+      if (o.kind === 'off') { big = `Off ${where}`; line = `${by} took you off ${bed && d && d.beds > 1 ? 'this bed' : room ? 'this room' : 'your beds'}.`; }
+      else if (o.kind === 'handover') { big = where; line = `${by} handed you this bed and its patients.`; }
+      else if (o.kind === 'add') { big = where; line = `${by} gave you this bed as well.`; }
+      else { big = where; line = `${by} moved you here.`; } }
+    else { lab = 'Visit'; big = roomWord(String(vi.room)); line = vWords(vi); btn = '<button type="button" class="btn big tc-yes" data-sv="vstep" data-svstep="on_way">OK</button>'; }
+    return `<div class="tc-alert ord-alert" role="alertdialog" aria-modal="true" aria-labelledby="ord-al-h" aria-describedby="ord-al-d"><div class="tc-al-in">
+      <span class="tc-al-l">${esc(lab)}</span><h2 id="ord-al-h">${esc(big)}</h2><p class="tc-al-what" id="ord-al-d">${esc(line)}</p>
+      ${vi && !o ? `<p class="tc-al-sub">From ${esc(vi.by || 'the supervisor')}. You don't take a bed.</p>` : ''}<div class="tc-al-btns one">${btn}</div></div></div>`;
   }
   const W_SV = { ready: false, keys: new Set() };
   function svWatch() {
@@ -1974,7 +1986,8 @@ ${nextBarHtml(p)}
     if (!isPhone()) { sizeBoard(); placePop(); placeSvPop(); }
     if (S.fp) { sizeFp(); requestAnimationFrame(sizeFp); }
     if ($('.fpz')) fpzApply();
-    const fw1 = $('.plan .floor-wrap'); if (fw1 && fwS) { fw1.scrollLeft = fwS[0]; fw1.scrollTop = fwS[1]; }
+    const fw1 = $('.plan .floor-wrap'); if (window.CBHZoom && fw1) { try { window.CBHZoom.attach(fw1); } catch (e) { console.error('CBH Chart zoom:', e); } }   // Delta's zoom (chart-zoom.js), before the scroll comes back
+    if (fw1 && fwS) { fw1.scrollLeft = fwS[0]; fw1.scrollTop = fwS[1]; }
     tcFocus();
     try { const el = keep ? document.getElementById(keep) : focusSig && app.querySelector(focusSig); if (el) { el.focus({ preventScroll: true }); if (keep && el.setSelectionRange && el.type === 'text') el.setSelectionRange(el.value.length, el.value.length); } } catch { /* fine */ }
   }
