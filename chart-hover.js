@@ -12,6 +12,7 @@
   const REASONS = { help: 'Help with patient', complaint: 'Patient complaint', check_staff: 'Check on staff',
     second_opinion: 'Second opinion', medical: 'Medical request' };
   const KIND = { exec: 'Executive', director: 'Director', admin: 'Administration' };
+  const ROLE_ON = ['room', 'oncall', 'road', 'reception', 'super'];   // a Chart role (not off or on a break)
   const DEPT = { Nursing: '#FF3D7E', Paramedicine: '#FF5533', Administration: '#5C72FF', 'Community Engagement': '#FFAA00',
     Medical: '#3A82D0', Surgical: '#16A34A' };
   const h = (s) => (typeof esc === 'function' ? esc(s == null ? '' : String(s))
@@ -39,7 +40,7 @@
   function faceHtml(p, px, cls = '') {
     const n = nameOf(p.name), url = pic(p.avatar_url, px * 2);
     return `<span class="hv-face${cls}" style="--dc:${colourOf(p)};width:${px}px;height:${px}px" aria-hidden="true">`
-      + `<i>${h((n.trim()[0] || '?').toUpperCase())}</i>${url ? `<img src="${h(url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
+      + `<i>${h((n.trim().replace(/^dr\.?\s+/i, '')[0] || '?').toUpperCase())}</i>${url ? `<img src="${h(url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
   }
 
   // ---------- the card ----------
@@ -127,14 +128,33 @@
     let xs = []; try { xs = (api().admins && api().admins()) || []; } catch { xs = []; }
     if (!xs.length) return '';
     const drag = !!(api().canDrag && api().canDrag());
-    const chip = (p) => { const sid = h(p.sid || p.discord_id), v = p.visit;
-      const line = v ? visitLine(v) : p.role_name && p.role !== 'off' ? (p.status || p.role_name) : KIND[p.admin_kind] || 'On shift';
-      return `<button type="button" class="adm-chip${drag ? ' can-drag' : ''}${v ? (v.state === 'arrived' ? ' vis-here' : ' vis-going') : ''}" data-sid="${sid}" data-hsid="${sid}"`
-        + `${drag ? ` data-dragsid="${sid}"` : ''} aria-label="${h(nameOf(p.name))}, ${h(line)}">${faceHtml(p, 28)}`
+    // Admins also working a Chart role stay listed, greyed, with what they're on (the user, 21 Nov 2026: "Both,
+    // marked"). They're moved from their role group, so they aren't draggable here; role-less admins go first.
+    const onRole = (p) => ROLE_ON.includes(p.role);
+    const roleLine = (p) => { const beds = (p.beds || []).map((b) => String(b).replace(' Bed ', ' ')).join(', ');
+      return p.role === 'room' ? `On Room · ${beds || p.department || 'no bed yet'}` : p.role === 'oncall' ? `On call · ${p.department || 'Doctor'}`
+        : p.role === 'road' ? 'On Road' : p.role === 'reception' ? 'On Reception' : 'Supervising'; };
+    xs = [...xs.filter((p) => !onRole(p)), ...xs.filter(onRole)];
+    const chip = (p) => { const sid = h(p.sid || p.discord_id), v = p.visit, busy = onRole(p), dr = drag && !busy;
+      const line = v ? visitLine(v) : busy ? roleLine(p) : KIND[p.admin_kind] || 'On shift';
+      return `<button type="button" class="adm-chip${dr ? ' can-drag' : ''}${busy ? ' on-role' : ''}${v ? (v.state === 'arrived' ? ' vis-here' : ' vis-going') : ''}" data-sid="${sid}" data-hsid="${sid}"`
+        + `${dr ? ` data-dragsid="${sid}"` : ''} aria-label="${h(nameOf(p.name))}, ${h(line)}">${faceHtml(p, 28)}`
         + `<span><b>${h(nameOf(p.name))}</b><small>${h(line)}</small></span></button>`; };
-    return `<section class="adm-box" aria-label="Admins on shift"><span class="ps-l">Admins on shift <i>${xs.length}</i></span>`
-      + `<div class="adm-list">${xs.map(chip).join('')}</div></section>`;
+    // Folded by default to one slim row (the user, 21 Nov 2026: "a little toggleable box to expand it if we need").
+    const stack = xs.slice(0, 3).map((p) => faceHtml(p, 20)).join('') + (xs.length > 3 ? `<span class="adm-more">+${xs.length - 3}</span>` : '');
+    return `<section class="adm-box${admOpen ? ' open' : ''}" aria-label="Admins on shift">`
+      + `<button type="button" class="adm-tg" aria-expanded="${admOpen}" aria-controls="adm-list">`
+      + `<span class="ps-l">Admins on shift <i>${xs.length}</i></span><span class="adm-stack" aria-hidden="true">${stack}</span><span class="adm-chev" aria-hidden="true"></span></button>`
+      + `<div class="adm-fold"><div class="adm-list" id="adm-list">${xs.map(chip).join('')}</div></div></section>`;
   }
+  // Open or closed is kept per device. The toggle is direct (no redraw); the next redraw draws the same state.
+  let admOpen = (() => { try { return localStorage.getItem('cbh-chart-admins-open') === '1'; } catch { return false; } })();
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest && e.target.closest('.adm-tg'); if (!t) return;
+    e.stopPropagation(); admOpen = !admOpen; try { localStorage.setItem('cbh-chart-admins-open', admOpen ? '1' : '0'); } catch { /* fine */ }
+    document.querySelectorAll('.chx .adm-box').forEach((b) => { b.classList.toggle('open', admOpen);
+      b.querySelector('.adm-tg').setAttribute('aria-expanded', String(admOpen)); });
+  });
 
   window.CBHHover = { reasonLabel, visitLine, hide, REASONS };
   window.CBHChart = Object.assign(window.CBHChart || {}, { renderAdmins });

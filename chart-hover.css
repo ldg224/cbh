@@ -26,8 +26,34 @@
 .hv-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* ---- Admins on shift: a box of its own under the People groups ---- */
-.chx .adm-box { display: grid; gap: 6px; margin-top: 6px; padding: 8px; border-radius: 12px; background: #F6F9FD; border: 1px solid var(--line); }
+.chx .adm-box { display: grid; margin-top: 6px; padding: 2px; border-radius: 12px; background: #F6F9FD; border: 1px solid var(--line); }
 .chx .adm-box .ps-l { margin: 0; }
+/* the slim header row: label + count, a few stacked faces (folded only), chevron */
+.chx .adm-tg { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 4px 8px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.chx .adm-tg:hover { background: #EEF4FB; }
+.chx .adm-tg:focus-visible { outline: 2px solid var(--blue); outline-offset: 0; }
+.chx .adm-tg .ps-l { flex: none; }
+.chx .adm-stack { display: flex; align-items: center; margin-left: auto; min-width: 0; overflow: hidden; transition: opacity .15s; }
+.chx .adm-stack .hv-face { margin-left: -6px; box-shadow: 0 0 0 2px #F6F9FD; }
+.chx .adm-stack .hv-face:first-child { margin-left: 0; }
+.chx .adm-stack .hv-face { width: 18px !important; height: 18px !important; }
+.chx .adm-stack .hv-face i { font-size: 9px; }
+.chx .adm-more { margin-left: 4px; font-size: 10.5px; font-weight: 700; color: var(--muted); }
+/* only as many faces as fit cleanly: 3 and "+N" in a wide list, 2 in the usual one, none when tighter */
+.chx .adm-box { container-type: inline-size; }
+@container (max-width: 300px) { .chx .adm-stack .hv-face:nth-child(n+3), .chx .adm-stack .adm-more { display: none; } }
+@container (max-width: 205px) { .chx .adm-stack { display: none; } .chx .adm-chev { margin-left: auto; } }
+.chx .adm-chev { flex: none; width: 8px; height: 8px; margin: 0 2px 3px 0; border-right: 2px solid #8191aa; border-bottom: 2px solid #8191aa; transform: rotate(45deg); transition: transform .2s ease; }
+.chx .adm-box.open .adm-chev { transform: rotate(-135deg); margin-bottom: -3px; }
+.chx .adm-box.open .adm-stack { opacity: 0; visibility: hidden; }
+.chx .adm-box:not(.open) .adm-stack + .adm-chev { margin-left: 0; }
+/* the fold: grid rows 0fr -> 1fr animates to the list's real height */
+.chx .adm-fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
+.chx .adm-box.open .adm-fold { grid-template-rows: 1fr; }
+.chx .adm-fold > .adm-list { min-height: 0; overflow: hidden; padding: 0 6px; visibility: hidden; transition: visibility 0s linear .22s; }   /* folded: out of reach of clicks and Tab */
+.chx .adm-box.open .adm-fold > .adm-list { visibility: visible; transition: none; }
+.chx .adm-box.open .adm-fold > .adm-list { padding: 2px 6px 6px; }
+@media (prefers-reduced-motion: reduce) { .chx .adm-fold, .chx .adm-chev, .chx .adm-stack { transition: none; } }
 .chx .adm-box .ps-l i { font-style: normal; font-weight: 700; color: var(--muted); margin-left: 4px; }
 .chx .adm-list { display: grid; gap: 4px; }
 .chx .adm-chip { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 5px 8px 5px 6px; border: 1px solid transparent; border-radius: 9px;
@@ -43,9 +69,18 @@
 .chx .adm-chip.vis-here .hv-face { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #22a35a; }
 .chx .adm-chip.vis-going small { color: #8a4b00; } .chx .adm-chip.vis-here small { color: #166534; }
 .chx .adm-chip.drag-src { opacity: .45; }
+/* also working a Chart role: listed, but quiet (moved from their role group) */
+.chx .adm-chip.on-role { background: none; }
+.chx .adm-chip.on-role .hv-face { filter: grayscale(.85); opacity: .6; }
+.chx .adm-chip.on-role b { color: var(--muted); font-weight: 600; }
+.chx .adm-chip.on-role small { color: #8191aa; }
 /* the narrow People rail (collapsed list or a record docked beside the plan): faces only, like the role groups */
 .chx .plan-grid.shut .adm-box, .chx .docked-view .plan-grid .adm-box { padding: 6px 0; background: none; border: 0; justify-items: center; }
 .chx .plan-grid.shut .adm-box .ps-l, .chx .docked-view .plan-grid .adm-box .ps-l { display: none; }
+/* the rail has no fold: its faces always show */
+.chx .plan-grid.shut .adm-tg, .chx .docked-view .plan-grid .adm-tg { display: none; }
+.chx .plan-grid.shut .adm-fold, .chx .docked-view .plan-grid .adm-fold { grid-template-rows: 1fr; }
+.chx .plan-grid.shut .adm-fold > .adm-list, .chx .docked-view .plan-grid .adm-fold > .adm-list { padding: 0; justify-items: center; visibility: visible; }
 .chx .plan-grid.shut .adm-chip, .chx .docked-view .plan-grid .adm-chip { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: 50%; background: none; }
 .chx .plan-grid.shut .adm-chip > span:not(.hv-face), .chx .docked-view .plan-grid .adm-chip > span:not(.hv-face) { display: none; }
 .chx .plan-grid.shut .adm-chip .hv-face, .chx .docked-view .plan-grid .adm-chip .hv-face { width: 40px !important; height: 40px !important; }
