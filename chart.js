@@ -553,9 +553,10 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const want = (S.pickSel || []).slice(), have = bedsOf('me');
     if (!want.length) { toast('Pick at least one bed.'); return; }
     if (want.length === have.length && want.every((b) => have.includes(b))) { S.pick = false; S.pickSel = null; render(); return; }
-    try { if (have.length) await rpc('chart_leave_beds', {}); const r = await rpc('chart_take_beds', { p_beds: want.map(bedId) }) || {}; S.pick = false; S.pickSel = null;
+    // one bed is a switch on the server (0097): the old bed is let go only when the new one is taken, and kept while a partner ask waits
+    try { const r = await rpc('chart_take_beds', { p_beds: want.map(bedId) }) || {}; S.pick = false; S.pickSel = null;
       const mate = D.BEDS.find((b) => b !== want[0] && roomIdOf(b) === roomIdOf(want[0]) && ownerOf(b) && ownerOf(b) !== 'me');
-      toast(r.partner_pending ? `Asked ${esc(mate ? first(ownerOf(mate)) : 'them')} to share ${esc(roomWord(roomIdOf(want[0])))}. You get ${esc(want[0])} if they say yes.` : `Your bed: ${esc(want.join(', '))}. Press Ready when you're free.`); }
+      toast(r.partner_pending ? `Asked ${esc(mate ? first(ownerOf(mate)) : 'them')} to share ${esc(roomWord(roomIdOf(want[0])))}. You get ${esc(want[0])} if they say yes${have.length ? `; you keep ${esc(have.join(', '))} until then` : ''}.` : `Your bed: ${esc(want.join(', '))}. Press Ready when you're free.`); }
     catch (e) { toast(esc(e.message)); }
     await poll(true);
   }
@@ -1787,7 +1788,7 @@ ${nextBarHtml(p)}
 
   // ----- the asks (small popovers by the room; a sheet on phones) -----
   const bedFree = (b) => !ownerOf(b) && !bedUsable(b);
-  const roomDeptClash = (sid, room) => { const d = S.roomDept[room]; return d && d !== 'Any' && staffDept(sid) && d !== staffDept(sid) && !(S.roomCfg[room] || {}).kids ? d : ''; };
+  const roomDeptClash = (sid, room) => { const d = S.roomDept[room]; return d && d !== 'Any' && d !== 'Paediatric' && staffDept(sid) && d !== staffDept(sid) && !(S.roomCfg[room] || {}).kids ? d : ''; };
   const ptsLeft = (sid, keep) => mine(sid).filter((p) => p.room && p.room !== keep && bedsOf(sid).includes(p.room));
   // A face dropped on a bed or a room (desktop drag, or the face sheet's Move to / Send to visit).
   function svDrop(sid, room, bed) {
