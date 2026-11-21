@@ -3,6 +3,22 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.47.0 (2026-11-21)
+
+**Added:**
+- **Supervisor v2 on the CBH Chart.** Supervisors can drag a nurse's face onto a bed to move them. If they already have a bed it asks "Move here / Give this bed too", if patients are still in their old bed it asks first (with "Hand them to…"), and a department clash asks each time. Double-click a face to take someone off a bed.
+- **Supervisor orders are a full orange screen** for the person moved ("SUPERVISOR ORDER · Room 104 · Nina Ross moved you here"), with a softer alarm that repeats until seen and stays until OK.
+- **Visits:** drag an admin, executive, Director or On call doctor onto a room and pick a reason (Help with patient, Patient complaint, Check on staff, Second opinion, Medical request, or your own message). They get the orange screen, then Arrived → Done, and show on the room with one short tag.
+- **Partner requests:** picking a bed in a room someone else holds asks them to share (Accept / No, 60 seconds). You keep your old bed until they say yes.
+- **Admins on shift** box under People (Administration, executives and Directors on shift), draggable onto rooms for visits.
+- **Hover cards:** hover (or long-press on phones) on anyone for their Discord picture, name, rank, role and bed, what they're doing, any visit and time on shift. Faces use Discord pictures where available.
+- **Zoom on the computer floor plan:** − / slider / + / Fit controls, Ctrl+wheel or trackpad pinch to zoom, drag the empty floor to pan. Each device remembers its zoom.
+
+**Changed:**
+- **One bed per person.** Nurses pick one bed; the Supervisor can give a second. An Open-room offer gives one bed.
+
+Database change: yes (0097: one-bed rule, moves, orders, visits, partner requests, admins in the Chart; additive).
+
 ## 0.46.0 (2026-11-21)
 
 **Added:**
