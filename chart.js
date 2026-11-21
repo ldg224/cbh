@@ -782,7 +782,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const n = pickSelNow().length;
     return `<div class="pane-pad rooms-pad"><div class="pane-head"><div><h2>${n ? 'Your room' : 'Pick your room'}</h2><p class="muted">Tap beds to take them, up to ${D.LIMIT}: a 2-bed room, any two 1-bed rooms, or one bed in a shared room. ${esc(S.rdept || '')} rooms are outlined. You stay in it for the shift.</p></div>${n ? `<button type="button" class="btn" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>
       ${isPhone() ? fpzBlock('pick') + '<h4 class="ph-sub ph-or">Or pick from the list</h4>' : ''}${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${esc(roomName(r.id))} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), 'pick')).join('')}</div>`).join('')
-        : `<div class="floor-wrap"><div class="floor pick" aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
+        : `<div class="floor-wrap${erOn() ? ' er' : ''}"><div class="floor pick${erOn() ? ' er' : ''}" aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
   }
 
   // ---------- PATIENT CARE: ON CALL (and the Supervisor's Requests) ----------
@@ -926,21 +926,28 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // lockers and reception at its front). Everything that isn't a room, the hub or a wall is corridor. Openings:
   // Radiology (top, between 105 and 106), the ER Waiting Room (top, between 108 and the blank wall above 109),
   // Emergency (right, between 109 and 110), and two doors to the main waiting area (bottom: beside 101 and beside 110).
-  // FW is the plan's width: 415 for the main ward, 720 with the Emergency wing on its right ('main_er'; setMap()).
-  const FH = 300, MW = 415, ERW = 720; let FW = MW;
+  // The plan is FW x FH units. The main ward is MW x MH (415 x 300). With the Emergency wing on ('main_er'; setMap()) the
+  // plan is 748 x 345: the wing sits on the right and reaches OY (45) units above the main ward's top edge (the user,
+  // 21 Nov 2026: the Trauma Bays sit a little ahead of the ER Waiting Room opening). Coordinates stay main-ward units;
+  // box() adds OY, so the wing's top rows have negative y.
+  const MW = 415, MH = 300, ERW = 748, ERY = 45; let FW = MW, FH = MH, OY = 0;
   const erOn = () => S.map === 'main_er';
-  function setMap() { FW = erOn() ? ERW : MW; FZW = erOn() ? FZW_ER : FZW_MAIN; }
+  function setMap() { const e = erOn(); FW = e ? ERW : MW; OY = e ? ERY : 0; FH = MH + OY; FZW = e ? FZW_ER : FZW_MAIN; FZH = e ? FZH_ER : FZH_MAIN; }
   // The Emergency wing, from the user's map (chart/maps/emergency.png), drawn right of the main ward. Its corridor runs
   // left to right from the main ward's "To Emergency" doorway (right wall, 165-190), between the top rows (Trauma Bays,
   // then ER 1-3) and the bottom row (ER 6-4, then storage). Minor Triage (tall) and Emergency Dispatch (narrow, below it)
   // close the far end; the ambulance bay is outside along the top, reached up the gap between ER 3 and Minor Triage.
+  // Sizes (the user): ER 1-6 a little smaller than a 1-bed main-ward room (102-104 are 75 wide), the Trauma Bays bigger,
+  // Minor Triage tall enough for its 3 chairs.
   const ER = {
-    rooms: { TB2: [415, 28, 104, 74], TB1: [519, 28, 94, 74], ER1: [425, 102, 66, 53], ER2: [491, 102, 62, 53], ER3: [553, 102, 60, 53],
-      ER6: [425, 200, 62, 50], ER5: [487, 200, 62, 50], ER4: [549, 200, 68, 50], MT: [653, 28, 66, 107] },
-    store: [617, 200, 36, 50], dispatch: [653, 135, 28, 115],
-    amb: [415, 0, 305, 28], out: [[681, 135, 39, 165], [415, 250, 266, 50]], corr: [425, 155, 188, 45],
-    // wall lines: [x1, y1, x2, y2] (one of the two pairs equal); the ambulance entrance (613-653 along the top) is left open
-    walls: [[415, 28, 613, 28], [653, 28, 719, 28], [719, 28, 719, 135], [681, 135, 719, 135], [681, 135, 681, 250], [415, 250, 681, 250]],
+    rooms: { TB2: [415, -15, 108, 92], TB1: [523, -15, 100, 92], ER1: [425, 77, 66, 58], ER2: [491, 77, 66, 58], ER3: [557, 77, 66, 58],
+      ER6: [425, 200, 66, 58], ER5: [491, 200, 66, 58], ER4: [557, 200, 70, 58], MT: [663, -15, 82, 130] },
+    store: [627, 200, 36, 58], dispatch: [663, 115, 32, 143],
+    amb: [415, -45, 333, 30], corr: [425, 135, 198, 65],
+    // the ground outside the building: above the main ward, right of Dispatch, under the wing
+    out: [[0, -45, 415, 45], [695, 115, 53, 185], [415, 258, 280, 42], [745, -15, 3, 130]],
+    // wall lines: [x1, y1, x2, y2] (one of the two pairs equal); the ambulance entrance (623-663 along the top) is left open
+    walls: [[415, -15, 623, -15], [663, -15, 745, -15], [745, -15, 745, 115], [695, 115, 745, 115], [695, 115, 695, 258], [415, 258, 695, 258], [415, -15, 415, 0]],
   };
   const FLOOR = {
     rooms: { 105: [0, 0, 140, 75], 106: [160, 0, 55, 75], 107: [215, 0, 55, 75], 108: [270, 0, 55, 75],
@@ -954,7 +961,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       bottom: [[130, 150, 'To the main waiting area'], [325, 345, 'To the main waiting area']] },
   };
   const pc = (v, of) => `${(v / of) * 100}%`;
-  const box = ([x, y, w, h]) => `left:${pc(x, FW)};top:${pc(y, FH)};width:${pc(w, FW)};height:${pc(h, FH)}`;
+  const box = ([x, y, w, h]) => `left:${pc(x, FW)};top:${pc(y + OY, FH)};width:${pc(w, FW)};height:${pc(h, FH)}`;
   const bedIcons = (p) => `${p.stage === 'queue' ? bell : ''}${flags(p, true)}`;
   const inits = (n) => String(n || '').replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const bedCell = (bed, short, mode, shared, narrow) => { const p = roomsInUse()[bed], o = ownerOf(bed);
@@ -985,22 +992,22 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // The main ward's outline (with its doorways) always spans x 0-415; with the wing on, its right wall sits inside the plan.
   function wallSegs() {
     const seg = (side, from, to) => side === 'top' || side === 'bottom'
-      ? `<i class="fp-wall fw-h" style="left:${pc(from, FW)};width:${pc(to - from, FW)};${side === 'top' ? 'top:0' : 'bottom:0'}"></i>`
-      : `<i class="fp-wall fw-v" style="top:${pc(from, FH)};height:${pc(to - from, FH)};${side === 'left' ? 'left:0' : erOn() ? `left:calc(${pc(MW, FW)} - 3px)` : 'right:0'}"></i>`;
+      ? `<i class="fp-wall fw-h" style="left:${pc(from, FW)};width:${pc(to - from, FW)};${side === 'top' ? `top:${pc(OY, FH)}` : 'bottom:0'}"></i>`
+      : `<i class="fp-wall fw-v" style="top:${pc(from + OY, FH)};height:${pc(to - from, FH)};${side === 'left' ? 'left:0' : erOn() ? `left:calc(${pc(MW, FW)} - 3px)` : 'right:0'}"></i>`;
     const run = (side, len) => { const gaps = (FLOOR.gaps[side] || []).slice().sort((a, b) => a[0] - b[0]); let at = 0, out = '';
       gaps.forEach(([g0, g1]) => { out += seg(side, at, g0); at = g1; }); return out + seg(side, at, len); };
     const er = erOn() ? ER.walls.map(([x1, y1, x2, y2]) => (y1 === y2
-      ? `<i class="fp-wall fw-h" style="left:${pc(x1, FW)};width:calc(${pc(x2 - x1, FW)} + 3px);top:calc(${pc(y1, FH)} - 1.5px)"></i>`
-      : `<i class="fp-wall fw-v" style="top:${pc(y1, FH)};height:${pc(y2 - y1, FH)};left:calc(${pc(x1, FW)} - 1.5px)"></i>`)).join('') : '';
-    return run('top', MW) + run('bottom', MW) + run('left', FH) + run('right', FH) + er;
+      ? `<i class="fp-wall fw-h" style="left:${pc(x1, FW)};width:calc(${pc(x2 - x1, FW)} + 3px);top:calc(${pc(y1 + OY, FH)} - 1.5px)"></i>`
+      : `<i class="fp-wall fw-v" style="top:${pc(y1 + OY, FH)};height:${pc(y2 - y1, FH)};left:calc(${pc(x1, FW)} - 1.5px)"></i>`)).join('') : '';
+    return run('top', MW) + run('bottom', MW) + run('left', MH) + run('right', MH) + er;
   }
   function exitLabels() {
     const lab = (side, a, b2, text) => { const mid = (a + b2) / 2;
-      return side === 'right' ? (erOn() ? '' : `<span class="fp-exit fx-right" style="top:${pc(mid, FH)}">→ ${esc(text)}</span>`)   // with the wing on, the doorway leads into it
-        : `<span class="fp-exit fx-${side}" style="left:${pc(mid, FW)}">${side === 'top' ? '↑' : '↓'} ${esc(text)}</span>`; };
+      return side === 'right' ? (erOn() ? '' : `<span class="fp-exit fx-right" style="top:${pc(mid + OY, FH)}">→ ${esc(text)}</span>`)   // with the wing on, the doorway leads into it
+        : `<span class="fp-exit fx-${side}" style="left:${pc(mid, FW)}${side === 'top' && OY ? `;top:calc(${pc(OY, FH)} - 20px)` : ''}">${side === 'top' ? '↑' : '↓'} ${esc(text)}</span>`; };   // with the wing on, the top labels sit in the ground above the ward
     return Object.entries(FLOOR.gaps).flatMap(([side, list]) => list.map(([a, b2, t]) => lab(side, a, b2, t))).join('');
   }
-  const hubSvg = () => `<svg class="fp-hub" viewBox="0 0 ${FW} ${FH}" preserveAspectRatio="none" aria-hidden="true"><polygon points="${FLOOR.hub.map((x) => x.join(',')).join(' ')}"/></svg>
+  const hubSvg = () => `<svg class="fp-hub" viewBox="0 ${-OY} ${FW} ${FH}" preserveAspectRatio="none" aria-hidden="true"><polygon points="${FLOOR.hub.map((x) => x.join(',')).join(' ')}"/></svg>
     <div class="fp-hub-label" style="${box([95, 115, 230, 80])}"><b>Central Hub</b><small>Nurses' & doctors' station · break room · lockers</small></div>
     <div class="fp-hub-label front" style="${box([150, 235, 140, 55])}"><b>Reception</b><small>Front desk, facing the main waiting area</small></div>`;
   // Moving patients: drag a patient (or someone from Up next) onto a bed. The checks, a swap offer and the log live in
@@ -1333,9 +1340,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // The map sits upright on the Floor Plan tab (and Pick your room): pinch or +/- to zoom, drag to move around, tap a bed
   // as usual. It's drawn at a fixed size (FZW x FZH, room for the exit labels) and scaled with a transform kept in S.fpz,
   // so the polls' redraws keep the view. A drag or pinch never counts as a tap.
-  // With the Emergency wing the drawing is wider (floor 1318 x 549 instead of 760 x 549, and no "To Emergency" label on
-  // the right): chart-phone.css .fpz.er matches these sizes.
-  const FZW_MAIN = 880, FZW_ER = 1348, FZH = 613, FZMAX = 1.5; let FZW = FZW_MAIN;
+  // With the Emergency wing the drawing is bigger at the same scale (floor 1369 x 631 instead of 760 x 549, and no
+  // "To Emergency" label on the right): chart-phone.css .fpz.er matches these sizes.
+  const FZW_MAIN = 880, FZH_MAIN = 613, FZW_ER = 1399, FZH_ER = 695, FZMAX = 1.5; let FZW = FZW_MAIN, FZH = FZH_MAIN;
   const fpzBlock = (mode) => `<div class="fpz${erOn() ? ' er' : ''}" data-mode="${mode}"><div class="fpz-in"><div class="floor${mode === 'pick' ? ' pick' : ''}${erOn() ? ' er' : ''}" aria-label="${mode === 'pick' ? 'Pick your room' : erOn() ? 'Main ward and Emergency floor plan' : 'Main ward floor plan'}">${floorInner(mode)}</div></div>
     <div class="fpz-ctl"><button type="button" data-fpz="in" aria-label="Zoom in">+</button><button type="button" data-fpz="out" aria-label="Zoom out">−</button><button type="button" data-fpz="fit" class="fit-b" aria-label="Show the whole ward">Fit</button></div>
     <button type="button" class="fpz-full" data-a="${mode === 'pick' ? 'fppick' : 'fpopen'}">Full screen</button></div>`;
