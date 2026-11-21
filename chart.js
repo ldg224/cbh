@@ -310,9 +310,22 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     polling = false;
     if (pollAgain) { pollAgain = false; return poll(true); }
     if (onPage && S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
-    pollT = setTimeout(() => poll(), onPage && (!document.hidden || (S.myCall && S.myCall.state === 'called')) ? 3000 : !onPage && S.onShift ? 6000 : 15000);   // on shift elsewhere on the site: orders reach you within seconds
+    pollT = setTimeout(() => poll(), pollDelay());
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && app.isConnected) poll(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });   // back on the tab: straight away (any CBH page)
+  // Poll pacing (Charlie, for 50 people at once): 3 s while you're using the site, about 9 s after 2 minutes with no
+  // input, about 25 s while the tab is hidden (or off the Chart and not on shift), always ±20% so 50 tabs don't all
+  // refetch at the same moment after a change. A Trauma siren that's going keeps it at 3 s anywhere. The same pacing
+  // drives the site-wide background poll (orders and alarms off the Chart page).
+  let lastInput = Date.now();
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => document.addEventListener(ev, () => {
+    const wasIdle = Date.now() - lastInput > 120000; lastInput = Date.now(); if (wasIdle && !polling) poll();   // back from idle: catch up now
+  }, { capture: true, passive: true }));
+  function pollDelay() {
+    const siren = S.myCall && S.myCall.state === 'called', onChart = app.isConnected && location.hash.startsWith('#chart');
+    const base = siren ? 3000 : document.hidden || (!onChart && !S.onShift) ? 25000 : Date.now() - lastInput > 120000 ? 9000 : 3000;
+    return Math.round(base * (0.8 + Math.random() * 0.4));
+  }
   document.addEventListener('focusout', () => { if (dirty && !drag && app.isConnected) { dirty = false; setTimeout(render, 0); } });
 
   // ---------- snapshot → view model ----------
@@ -2565,7 +2578,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
   app.addEventListener('click', (e) => { const u = e.target.closest('[data-undocall]'); if (!u) return; const p = byId(+u.dataset.undocall); if (p) { $('#chx-toast').hidden = true; act.calledOut(p, true); } });
   if (window.ResizeObserver) new ResizeObserver(() => { if (!isPhone()) sizeBoard(); }).observe(app);
   // Test hook (prototype only): the room-rule self-test in the console uses these.
-  if (LOCAL) window.__cbh = { S, D, A, SND, pending, looking, svDrop, svOff, render, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
+  if (LOCAL) window.__cbh = { pollDelay, idleFor: (ms) => { lastInput = Date.now() - ms; }, S, D, A, SND, pending, looking, svDrop, svOff, render, byId, act, bedUsable, alertMe, tone, dropOnBed, dropOnPerson, giveRoom, giveTo, pickBed, planMove, doMove, canHave, bestFor, bedsOf, roomsInUse, myRoomSection, roomPanel };
   // ---------- hooks for the entry points outside chart.js (sidebar badge, shift card, phone tab) ----------
   window.CBHChart = Object.assign(window.CBHChart || {}, {
     summary: () => (!SNAP ? null : {
