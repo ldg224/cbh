@@ -3,6 +3,14 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.48.1 (2026-11-21)
+
+**Changed:**
+- **The CBH Chart handles 50 people at once.** Chart refreshes no longer wait in line behind each other, and what's the same for everyone is worked out once per change instead of once per person. In a 50-account test: typical refresh 0.1 s (was 12 s with 31 accounts), no timeouts (was 16).
+- The Chart refreshes every 3 s while you're using it, about every 9 s after 2 minutes idle, and about every 25 s in a hidden tab (straight away when you come back). A ringing Trauma siren always keeps it at 3 s.
+
+Database change: yes (0103: faster Chart refresh; already applied; additive).
+
 ## 0.48.0 (2026-11-21)
 
 **Added:**
