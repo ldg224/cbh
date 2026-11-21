@@ -256,3 +256,52 @@ body.desk .h-sec { margin-top: 26px; }
 @media (min-width: 861px) { body.desk.in-dept main { background: linear-gradient(90deg, #f6f9fd 0 227px, #e1e8f2 227px 228px, #fff 228px); } }
 /* 0.41.1: the top bar's search label stays on one line on smaller laptops */
 .dt-search .dt-st { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* ---------- folded outer menu (Bravo, 21 Nov 2026) ----------
+   The user: "make the outer menu like collapse down nicely like the inner menu does". Computers only: the Collapse
+   button at the foot of the left menu folds it to an icon rail (68px) the way the Chart's own rail works: the logo
+   mark and the icons stay, counts sit on the icons, section names become thin lines, and hovering (or tabbing into)
+   the rail opens it over the page with the Chart rail's width ease (.18s), shadow and label fade (.12s). The window
+   widens to fill the space. Remembered per device (desk.js). Phones keep the drawer. */
+.ds-foot { display: none; }
+/* --desk-now: how wide the left menu is right now (232px, or 68px folded; 0 on phones), for anything placed against it */
+:root { --desk-now: var(--desk-w); }
+@media (max-width: 860px) { :root { --desk-now: 0px; } }
+@media (min-width: 861px) {
+  :root { --desk-mini: 68px; }
+  body.desk.desk-mini { --desk-now: var(--desk-mini); }
+  .desk-side { overflow: hidden; transition: width .18s ease, box-shadow .18s ease; }
+  .ds-foot { display: block; flex: none; padding: 6px 12px 12px; }
+  .ds-fold { width: 100%; border: 0; background: none; font: inherit; font-weight: 600; font-size: 13px; color: var(--frame-faint); cursor: pointer; text-align: left; }
+  .ds-fold:hover { color: var(--frame-ink); }
+  .ds-fold:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .ds-fold .ds-i { background: transparent; }
+  .ds-fold .ds-i::after { background: currentColor; transition: transform .18s ease; }
+  .ds-link .ds-lab, .ds-link .ds-tag { transition: opacity .12s ease; }
+  .ds-link { position: relative; }
+
+  /* folded: the rail, and the window and logo moving over */
+  body.desk.desk-mini { padding-left: var(--desk-mini); }
+  body.desk.desk-mini .desk-side { width: var(--desk-mini); }
+  body.desk.desk-mini .desk-top .ds-brand { width: calc(var(--desk-mini) - 30px); overflow: hidden; }
+  .desk-top .ds-wm { transition: opacity .12s ease; }
+  body.desk.desk-mini .desk-top .ds-wm { opacity: 0; }
+  body.desk.desk-folding { transition: padding-left .18s ease; }
+  body.desk.desk-folding .desk-top .ds-brand { transition: width .18s ease; }
+  body.desk.desk-mini .ds-fold .ds-i::after { transform: scaleX(-1); }
+
+  /* hover or keyboard focus opens the folded rail over the page (not straight after folding it with the mouse) */
+  body.desk.desk-mini:not(.desk-nopeek) .desk-side:hover, body.desk.desk-mini .desk-side:has(:focus-visible) {
+    width: var(--desk-w); box-shadow: 10px 0 30px rgba(11, 30, 74, .14); }
+
+  /* closed rail: labels hidden, counts on the icons, section names as lines */
+  :is(body.desk.desk-mini .desk-side:not(:hover):not(:has(:focus-visible)), body.desk.desk-mini.desk-nopeek .desk-side:not(:has(:focus-visible))) :is(.ds-lab, .ds-tag) { opacity: 0; }
+  :is(body.desk.desk-mini .desk-side:not(:hover):not(:has(:focus-visible)), body.desk.desk-mini.desk-nopeek .desk-side:not(:has(:focus-visible))) .ds-n {
+    position: absolute; top: 2px; left: 26px; margin: 0; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; box-shadow: 0 0 0 2px var(--frame); }
+  :is(body.desk.desk-mini .desk-side:not(:hover):not(:has(:focus-visible)), body.desk.desk-mini.desk-nopeek .desk-side:not(:has(:focus-visible))) .ds-cat {
+    font-size: 0; padding: 0; height: 1px; margin: 10px 12px; background: #cfdbeb; }
+}
+@media (min-width: 861px) and (prefers-reduced-motion: reduce) {
+  .desk-side, .ds-link .ds-lab, .ds-link .ds-tag, .desk-top .ds-wm, .ds-fold .ds-i::after,
+  body.desk.desk-folding, body.desk.desk-folding .desk-top .ds-brand { transition: none; }
+}
