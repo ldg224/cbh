@@ -1771,7 +1771,8 @@ ${nextBarHtml(p)}
     S.sInfo = {};
     (s.staff || []).forEach((x) => { const sid = sidOf(x.discord_id); S.sInfo[sid] = { avatar: x.avatar_url || '', rank: x.rank || '', admin: !!x.admin, since: x.shift_started_at || null }; });
     // admins, execs and Directors on shift (some have no Chart role, so they're only here): they can be sent to visit
-    S.adminIds = (s.admins || []).map((x) => { const sid = person(x.discord_id, x.name, x.shift_department), o = S.sInfo[sid] || {};
+    // someone on the Chart keeps their Chart department (staff[].department); only role-less admins take their shift's (Delta, 0.47.0)
+    S.adminIds = (s.admins || []).map((x) => { const sid = person(x.discord_id, x.name, S.sInfo[sidOf(x.discord_id)] ? null : x.shift_department), o = S.sInfo[sid] || {};
       S.sInfo[sid] = Object.assign(o, { avatar: x.avatar_url || o.avatar || '', rank: x.rank || o.rank || '', admin: true, adminKind: x.admin_kind || 'admin', since: x.shift_started_at || o.since || null });
       if (sid !== 'me' && !S.staffRole[sid]) S.staffRole[sid] = x.role ? ROLE_IN[x.role] || 'off' : 'off';
       return sid; });
