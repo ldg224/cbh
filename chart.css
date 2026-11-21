@@ -20,7 +20,6 @@ body.in-chart .win-sub { display: none; }
   --frame: #E9F1FB; --panel: #fff; --text: #0B1E4A; --muted: #55688C; --line: #DBE4F0; --raised: #EEF4FB; --soft: #F6F9FD;
   --teal: #2ED3C6; --teal-ink: #0D7D74; --teal-wash: #E5F9F7; --blue: #3A82D0; --blue-deep: #22579F;
   --ok: #16A34A; --warn: #B45309; --bad: #D92D20;
-  --top: 60px; --side: 232px;
   font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 .chx * { box-sizing: border-box; }
