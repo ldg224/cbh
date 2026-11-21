@@ -11,7 +11,7 @@
 --                           sent -> seen -> ok; chart_order_seen, chart_order_ok; me.order in the poll
 --   Visits                  chart_visit_send / chart_visit_step / chart_visit_remove (chart_visits): admins, execs,
 --                           Directors and On call people, sent -> on_way -> arrived -> done (or removed)
---   Poll                    admins on shift, visits, me.order/visit/partner_ask/partner_wait/rank/shift_started_at/admin,
+--   Poll                    me.offer.beds = the one bed the offer gives; admins on shift, visits, me.order/visit/partner_ask/partner_wait/rank/shift_started_at/admin,
 --                           staff[].rank/admin/shift_started_at/visit
 --   Tick                    partner asks expire, visits and orders of people who clocked out close (guarded block)
 -- No triggers. Live functions are patched by exact text replacement (asserted); the down file reverses them.
@@ -503,5 +503,10 @@ begin
   n := replace(d, $a$'calls', public.chart_calls_view());$a$,
                   $b$'calls', public.chart_calls_view(), 'visits', public.chart_visits_view(), 'admins', public.chart_admins_view());$b$);
   if n = d then raise exception '0097: chart_poll lists text not found'; end if;
+  d := n;
+  -- the offer card shows the one bed taking it gives (chart_offer_take above)
+  n := replace(d, $a$'beds', (select jsonb_agg(b.id order by b.id) from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null),$a$,
+                  $b$'beds', (select jsonb_agg(y.id) from (select b.id from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null order by b.id limit 1) y),$b$);
+  if n = d then raise exception '0097: chart_poll offer text not found'; end if;
   execute n;
 end $m$;

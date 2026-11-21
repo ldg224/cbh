@@ -66,6 +66,10 @@ begin
   n := replace(d, $b$'calls', public.chart_calls_view(), 'visits', public.chart_visits_view(), 'admins', public.chart_admins_view());$b$,
                   $a$'calls', public.chart_calls_view());$a$);
   if n = d then raise exception '0097 down: chart_poll lists text not found'; end if;
+  d := n;
+  n := replace(d, $b$'beds', (select jsonb_agg(y.id) from (select b.id from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null order by b.id limit 1) y),$b$,
+                  $a$'beds', (select jsonb_agg(b.id order by b.id) from public.chart_beds b where b.room_id = me.offer_room_id and b.available and b.owner_id is null),$a$);
+  if n = d then raise exception '0097 down: chart_poll offer text not found'; end if;
   execute n;
 end $m$;
 
