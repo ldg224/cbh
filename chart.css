@@ -1173,3 +1173,9 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 /* a patient left in a bed with nobody: "Needs a nurse" in orange (supervisor-v2 §7b) */
 .chx .bed.hb.needs { box-shadow: inset 0 0 0 2px var(--ord, #F0A530); }
 .chx .bed.hb.needs .bed-st { color: #7a4300; font-weight: 800; }
+
+/* the trauma bay takes patients (supervisor-v2 §8) */
+.chx .tc-room.drop-over { background: rgba(217, 45, 32, .16); box-shadow: inset 0 0 0 3px var(--tc); }
+.chx .fp-room.tc-on.drop-over { box-shadow: 0 0 0 4px var(--tc), 0 0 0 8px rgba(217, 45, 32, .25) !important; }
+.chx .tc-r-pt { font-size: 10.5px; font-weight: 800; color: var(--text); background: #fff; border-radius: 4px; padding: 1px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chx .tc-chip.bay-place { background: var(--tc); color: #fff; }
