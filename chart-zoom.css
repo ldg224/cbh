@@ -1,0 +1,28 @@
+/* CBH Chart: zoom and pan controls on the desktop floor plan (Delta, 21 Nov 2026). Pairs with chart-zoom.js. */
+.chx .zm-box { position: relative; min-width: 0; display: grid; }
+.chx .plan .floor-wrap.zm { overflow: auto; overscroll-behavior: contain; }
+.chx .plan .floor-wrap.zm > .floor { min-width: 0; max-width: none; flex: none; }
+.chx .floor-wrap.zm.can-pan .floor { cursor: grab; }
+.chx .floor-wrap.zm.panning, .chx .floor-wrap.zm.panning .floor, .chx .floor-wrap.zm.panning * { cursor: grabbing !important; user-select: none; }
+/* small and quiet in the bottom-right corner, fully there on hover or focus */
+.chx .zm-ctl { position: absolute; right: 12px; bottom: 12px; z-index: 6; display: flex; align-items: center; gap: 2px; padding: 3px;
+  border-radius: 10px; background: rgba(255, 255, 255, .94); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(11, 30, 74, .1);
+  opacity: .82; transition: opacity .15s; }
+.chx .zm-ctl:hover, .chx .zm-ctl:focus-within { opacity: 1; }
+.chx .zm-b { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--text); cursor: pointer; }
+.chx .zm-b:hover:not(:disabled) { background: var(--raised); }
+.chx .zm-b:disabled { opacity: .35; cursor: default; }
+.chx .zm-b:focus-visible { outline: 2px solid var(--blue); outline-offset: 0; }
+.chx .zm-i { width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+.chx .zm-i.in { --ic: url(assets/icons/plus-math.png); } .chx .zm-i.out { --ic: url(assets/icons/minus-math.png); }
+.chx .zm-i.fit { --ic: url(assets/icons/full-screen.png); width: 14px; height: 14px; }
+.chx .zm-b[data-zm="fit"].on { color: var(--teal-ink); }
+.chx .zm-sep { width: 1px; height: 16px; background: var(--line); margin: 0 3px; }
+/* the slider: a thin line with a small round handle */
+.chx .zm-r { -webkit-appearance: none; appearance: none; width: 84px; height: 26px; margin: 0 2px; background: none; cursor: pointer; }
+.chx .zm-r::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: #d3dce8; }
+.chx .zm-r::-moz-range-track { height: 3px; border-radius: 3px; background: #d3dce8; }
+.chx .zm-r::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; margin-top: -5px; border-radius: 50%; background: #fff; border: 2px solid var(--blue-deep); box-shadow: 0 1px 3px rgba(11, 30, 74, .2); }
+.chx .zm-r::-moz-range-thumb { width: 9px; height: 9px; border-radius: 50%; background: #fff; border: 2px solid var(--blue-deep); }
+.chx .zm-r:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-radius: 6px; }
+body.phone .chx .zm-ctl { display: none; }

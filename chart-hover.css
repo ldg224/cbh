@@ -1,0 +1,51 @@
+/* CBH Chart: hover cards and the Admins on shift box (Delta, 21 Nov 2026; Supervisor v2 §5–§6). Pairs with chart-hover.js. */
+/* The card lives on <body> (outside .chx), so it carries its own colours. */
+.hv-card { position: fixed; z-index: 90; width: 248px; padding: 12px 12px 10px; border-radius: 12px; background: #fff; color: #0B1E4A;
+  border: 1px solid #DBE4F0; box-shadow: inset 0 3px 0 var(--dc, #9aa9c4), 0 12px 32px rgba(11, 30, 74, .16), 0 2px 6px rgba(11, 30, 74, .08);
+  font-family: Montserrat, system-ui, sans-serif; font-size: 12.5px; line-height: 1.4; pointer-events: none; animation: hv-in .12s ease-out; }
+.hv-card[hidden] { display: none; }
+@keyframes hv-in { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .hv-card { animation: none; } }
+.hv-top { display: flex; align-items: center; gap: 10px; }
+.hv-id { display: grid; min-width: 0; }
+.hv-id b { font-size: 14px; font-weight: 800; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hv-id b em { font-style: normal; font-size: 10px; font-weight: 700; color: #0D7D74; background: #E5F9F7; border-radius: 999px; padding: 1px 6px; margin-left: 4px; vertical-align: 2px; }
+.hv-id small { font-size: 11.5px; font-weight: 600; color: #55688C; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hv-rows { display: grid; gap: 5px; margin: 10px 0 0; padding: 9px 0 0; border-top: 1px solid #EEF4FB; }
+.hv-rows > div { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.hv-rows dt { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #8191aa; }
+.hv-rows dd { margin: 0; font-weight: 600; }
+.hv-st { display: inline-block; font-size: 11.5px; font-weight: 700; background: #EEF4FB; border-radius: 999px; padding: 1px 8px; }
+.hv-vis dd { color: #8a4b00; } .hv-vis.here dd { color: #166534; }
+
+/* a face: picture over the initial (the initial shows if there's no picture or it fails to load) */
+.hv-face { position: relative; display: inline-grid; place-items: center; flex: none; border-radius: 50%; overflow: hidden;
+  background: var(--dc, #9aa9c4); color: #fff; font-weight: 800; box-shadow: 0 0 0 2px #fff, 0 0 0 3px color-mix(in srgb, var(--dc, #9aa9c4) 55%, #fff); }
+.hv-face i { font-style: normal; font-size: .9em; }
+.hv-top .hv-face i { font-size: 17px; }
+.hv-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* ---- Admins on shift: a box of its own under the People groups ---- */
+.chx .adm-box { display: grid; gap: 6px; margin-top: 6px; padding: 8px; border-radius: 12px; background: #F6F9FD; border: 1px solid var(--line); }
+.chx .adm-box .ps-l { margin: 0; }
+.chx .adm-box .ps-l i { font-style: normal; font-weight: 700; color: var(--muted); margin-left: 4px; }
+.chx .adm-list { display: grid; gap: 4px; }
+.chx .adm-chip { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 5px 8px 5px 6px; border: 1px solid transparent; border-radius: 9px;
+  background: #fff; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.chx .adm-chip.can-drag { cursor: grab; touch-action: none; }
+.chx .adm-chip:hover { border-color: var(--line); }
+.chx .adm-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.chx .adm-chip .hv-face i { font-size: 12px; }
+.chx .adm-chip > span { display: grid; min-width: 0; }
+.chx .adm-chip b { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chx .adm-chip small { font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chx .adm-chip.vis-going .hv-face { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #F0A530; }
+.chx .adm-chip.vis-here .hv-face { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #22a35a; }
+.chx .adm-chip.vis-going small { color: #8a4b00; } .chx .adm-chip.vis-here small { color: #166534; }
+.chx .adm-chip.drag-src { opacity: .45; }
+/* the narrow People rail (collapsed list or a record docked beside the plan): faces only, like the role groups */
+.chx .plan-grid.shut .adm-box, .chx .docked-view .plan-grid .adm-box { padding: 6px 0; background: none; border: 0; justify-items: center; }
+.chx .plan-grid.shut .adm-box .ps-l, .chx .docked-view .plan-grid .adm-box .ps-l { display: none; }
+.chx .plan-grid.shut .adm-chip, .chx .docked-view .plan-grid .adm-chip { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: 50%; background: none; }
+.chx .plan-grid.shut .adm-chip > span:not(.hv-face), .chx .docked-view .plan-grid .adm-chip > span:not(.hv-face) { display: none; }
+.chx .plan-grid.shut .adm-chip .hv-face, .chx .docked-view .plan-grid .adm-chip .hv-face { width: 40px !important; height: 40px !important; }
