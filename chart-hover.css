@@ -69,6 +69,11 @@
 .chx .adm-chip.vis-here .hv-face { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #22a35a; }
 .chx .adm-chip.vis-going small { color: #8a4b00; } .chx .adm-chip.vis-here small { color: #166534; }
 .chx .adm-chip.drag-src { opacity: .45; }
+/* also working a Chart role: listed, but quiet (moved from their role group) */
+.chx .adm-chip.on-role { background: none; }
+.chx .adm-chip.on-role .hv-face { filter: grayscale(.85); opacity: .6; }
+.chx .adm-chip.on-role b { color: var(--muted); font-weight: 600; }
+.chx .adm-chip.on-role small { color: #8191aa; }
 /* the narrow People rail (collapsed list or a record docked beside the plan): faces only, like the role groups */
 .chx .plan-grid.shut .adm-box, .chx .docked-view .plan-grid .adm-box { padding: 6px 0; background: none; border: 0; justify-items: center; }
 .chx .plan-grid.shut .adm-box .ps-l, .chx .docked-view .plan-grid .adm-box .ps-l { display: none; }
