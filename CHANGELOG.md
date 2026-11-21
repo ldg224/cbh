@@ -3,6 +3,19 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.45.0 (2026-11-21)
+
+**Added:**
+- **Trauma call on the CBH Chart.** Supervisors can call a whole team to a room at once: a "Trauma call" button on incoming ambulance patients, on a patient's record, in room settings and on the Trauma Bays. Set how many are needed from Medical, Surgical, Paramedicine and Nursing, tick names (or drag faces onto the bay), and any places left go out as an open call that free staff in that department can join.
+- People called get a red full-screen alert with a siren (and a buzz on phones) until they press **On my way** or **Can't come** (which reopens their place and tells the Supervisor), then a "Going to" bar with **Arrived**.
+- The called room turns red on the floor plan with "TRAUMA CALL · 4 of 7", a row per department and the faces coming, and the plan scrolls to it. Supervisors can add or remove people, change the numbers, finish or cancel.
+- Busy staff can be called: their own beds stay theirs and show "Away: at trauma". The call closes by itself when the session ends or the patient leaves, and people who clock out are taken off it.
+
+**Fixed:**
+- The floor plan with Emergency no longer jumps back to the left edge every time it refreshes.
+
+Database change: yes (0096: trauma calls; additive).
+
 ## 0.44.0 (2026-11-21)
 
 **Added:**
