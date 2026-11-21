@@ -13,7 +13,7 @@ body.in-chart .foot { display: none; }
 body.in-chart .win-sub { display: none; }
 .chx h1, .chx h2, .chx h3, .chx h4, .chx h5 { color: var(--text); text-transform: none; letter-spacing: -.01em; font-weight: 800; margin: 0; line-height: 1.25; }
 .chx h1 { font-size: clamp(24px, 3vw, 34px); } .chx h2 { font-size: 20px; } .chx h3 { font-size: 16px; } .chx h4 { font-size: 14px; } .chx h5 { font-size: 12px; }
-.chx { --top: var(--desk-top, 60px); --side: var(--desk-w, 232px); position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #fff; color: var(--text); }
+.chx { --top: var(--desk-top, 60px); --side: var(--desk-now, var(--desk-w, 232px)); position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #fff; color: var(--text); }
 @media (max-width: 860px) { body.desk.in-chart main { height: calc(100vh - var(--desk-top) - 8px); } .chx { --side: 0px; } }
 
 .chx {
