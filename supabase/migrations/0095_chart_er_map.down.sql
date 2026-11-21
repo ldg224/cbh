@@ -22,6 +22,20 @@ begin
   if n = d then raise exception '0095 down: chart_poll beds text not found'; end if;
   execute n;
 
+  -- (before the chart_map column goes: the guard reads it)
+  d := pg_get_functiondef('public.sessions_cohost_guard()'::regprocedure);
+  n := replace(d, $b$  if new.chart_map is distinct from old.chart_map and 'live' in (old.status, new.status) and not public.can_run_sessions() then
+    raise exception 'Change the floor plan on the Chart during a session';
+  end if;
+  if public.can_run_sessions() or old.host_discord_id = public.my_discord_id() then return new; end if;$b$,
+                  $a$  if public.can_run_sessions() or old.host_discord_id = public.my_discord_id() then return new; end if;$a$);
+  if n = d then raise exception '0095 down: sessions_cohost_guard live text not found'; end if;
+  d := n;
+  n := replace(d, $b$     or new.location_text is distinct from old.location_text or new.chart_map is distinct from old.chart_map then$b$,
+                  $a$     or new.location_text is distinct from old.location_text then$a$);
+  if n = d then raise exception '0095 down: sessions_cohost_guard columns text not found'; end if;
+  execute n;
+
   d := pg_get_functiondef('public.chart_own_ok(text,text[])'::regprocedure);
   n := replace(d, $b$count(*) filter (where r.beds >= 2)$b$, $a$count(*) filter (where r.beds = 2)$a$);
   if n = d then raise exception '0095 down: chart_own_ok text not found'; end if;

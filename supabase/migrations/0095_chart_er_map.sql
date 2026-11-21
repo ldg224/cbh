@@ -11,6 +11,9 @@
 --   chart_set_map(p_map)      supervisor (hosp.supervise) or the live session's host, during a live session
 --   chart_poll                ops.map, rooms[].wing, and only beds in active rooms
 --   chart_own_ok              a 3-chair room counts like a 2-bed room
+--   sessions_cohost_guard     co-hosts can't change chart_map; on a live session only a session runner can change it
+--                             directly, everyone else goes through chart_set_map (Alpha's review)
+--   chart_map_sync failures   logged to chart_log as 'map_error' with the error text
 -- Inactive rooms are already skipped by chart_auto_assign and chart_place_ok (so by own/take/give/move as well).
 -- chart_tick, chart_poll and chart_own_ok are patched from their live definitions (exact replacements, asserted), so
 -- nothing else in them changes. No trigger is added to any table. The down file reverses everything.
@@ -105,6 +108,12 @@ begin
     insert into public.chart_log (actor_name, action, detail) values ('Auto', 'map_set', jsonb_build_object('map', want, 'from', have));
     return true;
   exception when others then
+    -- leave a trace so a stuck map is visible (like chart_shift_hook); the log write is guarded too
+    begin
+      insert into public.chart_log (actor_name, action, detail) values ('Auto', 'map_error', jsonb_build_object('map', want, 'from', have, 'error', sqlerrm));
+    exception when others then
+      raise warning 'chart_map_sync: %', sqlerrm;
+    end;
     return false;
   end;
 end $$;
@@ -163,6 +172,21 @@ begin
   n := replace(d, $a$order by b.id) from public.chart_beds b), '[]'),$a$,
                   $b$order by b.id) from public.chart_beds b join public.chart_rooms r on r.id = b.room_id where r.active), '[]'),$b$);
   if n = d then raise exception '0095: chart_poll beds text not found'; end if;
+  execute n;
+
+  -- sessions: the floor plan of a live session changes only through chart_set_map (or a session runner); co-hosts
+  -- can't change it at all (Alpha's review)
+  d := pg_get_functiondef('public.sessions_cohost_guard()'::regprocedure);
+  n := replace(d, $a$  if public.can_run_sessions() or old.host_discord_id = public.my_discord_id() then return new; end if;$a$,
+                  $b$  if new.chart_map is distinct from old.chart_map and 'live' in (old.status, new.status) and not public.can_run_sessions() then
+    raise exception 'Change the floor plan on the Chart during a session';
+  end if;
+  if public.can_run_sessions() or old.host_discord_id = public.my_discord_id() then return new; end if;$b$);
+  if n = d then raise exception '0095: sessions_cohost_guard live text not found'; end if;
+  d := n;
+  n := replace(d, $a$     or new.location_text is distinct from old.location_text then$a$,
+                  $b$     or new.location_text is distinct from old.location_text or new.chart_map is distinct from old.chart_map then$b$);
+  if n = d then raise exception '0095: sessions_cohost_guard columns text not found'; end if;
   execute n;
 
   -- own_ok: a 3-chair room counts like a 2-bed room
