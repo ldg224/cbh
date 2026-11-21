@@ -1329,7 +1329,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   }
 
   function computer() {
-    const g = gate(); if (g) return g;
+    const g = gate(); if (g) return `${svOffRole()}${g}${svAlert()}`;
     if (S.open && (!byId(S.open) || !['care', 'queue'].includes(byId(S.open).stage))) S.open = null;
     const allowed = SECTIONS[S.role]; if (!allowed.some((x) => x[0] === S.sec)) S.sec = allowed[0][0];
     const sec = { board: boardSection, desk: deskSection, myroom: myRoomSection, reqs: reqSection, road: roadSection, plan: planSection }[S.sec]();
@@ -1508,7 +1508,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const back = () => { if (S.ph.length > 1) S.ph.pop(); };
   const phHead = (t, sub) => `<div class="ph-head">${S.ph.length > 1 ? '<button type="button" class="ph-back" data-pb aria-label="Back">‹</button>' : ''}<div><h2>${t}</h2>${sub ? `<p>${sub}</p>` : ''}</div></div>`;
   function phone() {
-    const gp = gate(); if (gp) return `<div class="phone-ui">${gp}</div>`;
+    const gp = gate(); if (gp) return `<div class="phone-ui">${svOffRole()}${gp}</div>${svAlert()}`;
     const t = top(), p = t.id && byId(t.id); let h = '';
     const plist = (list, attrs, extra) => `<ul class="ph-list">${list.map((x) => `<li style="--u:${x.urgency ? U(x.urgency).colour : '#9aa9c4'}"><button type="button" class="ph-row" ${attrs(x)}><span class="ubar"></span><span><b>${esc(x.name)}</b><small>${extra(x)}</small></span></button></li>`).join('')}</ul>`;
     if (S.fp && (S.fp === 'pick' ? !S.pick : S.role !== 'super')) S.fp = false;
@@ -2015,8 +2015,8 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     if (v.step === 'break') h = `<b>${who} is on a break</b><span>Send them anyway? Their break ends.</span><div class="row-btns"><button type="button" class="btn small" data-sv="force">Send anyway</button>${x}</div>`;
     else if (v.step === 'trauma') h = `<b>${who} is at the trauma call</b><span>Pull them off it?</span><div class="row-btns"><button type="button" class="btn small warn" data-sv="pull">Pull them off</button>${x}</div>`;
     else if (v.step === 'team') h = `<b>Not ${who}'s team</b><span>${esc(v.teamMsg || 'The patient needs another team.')}</span><div class="row-btns"><button type="button" class="btn small" data-sv="team">Give anyway</button>${x}</div>`;
-    else if (v.step === 'held') { const other = D.BEDS.find((y) => roomIdOf(y) === v.room && y !== v.bed && !ownerOf(y) && !bedUsable(y)), hn = esc(first(v.holder));
-      h = `<b>${esc(v.bed)} is ${hn}'s</b><span>No patient in it.</span>
+    else if (v.step === 'held') { const other = D.BEDS.find((y) => roomIdOf(y) === v.room && y !== v.bed && !ownerOf(y) && !bedUsable(y)), hn = esc(first(v.holder)), wp = roomsInUse()[v.bed];
+      h = `<b>${esc(v.bed)} is ${hn}'s</b><span>${wp && !wp.nurse ? `${esc(wp.name)} is waiting there with no nurse: giving the bed gives ${esc(wp.name)} too.` : 'No patient in it.'}</span>
         <div class="row-btns"><button type="button" class="btn small" data-sv="share"${other ? '' : ` disabled title="No other free bed in ${esc(roomWord(v.room))}"`}>Share the room with ${hn}</button><button type="button" class="btn small ghost" data-sv="swap">Give this bed to ${who}</button>${x}</div>
         ${other ? '' : `<small class="muted">No other free bed in ${esc(roomWord(v.room))} to share.</small>`}`; }
     else if (v.kind === 'place' && v.step === 'clash') { const d = roomDeptClash(v.sid, v.room) || S.roomDept[v.room];
@@ -2124,6 +2124,8 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
       <span class="tc-al-l">${esc(lab)}</span><h2 id="ord-al-h">${esc(big)}</h2><p class="tc-al-what" id="ord-al-d">${esc(line)}</p>
       ${vi && !o ? `<p class="tc-al-sub">From ${esc(vi.by || 'the supervisor')}. You don't take a bed.</p>` : ''}<div class="tc-al-btns one">${btn}</div></div></div>`;
   }
+  // admins with no Chart role still get their visit (the steps after OK), above "What are you doing this session?"
+  const svOffRole = () => (S.onShift && SNAP && (S.myVisit || S.order || S.partner) ? `<div class="tc-bars off-role">${svCards()}</div>` : '');
   const W_SV = { ready: false, keys: new Set() };
   const W_FOLLOW = {};   // what I'm on my way to help with -> the room it was in
   function followWatch() {
