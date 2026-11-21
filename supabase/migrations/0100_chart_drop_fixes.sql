@@ -6,7 +6,8 @@
 --   B5   a Supervisor placement withdraws the person's own pending partner ask, telling the bed holder (chart_person_place)
 --   A3   a patient handed over while being fetched ('called') goes back to 'assigned' with a fresh 60 s, so the new nurse's
 --        Got it works (chart_sv_leave); a patient already in care stays in care
---   B11  End session with close-all also frees held beds and ends orders, visits and partner asks (chart_session_end)
+--   B11  End session with close-all also frees held beds and ends orders, visits and partner asks (chart_session_end),
+--        only during a live session or when they're the last person on shift (Alpha's review)
 --   nits the holder is told when someone shares their room; the partner-ask expiry notice uses the room's display name
 -- C10/Q6: no change (closing a room someone holds a bed in stays refused, room_owned).
 do $m$
@@ -73,11 +74,14 @@ $b$);
   n := replace(d, $a$    update public.chart_requests set cancelled_at = now(), cancel_reason = 'Session ended' where done_at is null and cancelled_at is null;
 $a$,
                   $b$    update public.chart_requests set cancelled_at = now(), cancel_reason = 'Session ended' where done_at is null and cancelled_at is null;
-    update public.chart_beds set owner_id = null, owner_since = null where owner_id is not null;
-    update public.chart_orders set state = 'expired' where state in ('sent', 'seen');
-    update public.chart_visits set state = 'removed', ended_at = now(), ended_by = public.my_discord_id(), end_reason = 'Session ended'
-    where state in ('sent', 'on_way', 'arrived');
-    update public.chart_partner_asks set state = 'cancelled', answered_at = now() where state = 'pending';
+    -- freeing everyone's beds, orders, visits and asks: only for a real end (a live session, or the last person on shift)
+    if public.chart_session_live() is not null or (select count(*) from public.shifts s where s.status <> 'ended') <= 1 then
+      update public.chart_beds set owner_id = null, owner_since = null where owner_id is not null;
+      update public.chart_orders set state = 'expired' where state in ('sent', 'seen');
+      update public.chart_visits set state = 'removed', ended_at = now(), ended_by = public.my_discord_id(), end_reason = 'Session ended'
+      where state in ('sent', 'on_way', 'arrived');
+      update public.chart_partner_asks set state = 'cancelled', answered_at = now() where state = 'pending';
+    end if;
 $b$);
   if n = d then raise exception '0100: session_end text not found'; end if;
   execute n;

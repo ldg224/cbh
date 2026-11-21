@@ -4,11 +4,14 @@ declare d text; n text;
 begin
   d := pg_get_functiondef('public.chart_session_end(boolean)'::regprocedure);
   n := replace(d, $b$    update public.chart_requests set cancelled_at = now(), cancel_reason = 'Session ended' where done_at is null and cancelled_at is null;
-    update public.chart_beds set owner_id = null, owner_since = null where owner_id is not null;
-    update public.chart_orders set state = 'expired' where state in ('sent', 'seen');
-    update public.chart_visits set state = 'removed', ended_at = now(), ended_by = public.my_discord_id(), end_reason = 'Session ended'
-    where state in ('sent', 'on_way', 'arrived');
-    update public.chart_partner_asks set state = 'cancelled', answered_at = now() where state = 'pending';
+    -- freeing everyone's beds, orders, visits and asks: only for a real end (a live session, or the last person on shift)
+    if public.chart_session_live() is not null or (select count(*) from public.shifts s where s.status <> 'ended') <= 1 then
+      update public.chart_beds set owner_id = null, owner_since = null where owner_id is not null;
+      update public.chart_orders set state = 'expired' where state in ('sent', 'seen');
+      update public.chart_visits set state = 'removed', ended_at = now(), ended_by = public.my_discord_id(), end_reason = 'Session ended'
+      where state in ('sent', 'on_way', 'arrived');
+      update public.chart_partner_asks set state = 'cancelled', answered_at = now() where state = 'pending';
+    end if;
 $b$,
                   $a$    update public.chart_requests set cancelled_at = now(), cancel_reason = 'Session ended' where done_at is null and cancelled_at is null;
 $a$);
