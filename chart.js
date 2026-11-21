@@ -2601,7 +2601,9 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
   // shift), with the same alarm. Answering here does the same as on the Chart; OK and On my way open the Chart.
   let gHost = null;
   function globalAlert() {
-    const on = !app.isConnected && SNAP && S.onShift && (S.myCall && S.myCall.state === 'called' || S.order || (S.myVisit && S.myVisit.state === 'sent'));
+    // the Chart may still be in the page but hidden (you came from it): what counts is the page you're looking at
+    const chartShown = app.isConnected && location.hash.startsWith('#chart');
+    const on = !chartShown && SNAP && S.onShift && (S.myCall && S.myCall.state === 'called' || S.order || (S.myVisit && S.myVisit.state === 'sent'));
     if (!on) { if (gHost) { gHost.remove(); gHost = null; } return; }
     if (!gHost) { gHost = document.createElement('div'); gHost.className = 'chx cbh-global'; gHost.addEventListener('click', globalClick); document.body.append(gHost); }
     const html = tcAlert() || svAlert();
