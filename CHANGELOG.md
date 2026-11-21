@@ -3,6 +3,16 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.47.1 (2026-11-21)
+
+**Changed:**
+- **Admins on shift folds away.** It's a slim "Admins on shift" row with a few faces; click to open the full list. Each device remembers it. Admins who are already working a Chart role stay in the list, greyed, with their role ("On Room · 105 A"), and are moved from their role group instead.
+
+**Fixed:**
+- Anyone working on the Chart who is also an admin, executive or Director showed their shift's department (e.g. everyone "Nursing") instead of their Chart department, in People, hover cards and the department-clash question.
+
+Database change: no.
+
 ## 0.47.0 (2026-11-21)
 
 **Added:**
