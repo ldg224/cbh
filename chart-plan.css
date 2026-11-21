@@ -51,3 +51,35 @@
 /* The name never collapses: a bed's rows keep their content height (the name's overflow:hidden made its row's
    automatic minimum 0, so a full bed squashed it to ~7px; Delta, 20 Nov). Overflow is clipped at the bed's bottom. */
 .chx .bed { grid-auto-rows: max-content; }
+
+/* ---- The Emergency wing (Delta, 21 Nov 2026; the user's map chart/maps/emergency.png). On the 'main_er' map the plan
+   is 720 x 300 units instead of 415 x 300 (chart.js FW): the wing sits right of the main ward. ---- */
+/* Drawn at the main ward's own scale (the user, 21 Nov 2026: no shrinking on 'main_er'): --k px per unit, the scale the
+   'main' map gets in this window (its height, or its width beside the People list). The bigger plan scrolls sideways and up/down inside its box instead. */
+.chx .floor.er, .chx .plan .floor.er { --k: clamp(1.6px, min(calc((100vh - 280px) / 300), calc((100vw - 690px) / 415)), 2.2px); aspect-ratio: auto; width: calc(748 * var(--k)); height: calc(345 * var(--k)); min-width: 0; max-width: none; flex: none; }
+.chx .floor-wrap.er, .chx .plan .floor-wrap.er { overflow: auto; max-height: calc(100vh - 320px); justify-items: start; padding: 8px 14px 30px 6px; overscroll-behavior: contain; }
+/* outside the building (blank ground), the ambulance bay, the corridor's name, Dispatch and storage */
+.chx .fp-out { background: #fbfcfe; }
+.chx .fp-amb { display: grid; place-items: center; background: repeating-linear-gradient(90deg, #f1f4f8 0 26px, #e3e9f1 26px 28px); border-bottom: 2px dashed #b8c5d6; }
+.chx .fp-amb b { font-size: 10px; font-weight: 700; color: #55688c; background: #fbfcfe; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.chx .fp-corr { display: grid; place-items: center; pointer-events: none; }
+.chx .fp-corr b { font-size: 10px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: #9aa9c4; white-space: nowrap; }
+.chx .fp-disp b { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+.chx .fp-room.er-room .fp-rh > b { line-height: 1.1; }   /* long names (Trauma Bay 1) wrap rather than run under the pencil */
+.chx .fp-room.er-room[data-room^="ER"] .fp-rh > b { white-space: nowrap; }   /* ER 1-6: the name stays on one line */
+/* the plan's header: what's on the map, beds in use, and (supervisors) the map switch */
+.chx .plan-h { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; margin: 2px 0 8px; }
+.chx .plan-h > b { font-size: 14px; font-weight: 800; letter-spacing: -.01em; }
+.chx .map-sw { display: inline-flex; margin-left: auto; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 9px; background: #f3f6fa; }
+.chx .map-sw button { font: inherit; font-size: 12px; font-weight: 600; color: #55688c; background: none; border: 0; border-radius: 7px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.chx .map-sw button[aria-pressed="true"] { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(11, 30, 74, .12), inset 0 0 0 1px #d3dce8; }
+.chx .map-sw button:disabled { cursor: not-allowed; opacity: .55; }
+.chx .map-sw button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+/* On the wider ER map rooms draw narrower, and chart.css keeps a narrow room's header on one line with the department
+   tag cut to an ellipsis (a stray "S" beside Trauma Bay 1) and Paediatric clipped on 109/110 (Charlie, 21 Nov 2026).
+   Narrow ER rooms drop the department tag (the coloured strip on top shows it); 109/110 drop it too (the Paediatric
+   tag says it) and their header wraps, so Paediatric sits whole on its own line. */
+.chx .floor.er .fp-room.er-room:not(.wide) .rd-tag, .chx .floor.er .fp-room.ped:not(.wide) .rd-tag { display: none; }
+.chx .floor.er .fp-room.ped:not(.wide) .fp-rh { flex-wrap: wrap; }
+.chx .floor.er .fp-room.ped:not(.wide) .ped-tag { flex: none; order: 2; }
+.chx .floor.er .fp-room.ped:not(.wide) .rh-who { order: 1; }

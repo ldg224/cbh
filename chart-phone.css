@@ -191,3 +191,14 @@ body.fp-open { overflow: hidden; }
 .chx .ph-sess-in { display: grid; gap: 6px; padding: 0 10px 10px; }
 .chx .ph-sess-in .btn { justify-self: start; }
 .chx .sess-pop { width: 270px; }
+
+/* ---- The Emergency wing on phones (Delta, 21 Nov 2026): the drawing is 748 x 345 units at the same scale, so the zoom
+   plan's canvas is 1399 x 695 (floor 1369 x 631, chart.js FZW_ER/FZH_ER) and the full-screen plan needs no room for a
+   right-hand exit label. ---- */
+.chx .fpz.er .fpz-in { width: 1399px; height: 695px; padding-right: 20px; }
+.chx .fpz.er .floor { width: 1369px; height: 631px; }
+.chx .fpx-floor:has(.floor.er) { padding-right: 8px; }
+.chx .fp-launch .floor.mini.er { aspect-ratio: 748 / 345; height: auto; --k: 0px; }
+.chx .fpx .fp-amb b, .chx .fpx .fp-corr b { font-size: 7.5px; }
+.chx .fp-launch .fp-out { background: #fff; }
+.chx .ph-head + .map-sw { margin: -4px 0 4px; align-self: flex-start; }
