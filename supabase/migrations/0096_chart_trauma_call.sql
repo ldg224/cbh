@@ -124,7 +124,15 @@ create or replace function public.chart_calls_joinable(who text) returns jsonb
 language sql stable security definer set search_path = '' as $$
   select coalesce(jsonb_agg(c.id order by c.id), '[]'::jsonb) from public.chart_calls c
   where c.status = 'open' and not public.chart_on_break(who) and public.chart_call_fit_dept(c.id, who) is not null
-    and not exists (select 1 from public.chart_call_members m where m.call_id = c.id and m.discord_id = who and m.state in ('called', 'on_way', 'arrived'))
+    -- someone who pressed "Can't come" gets no Join banner for that call (they can still join it themselves)
+    and not exists (select 1 from public.chart_call_members m where m.call_id = c.id and m.discord_id = who and m.state in ('called', 'on_way', 'arrived', 'declined'))
+$$;
+
+-- The room a call is in: its bed's room, or else the room of its patient's bed (null for a patient not in a bed yet).
+create or replace function public.chart_call_room(p_bed text, p_case bigint) returns text
+language sql stable security definer set search_path = '' as $$
+  select b.room_id from public.chart_beds b
+  where b.id = coalesce(p_bed, (select x.bed_id from public.chart_cases x where x.id = p_case))
 $$;
 
 -- Where the call is, in words (for notices).
@@ -272,7 +280,7 @@ end $$;
 create or replace function public.chart_call_start(p_case bigint, p_bed text, p_want jsonb,
                                                    p_people jsonb default '[]'::jsonb, p_note text default null) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
-declare cs public.chart_cases; bd text := nullif(btrim(coalesce(p_bed, '')), ''); cid bigint; c public.chart_calls;
+declare cs public.chart_cases; bd text := nullif(btrim(coalesce(p_bed, '')), ''); cid bigint; c public.chart_calls; rm text;
 begin
   perform public.chart_call_sup();
   if p_case is null and bd is null then perform public.chart_err('bad_input', 'Pick a patient or a bed.'); end if;
@@ -290,6 +298,11 @@ begin
     if exists (select 1 from public.chart_calls x where x.bed_id = bd and x.status in ('open', 'full')) then
       perform public.chart_err('call_exists', format('%s already has a trauma call.', (select b.label from public.chart_beds b where b.id = bd)));
     end if;
+  end if;
+  -- one active call per room
+  rm := public.chart_call_room(bd, p_case);
+  if rm is not null and exists (select 1 from public.chart_calls x where x.status in ('open', 'full') and public.chart_call_room(x.bed_id, x.case_id) = rm) then
+    perform public.chart_err('call_exists', format('Room %s already has a trauma call.', rm));
   end if;
   insert into public.chart_calls (case_id, bed_id, session_id, note, started_by)
   values (p_case, bd, public.chart_session_live(), left(nullif(btrim(coalesce(p_note, '')), ''), 200), public.my_discord_id())
@@ -380,6 +393,9 @@ begin
   c := public.chart_call_get(p_call);
   select * into m from public.chart_call_members x where x.call_id = c.id and x.discord_id = me for update;
   if m.id is not null and m.state in ('called', 'on_way', 'arrived') then
+    if p_coming and m.state in ('on_way', 'arrived') then
+      return jsonb_build_object('ok', true, 'rev', public.chart_rev());   -- a repeat On my way: nothing to do, nothing to log
+    end if;
     if p_coming and m.state = 'called' then
       update public.chart_call_members set state = 'on_way', answered_at = now() where id = m.id;
     elsif not p_coming then
@@ -390,6 +406,7 @@ begin
     end if;
   elsif p_coming then
     -- joining an open place, in the department given or the first of theirs with room
+    if public.chart_on_break(me) then perform public.chart_err('on_break', 'You''re on break: end your break to join a trauma call.'); end if;
     if d is not null then
       if not d = any (public.chart_call_depts()) then perform public.chart_err('bad_input', format('%s isn''t a department for trauma calls.', d)); end if;
       if not d = any (public.chart_person_depts(me)) then perform public.chart_err('not_in_department', format('You aren''t in %s.', d)); end if;
@@ -479,7 +496,7 @@ begin
   foreach f in array array[
     'public.chart_call_depts()', 'public.chart_call_want(public.chart_calls,text)', 'public.chart_call_held(bigint,text)',
     'public.chart_call_open(bigint,text)', 'public.chart_call_open_total(bigint)', 'public.chart_call_refresh(bigint)', 'public.chart_away(text)',
-    'public.chart_call_state(text)', 'public.chart_call_fit_dept(bigint,text)', 'public.chart_calls_joinable(text)', 'public.chart_call_where(bigint)',
+    'public.chart_call_state(text)', 'public.chart_call_fit_dept(bigint,text)', 'public.chart_calls_joinable(text)', 'public.chart_call_where(bigint)', 'public.chart_call_room(text,bigint)',
     'public.chart_calls_view()', 'public.chart_call_sup()', 'public.chart_call_get(bigint)', 'public.chart_call_set_want(bigint,jsonb)',
     'public.chart_call_name(bigint,text,text)', 'public.chart_call_name_all(bigint,jsonb)', 'public.chart_call_fit(bigint)',
     'public.chart_call_check(bigint)', 'public.chart_call_sweep()',

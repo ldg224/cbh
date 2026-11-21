@@ -1,5 +1,7 @@
 -- Undo 0096: no trauma calls. The live functions go back to their 0095 text first (they call the new helpers), then the
 -- functions and both tables go.
+-- Order: run this before 0095.down when undoing both (calls can sit on Emergency wing beds, and this file expects the
+-- 0095 text of chart_poll and chart_tick).
 do $m$
 declare d text; n text;
 begin
@@ -53,6 +55,7 @@ drop function if exists public.chart_call_get(bigint);
 drop function if exists public.chart_call_sup();
 drop function if exists public.chart_calls_view();
 drop function if exists public.chart_call_where(bigint);
+drop function if exists public.chart_call_room(text, bigint);
 drop function if exists public.chart_calls_joinable(text);
 drop function if exists public.chart_call_fit_dept(bigint, text);
 drop function if exists public.chart_call_state(text);
