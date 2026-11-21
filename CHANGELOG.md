@@ -3,6 +3,15 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.44.0 (2026-11-21)
+
+**Added:**
+- **Emergency wing on the CBH Chart floor plan.** A second map, "Main ward + Emergency", adds the ER wing through the doorway between 109 and 110: Trauma Bays 1 and 2, ER 1–6, Minor Triage (3 chairs), plus Emergency Dispatch and Storage as labels, with the ambulance parking and drop-off above. 11 new spots; ER rooms default to Medical, Trauma Bays to Surgical (supervisors can change them).
+- **Choosing the map.** Hosts pick the Floor plan (Main ward / Main ward + Emergency) when making an in-game session. Supervisors can switch it any time from the floor plan header ("Main ward / With Emergency"). Switching back is refused while a patient is still in an ER bed. The Main ward stays the default and looks as before.
+- The floor plan with Emergency keeps the main ward at full size and scrolls inside its box on computers; phones zoom and pan as before.
+
+Database change: yes (0095: session map choice, Emergency rooms and beds, chart_set_map; additive).
+
 ## 0.43.0 (2026-11-20)
 
 **Added:**
