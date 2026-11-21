@@ -214,6 +214,7 @@ create or replace function public.chart_patient_drop(p_case bigint, p_bed text, 
                                                      p_anyway boolean default false, p_override boolean default false) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare c public.chart_cases; b public.chart_beds; r public.chart_rooms; e text; holder text; hs public.chart_staff; nurse text; oid bigint;
+  kids_waive boolean := false;
 begin
   perform public.chart_begin(); perform public.chart_need_sup();
   select * into c from public.chart_cases x where x.id = p_case for update;
@@ -224,7 +225,7 @@ begin
   select * into r from public.chart_rooms x where x.id = b.room_id;
   if (r.who = 'kids' or r.department = 'Paediatric') and not coalesce(c.child, false) then
     if not coalesce(p_anyway, false) then perform public.chart_err('kids_room', format('%s is for children. Send anyway?', public.chart_room_name(r.id))); end if;
-    perform set_config('cbh.kids_ok', 'on', true);   -- the Supervisor said send anyway (this transaction only)
+    kids_waive := true;   -- the Supervisor said send anyway: waived only around the bed change below
   end if;
   if r.who = 'adults' and c.child then perform public.chart_err('adults_only', format('%s is for adults only.', public.chart_room_name(r.id))); end if;
   if c.state = 'incoming' then
@@ -239,6 +240,7 @@ begin
   if b.reserved_for is not null and b.reserved_for <> c.id and exists (select 1 from public.chart_cases z where z.id = b.reserved_for and z.status = 'open' and z.state = 'incoming') then
     perform public.chart_err('reserved', format('%s is reserved for %s.', b.label, rtrim((select public.checkin_short_name(z.patient_name) from public.chart_cases z where z.id = b.reserved_for), '.')));
   end if;
+  if kids_waive then perform set_config('cbh.kids_ok', 'on', true); end if;   -- cleared again before chart_done (auto-assign)
   holder := b.owner_id;
   if c.owner_id is null then
     if holder is not null then
