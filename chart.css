@@ -658,6 +658,16 @@ body.dragging-p, body.dragging-p * { cursor: grabbing !important; user-select: n
 .chx { --code: #1D4ED8; --code-wash: #dbe6ff; }
 .chx .code-bar > div { background: var(--code); box-shadow: 0 8px 24px rgba(29, 78, 216, .35); }
 .chx .code-bar .btn { color: var(--code); }
+/* one line, never wrapped: CODE BLUE, the room and the time always show; only the patient's name shortens (Alpha, 21 Nov 2026) */
+.chx .code-bar > div { white-space: nowrap; min-width: 0; gap: 6px; }
+.chx .code-bar > div > b, .chx .code-bar .cb-room, .chx .code-bar .cb-t, .chx .code-bar .btn { flex: none; }
+.chx .code-bar > div > b { margin-right: 4px; }
+.chx .code-bar .cb-pt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chx .code-bar .btn { margin: 0 0 0 4px; align-self: center; }
+body.phone .chx .code-bar { left: 12px; right: 12px; transform: none; max-width: none; }
+body.phone .chx .code-bar > div { padding-left: 14px; font-size: 13.5px; }
+body.phone .chx .code-bar > div > b { letter-spacing: .1em; }
+body.phone .chx .code-bar .btn { margin-left: auto; }
 @keyframes codeFlash { 50% { background: var(--code-wash); box-shadow: 0 0 0 3px var(--code); } }
 @media (prefers-reduced-motion: reduce) {
 .chx .bed.code { box-shadow: 0 0 0 3px var(--code); }

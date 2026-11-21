@@ -1156,7 +1156,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     : S.role ? '' : roleScreen());
   const deskCount = () => callOuts().length + toConfirm().length;
   const openReqCount = () => S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging' && (S.role === 'super' || canAccept(r))).length;
-  const codeBar = () => (S.codes.length ? `<div class="code-bar" role="alert">${S.codes.map((c) => { const p = byId(c.pid); return `<div><b>CODE BLUE</b><span>${esc(roomOf(p))} · ${esc(p.name)} · ${elapsed(c.at)}</span>${p.nurse === 'me' || S.role === 'super' ? `<button type="button" class="btn small" data-codeclear="${p.id}">Clear</button>` : ''}</div>`; }).join('')}</div>` : '');
+  const codeBar = () => (S.codes.length ? `<div class="code-bar" role="alert">${S.codes.map((c) => { const p = byId(c.pid); return `<div><b>CODE BLUE</b><span class="cb-room">${esc(roomOf(p))}</span><span class="cb-pt">· ${esc(p.name)}</span><span class="cb-t">· ${elapsed(c.at)}</span>${p.nurse === 'me' || S.role === 'super' ? `<button type="button" class="btn small" data-codeclear="${p.id}">Clear</button>` : ''}</div>`; }).join('')}</div>` : '');
   // The role card (owner, 19 Nov 2026): your role and team as a gradient in that team's colour. Reception is a warm
   // yellow, Supervisor goes teal to Executive blue.
   const roleLabel = () => (S.role === 'room' ? `Room · ${S.rdept}` : S.role === 'oncall' ? `On call · ${S.rdept}` : S.role === 'road' ? 'Road · Paramedicine' : ROLE_NAME[S.role] || '');
