@@ -538,6 +538,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // Room picking: tap beds to choose (up to 2), then Done sends them in one go.
   const pickSelNow = () => S.pickSel || bedsOf('me');
   function pickBed(bed) {
+    if (!S.pickSel) S.pickSnap = bedsOf('me').join('|');   // a fresh pick: remember the beds you have now
     const sel = S.pickSel || (S.pickSel = bedsOf('me').slice()), o = ownerOf(bed);
     if (sel.includes(bed)) { const p = roomsInUse()[bed]; if (p && p.nurse === 'me') { toast('You have a patient in that bed.'); return; } S.pickSel = sel.filter((b) => b !== bed); return; }
     if (o && o !== 'me') { toast(`${esc((staff(o) || {}).name || 'Someone')} has ${esc(bed)}.`); return; }
@@ -549,17 +550,24 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (mate) toast(`${esc(first(ownerOf(mate)))} has ${esc(mate)}. When you press Done they're asked to share ${esc(roomWord(roomIdOf(bed)))} (1 minute).`);
     else if (kidsOnly(bed)) toast(`${esc(bed)} is Paediatric: you'll get patients under 18 there.`);
   }
+  // The Supervisor wins (the user, 21 Nov 2026): Pick your room closes, unsaved, when the Supervisor places you.
+  function pickClose(msg) { Object.assign(S, { pick: false, pickSel: null, pickSnap: null }); if (S.fp === 'pick') fpClose(); if (msg) toast(msg, 6000); }
+  const supPutYou = () => { const o = S.order, bed = o && o.bed ? BED_LABEL[o.bed] || o.bed_label || o.bed : null;
+    return o && o.kind === 'off' ? 'The Supervisor has just taken you off your bed.' : `The Supervisor has just put you in ${esc(o && o.room ? roomWord(String(o.room)) : bed || 'a room')}.`; };
   async function pickDone() {
     const want = (S.pickSel || []).slice(), have = bedsOf('me');
-    if (!want.length) { toast('Pick at least one bed.'); return; }
-    if (want.length === have.length && want.every((b) => have.includes(b))) { S.pick = false; S.pickSel = null; render(); return; }
+    if (!want.length) { toast('Pick a bed first.'); return; }   // never an empty take
+    // your beds changed while you were picking (the Supervisor placed you): theirs stands, nothing is sent
+    if (S.pickSnap != null && have.join('|') !== S.pickSnap) { pickClose(S.order ? supPutYou() : `Your bed changed while you were picking: you have ${esc(have.join(', ') || 'no bed')} now.`); render(); return; }
+    if (want.length === have.length && want.every((b) => have.includes(b))) { pickClose(); render(); return; }
     // one bed is a switch on the server (0097): the old bed is let go only when the new one is taken, and kept while a partner ask waits
-    try { const r = await rpc('chart_take_beds', { p_beds: want.map(bedId) }) || {}; S.pick = false; S.pickSel = null;
+    try { const r = await rpc('chart_take_beds', { p_beds: want.map(bedId) }) || {}; pickClose();
       const mate = D.BEDS.find((b) => b !== want[0] && roomIdOf(b) === roomIdOf(want[0]) && ownerOf(b) && ownerOf(b) !== 'me');
       toast(r.partner_pending ? `Asked ${esc(mate ? first(ownerOf(mate)) : 'them')} to share ${esc(roomWord(roomIdOf(want[0])))}. You get ${esc(want[0])} if they say yes${have.length ? `; you keep ${esc(have.join(', '))} until then` : ''}.` : `Your bed: ${esc(want.join(', '))}. Press Ready when you're free.`); }
-    catch (e) { toast(esc(e.message)); }
+    catch (e) { if (e.hint === 'sup_order') pickClose(esc(e.message)); else toast(esc(e.message)); }   // 0098: a Supervisor order in the last minute wins
     await poll(true);
   }
+
   // Supervisor actions on people and rooms (§5)
   function setRole(sid, k, sure) { const m = mine(sid), cur = S.staffRole[sid]; if (!k || k === cur) return;
     if (m.length && !sure) { S.roleAsk = k; return; }
@@ -1779,7 +1787,8 @@ ${nextBarHtml(p)}
     S.sInfo.me = Object.assign(S.sInfo.me || {}, { avatar: me.avatar_url || (S.sInfo.me || {}).avatar || '', rank: me.rank || '', admin: !!me.admin, since: me.shift_started_at || null });
     S.visits = (s.visits || []).map((v) => { const sid = person(v.person, v.name); if (v.avatar_url && !(S.sInfo[sid] || {}).avatar) (S.sInfo[sid] = S.sInfo[sid] || {}).avatar = v.avatar_url;
       return { id: v.id, sid, room: String(v.room), reason: v.reason, note: v.note || '', state: v.state, at: v.sent_at, arrivedAt: v.arrived_at, by: v.by_name || '' }; });
-    S.order = me.order || null; S.myVisit = me.visit || null; S.partner = me.partner_ask || null; S.partnerWait = me.partner_wait || null;
+    S.order = me.order || null; S.myVisit = me.visit || null;
+    if (S.order && S.order.id !== S.orderGot) { S.orderGot = S.order.id; if (S.pick || S.pickSel || S.fp === 'pick') pickClose(supPutYou()); } S.partner = me.partner_ask || null; S.partnerWait = me.partner_wait || null;
   }
   const info = (sid) => S.sInfo[sid] || {};
   const visitOf = (sid) => S.visits.find((v) => v.sid === sid);
@@ -1879,7 +1888,7 @@ ${nextBarHtml(p)}
       case 'off': S.face = null; svOff(ds.svsid, ds.svroom || null); break;
       case 'unvisit': S.face = null; { const vi = visitOf(ds.svsid); if (vi) S.sv = { kind: 'unvisit', id: vi.id, sid: vi.sid, room: vi.room }; } break;
       // the person's own cards
-      case 'orderok': { const o = S.order; S.order = null; svSilence(); if (o) call(SV.orderOk, { p_order: o.id }); break; }
+      case 'orderok': { const o = S.order; S.order = null; svSilence(); if (S.role === 'room') { S.sec = 'myroom'; S.ph = [{ s: 'myroom' }]; } if (o) call(SV.orderOk, { p_order: o.id }); break; }
       case 'vstep': { const vi = S.myVisit; if (vi) { svSilence(); S.myVisit = ds.svstep === 'done' ? null : { ...vi, state: ds.svstep }; call(SV.visitStep, { p_visit: vi.id, p_step: ds.svstep }, ds.svstep === 'done' ? 'Visit done.' : ds.svstep === 'arrived' ? 'Marked as arrived.' : `On your way to ${esc(roomWord(String(vi.room)))}.`); } break; }
       case 'partner': { const pa = S.partner; S.partner = null; svSilence(); if (pa) call(SV.partner, { p_ask: pa.id, p_yes: ds.svyes === '1' }, (r) => (r.taken === false ? esc(r.reason || 'They can’t take it any more.') : ds.svyes === '1' ? `You're sharing ${esc(roomWord(String(pa.room)))} with ${esc((pa.from || {}).name || 'them')}.` : 'Said no. They’ll pick another bed.')); break; }
       default: return;
@@ -2190,7 +2199,7 @@ ${nextBarHtml(p)}
     else if (ds.withpt) { const p = byId(+ds.withpt); if (p) { act.withPatient(p); if (!isPhone()) openP(p.id); } }
     else if (ds.noshow) { act.noShow(byId(+ds.noshow)); if (isPhone()) home(); }
     else if (ds.takeover) call('chart_offer_take', {}, `You took ${esc((S.offer && (S.offer.beds || []).length === 1 ? BED_LABEL[S.offer.beds[0]] || S.offer.beds[0] : 'the room'))}.`);
-    else if (ds.a === 'pick') { S.pick = true; S.pickSel = bedsOf('me').slice(); }
+    else if (ds.a === 'pick') { S.pick = true; S.pickSel = bedsOf('me').slice(); S.pickSnap = bedsOf('me').join('|'); }
     else if (ds.a === 'pickdone') pickDone();
     else if (ds.pickbed) pickBed(ds.pickbed);
     else if (ds.a === 'npc') S.npc = { name: '', symptoms: [] }; else if (ds.a === 'npcx') S.npc = null;
