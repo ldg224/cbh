@@ -1183,3 +1183,6 @@ body.phone .chx .cx-toast { top: auto; bottom: 84px; left: 12px; right: 12px; }
 /* a bed reserved for an incoming ambulance (supervisor-v2 §8b Q11): quiet, not alarming */
 .chx .bed .free-l.res-l { display: block; color: #8a4b00; font-weight: 700; font-style: normal; white-space: normal; line-height: 1.25; font-size: 10.5px; }
 .chx .q-chip.inc[data-drag] { cursor: grab; }
+
+/* the full screens on any CBH page (a Trauma call, a Supervisor order, a visit): only the alert, none of the Chart frame */
+.chx.cbh-global { position: static; display: contents; }

@@ -249,7 +249,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const vword = (v, val) => { const st = vstate(v, val); if (!st || st === 'ok') return st ? 'Normal' : ''; return (+val < v.lo ? 'Low' : 'High') + (st === 'warn' ? ' (a little)' : ''); };
   const vrange = (v, val, r) => (vstate(v, val) === 'ok' ? `Normal range ${r}` : `${vword(v, val)}${vstate(v, val) ? ' · ' : ''}normal ${r}`);
   const latest = (p) => Object.assign({}, ...p.vitals);
-  const toast = (t, ms) => { const el = $('#chx-toast'); el.innerHTML = t.replace(/\.(<\/?b>)?\./g, '.$1');   // "Leo M.." -> "Leo M."
+  const toast = (t, ms) => { const el = $('#chx-toast'); if (!el) return; el.innerHTML = t.replace(/\.(<\/?b>)?\./g, '.$1');   // "Leo M.." -> "Leo M."
     el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, ms || 4000); };
   const fromSaid = { 'A little': 4, 'Quite bad': 3, 'Very bad': 2 };
 
@@ -300,6 +300,8 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       S.pollErr = null;
       const changed = !!(s && !s.unchanged); if (changed) { ingest(s); document.dispatchEvent(new Event('cbh-chart-poll')); }
       if (onPage && (changed || !drawnWithData)) { if (drag) dirty = true; else render(); }
+      if (!onPage && SNAP) { try { alertWatch(); } catch (e2) { console.error('CBH Chart alerts:', e2); } }
+      globalAlert();
     } catch (e) {
       // Never leave the page spinning: a failed read or a drawing error shows a message, and the next poll starts from scratch.
       console.error('CBH Chart:', e); S.pollErr = e.hint ? e.message : 'Something went wrong drawing the Chart.'; REV = 0;
@@ -308,7 +310,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     polling = false;
     if (pollAgain) { pollAgain = false; return poll(true); }
     if (onPage && S.open && (!RECS[S.open] || RECS[S.open].rev !== REV)) loadRec(S.open);
-    pollT = setTimeout(() => poll(), onPage && (!document.hidden || (S.myCall && S.myCall.state === 'called')) ? 3000 : 15000);
+    pollT = setTimeout(() => poll(), onPage && (!document.hidden || (S.myCall && S.myCall.state === 'called')) ? 3000 : !onPage && S.onShift ? 6000 : 15000);   // on shift elsewhere on the site: orders reach you within seconds
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && app.isConnected) poll(); });
   document.addEventListener('focusout', () => { if (dirty && !drag && app.isConnected) { dirty = false; setTimeout(render, 0); } });
@@ -2547,7 +2549,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
   // Timers: Got it (60 s), Ready running out (10 min), and requests crossing 3 / 8 min redraw the screen once; the
   // countdowns tick every second without a redraw.
   setInterval(() => {
-    if (!app.isConnected) return;
+    if (!app.isConnected) { if (SNAP && S.onShift) tcTick(); return; }   // the Trauma siren repeats on any page
     let dirty = false;
     const sig2 = [...S.reqs.filter(isOpenReq).map(reqLevel), ...P().filter((p) => p.phase === 'called').map((p) => (since(p.calledAt) >= SEC(300) ? 1 : 0)), ...S.incoming.map((x) => (since(x.at) >= SEC(x.eta * 60) ? 1 : 0))].join();
     if (sig2 !== tickSig) { tickSig = sig2; dirty = true; }
@@ -2593,6 +2595,27 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     document.body.classList.add('in-chart'); setPageTitle('stethoscope', 'CBH Chart', 'staff');
     body.replaceChildren(app); render(); poll(true);
   };
-  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#chart')) { document.body.classList.remove('in-chart'); if (S.fp) fpClose(); } });
+  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#chart')) { document.body.classList.remove('in-chart'); if (S.fp) fpClose(); } setTimeout(globalAlert, 0); });
+  // ---------- on any other CBH page (the user, 21 Nov 2026: "orders are important") ----------
+  // A Trauma call, a Supervisor order or a new visit takes over the screen on whatever page you're on (only while on
+  // shift), with the same alarm. Answering here does the same as on the Chart; OK and On my way open the Chart.
+  let gHost = null;
+  function globalAlert() {
+    const on = !app.isConnected && SNAP && S.onShift && (S.myCall && S.myCall.state === 'called' || S.order || (S.myVisit && S.myVisit.state === 'sent'));
+    if (!on) { if (gHost) { gHost.remove(); gHost = null; } return; }
+    if (!gHost) { gHost = document.createElement('div'); gHost.className = 'chx cbh-global'; gHost.addEventListener('click', globalClick); document.body.append(gHost); }
+    const html = tcAlert() || svAlert();
+    if (gHost._h !== html) { gHost.innerHTML = html; gHost._h = html; }
+  }
+  async function globalClick(e) {
+    const b = e.target.closest('button'); if (!b || b.disabled) return; const ds = b.dataset; b.disabled = true;
+    const go = () => { if (!location.hash.startsWith('#chart')) location.hash = '#chart'; };
+    try {
+      if (ds.tc === 'going' || ds.tc === 'cant') { tcStop(+ds.tcid, ds.tc === 'going' ? 'on_way' : 'declined'); await rpc('chart_call_answer', { p_call: +ds.tcid, p_coming: ds.tc === 'going' }); if (ds.tc === 'going') go(); }
+      else if (ds.sv === 'orderok') { const o = S.order; S.order = null; svSilence(); if (o) await rpc(SV.orderOk, { p_order: o.id }); if (S.role === 'room') { S.sec = 'myroom'; S.ph = [{ s: 'myroom' }]; } go(); }
+      else if (ds.sv === 'vstep') { const vi = S.myVisit; if (vi) { svSilence(); S.myVisit = { ...vi, state: 'on_way' }; await rpc(SV.visitStep, { p_visit: vi.id, p_step: 'on_way' }); } go(); }
+    } catch (err) { console.error('CBH Chart:', err); go(); }   // the Chart shows what went wrong and lets them try again
+    globalAlert(); poll(true);
+  }
 
 })();
