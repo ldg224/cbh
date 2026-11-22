@@ -3,6 +3,17 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.51.0 (2026-11-22)
+
+**Added:**
+- **Pop out a floor plan view into its own window** (like vatSys). Pick a view and press **Pop out**: it opens in its own window with just the plan, live and signed in, with its own zoom. Drag it to another screen and open more, e.g. one window per zone. Only the main Chart window plays sounds and full-screen alerts. Computers only.
+- **View tabs over the floor plan:** All, 1st floor, 2nd floor, or one zone. A tab only changes what the map shows, on that device; Up next still follows "You cover".
+
+**Changed:**
+- **The 2nd floor is drawn like the main ward:** main-ward-sized rooms packed round short corridors, a wall all round each area, and the main ward's grey hatching for spaces with no patients (no more blank boxes or white gaps). Every room and doorway connects as before. The main ward and Emergency look the same.
+
+Database change: no.
+
 ## 0.50.0 (2026-11-22)
 
 **Added:**
