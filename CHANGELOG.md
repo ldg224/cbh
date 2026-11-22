@@ -3,6 +3,13 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.51.1 (2026-11-22)
+
+**Fixed:**
+- **Pop-out windows now have the People list**, so you can drag nurses and doctors onto beds there too (drag within the window that shows the room).
+
+Database change: no.
+
 ## 0.51.0 (2026-11-22)
 
 **Added:**
