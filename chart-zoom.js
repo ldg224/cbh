@@ -40,6 +40,7 @@
     s.h = wrap.offsetHeight; wrap.style.height = `${s.h}px`;
     s.fit = Math.min(1, (wrap.clientWidth - padX) / fw, (wrap.clientHeight - padY) / fh);
     s.fit = Math.max(0.3, Math.floor(s.fit * 100) / 100);
+    s.fitW = Math.max(s.fit, Math.min(1, Math.floor((wrap.clientWidth - padX) / fw * 100) / 100));   // the plan's full width in view
   }
   function show(s) {
     const r = s.ctl.querySelector('.zm-r'); r.value = toR(s.z, s);
@@ -63,10 +64,11 @@
     let box = wrap.parentElement;
     if (!box.classList.contains('zm-box')) { box = document.createElement('div'); box.className = 'zm-box'; wrap.before(box); box.appendChild(wrap); }
     box.insertAdjacentHTML('beforeend', ctlHtml());
-    const s = { wrap, floor, box, ctl: box.querySelector('.zm-ctl'), map: wrap.classList.contains('er') ? 'main_er' : 'main', z: 1, fit: 1 };
+    const s = { wrap, floor, box, ctl: box.querySelector('.zm-ctl'), map: wrap.dataset.zmap || (wrap.classList.contains('er') ? 'main_er' : 'main'), z: 1, fit: 1 };
     wrap.__zm = s; wrap.classList.add('zm'); cur = s;
     measure(s);
-    s.z = clamp(saved[s.map] || 1, s.fit, MAX); floor.style.zoom = s.z === 1 ? '' : String(s.z); show(s);
+    // a zone map (chart.js data-zmap) first opens with its whole width in view, then scrolls down; the others at 1x
+    s.z = clamp(saved[s.map] || (wrap.dataset.zmap ? s.fitW : 1), s.fit, MAX); floor.style.zoom = s.z === 1 ? '' : String(s.z); show(s);
 
     s.ctl.addEventListener('click', (e) => { const b = e.target.closest('[data-zm]'); if (!b) return;
       const k = b.dataset.zm; zoomTo(s, k === 'fit' ? s.fit : k === 'in' ? s.z * STEP : s.z / STEP); });

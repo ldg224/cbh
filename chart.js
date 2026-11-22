@@ -154,8 +154,13 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // "Minor Triage · Chair A".
   const ER_NAME = { TB1: 'Trauma Bay 1', TB2: 'Trauma Bay 2', ER1: 'ER 1', ER2: 'ER 2', ER3: 'ER 3', ER4: 'ER 4', ER5: 'ER 5', ER6: 'ER 6', MT: 'Minor Triage' };
   const isEr = (id) => Object.prototype.hasOwnProperty.call(ER_NAME, String(id));
-  const roomName = (id) => ER_NAME[id] || String(id);
-  const roomWord = (id) => (isEr(id) ? roomName(id) : `Room ${id}`);   // "Room 104" / "Trauma Bay 1"
+  // The 2nd floor (0105): Pre-Op, the ORs, PACU bays and ICU rooms have names like the Emergency wing's; 201-209 are
+  // numbered like the main ward.
+  const Z_NAME = { PO: 'Pre-Op', OR1: 'OR 1', OR2: 'OR 2', OR3: 'OR 3', PACU1: 'PACU 1', PACU2: 'PACU 2', PACU3: 'PACU 3',
+    ICU1: 'ICU 1', ICU2: 'ICU 2', ICU3: 'ICU 3', ICU4: 'ICU 4', ICU5: 'ICU 5', ICU6: 'ICU 6' };
+  const isNamed = (id) => isEr(id) || Object.prototype.hasOwnProperty.call(Z_NAME, String(id));
+  const roomName = (id) => ER_NAME[id] || Z_NAME[id] || String(id);
+  const roomWord = (id) => (isNamed(id) ? roomName(id) : `Room ${id}`);   // "Room 104" / "Trauma Bay 1"
   const unitOf = (id) => (id === 'MT' ? 'Chair' : 'Bed');
   const erLabel = (room, label, n) => (n > 1 ? `${roomName(room)} · ${unitOf(room)} ${String(label).slice(-1)}` : roomName(room));
   let nextId = 100;
@@ -166,7 +171,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const isPhone = () => !!(S && S.fp) || window.matchMedia('(max-width: 860px), (pointer: coarse) and (max-height: 520px)').matches;
   // ----- derived lists -----
   const qOrder = (a, b) => (!!b.bumped - !!a.bumped) || (a.urgency - b.urgency) || (new Date(a.queuedAt) - new Date(b.queuedAt));
-  const upNext = () => (S.queueIds || []).map((id) => byId(id)).filter((p) => p && p.stage === 'queue');
+  const upNext = () => (S.queueIds || []).map((id) => byId(id)).filter((p) => p && p.stage === 'queue' && (!p.room || roomInView(roomIdOf(p.room))));   // a supervisor sees the zones they cover
   const toConfirm = () => P().filter((p) => p.stage === 'checkin').sort((a, b) => new Date(a.arrived) - new Date(b.arrived));
   const callOuts = () => P().filter((p) => p.stage === 'care' && p.phase === 'called' && !p.calledOut);
   // Discharged cases are closed; the desk can still do optional after-care if the patient comes back (papers, follow-up, rating).
@@ -236,7 +241,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     assigned: `Assigned to ${title(p.nurse)}`, called: 'Called to room', transferred: `Transferred to ${p.where || 'another team'}`, offward: `In ${p.offWard}`,
     complete: 'Treatment complete', treatment: 'In treatment', assessed: 'Being assessed' }[stCode(p)]);
   const stKey = (p) => stCode(p);
-  const say = (p) => `${p.name}, ${isEr(roomIdOf(p.room)) ? p.room : `room ${roomIdOf(p.room) || '?'}${p.room && p.room.includes('Bed') ? ' ' + p.room.split(' ').slice(1).join(' ') : ''}`}, ${title(p.nurse)}`;
+  const say = (p) => `${p.name}, ${isNamed(roomIdOf(p.room)) ? p.room : `room ${roomIdOf(p.room) || '?'}${p.room && p.room.includes('Bed') ? ' ' + p.room.split(' ').slice(1).join(' ') : ''}`}, ${title(p.nurse)}`;
   const roomOf = (p) => (roomIdOf(p.room) ? roomWord(roomIdOf(p.room)) : 'Room ?');   // "Room 104" / "Trauma Bay 1"
   const isOpenReq = (r) => !r.doneAt && !r.cancelled;
   const reqsFor = (p) => S.reqs.filter((r) => r.pid === p.id && isOpenReq(r));
@@ -366,7 +371,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     Object.assign(meRow, { name: me.name || meRow.name || 'You', dept: me.department || me.shift_department || '', depts: me.departments || [] });
     D.STAFF = [meRow];
     // rooms and beds
-    S.map = ops.map === 'main_er' ? 'main_er' : 'main'; setMap();
+    S.map = zMapNorm(ops.map) || 'main'; setMap();
     if (s.rooms) {
       D.ROOMS = s.rooms.map((r) => ({ id: String(r.id), beds: r.beds, area: r.area, ped: r.who === 'kids', wing: r.wing || (isEr(r.id) ? 'er' : 'main') }));
       s.rooms.forEach((r) => { S.roomDept[r.id] = r.department; S.roomCfg[r.id] = Object.assign(S.roomCfg[r.id] || { log: [] }, { kids: r.who === 'kids', adults: r.who === 'adults', closed: !!r.closed, why: r.closed_reason || '', problem: r.problem || null, off: {} }); });
@@ -374,7 +379,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     S.bedOwner = {}; S.bedRes = {};
     if (s.beds) {
       const nIn = (room) => (D.ROOMS.find((r) => r.id === String(room)) || { beds: 1 }).beds;
-      const lab = (b) => (isEr(b.room) ? erLabel(String(b.room), b.label, nIn(b.room)) : b.label);
+      const lab = (b) => (isNamed(b.room) ? erLabel(String(b.room), b.label, nIn(b.room)) : b.label);
       D.BEDS = s.beds.map(lab);
       s.beds.forEach((b) => { const l = lab(b); BED_LABEL[b.id] = l; BED_ID[l] = b.id; BED_ROOM[l] = String(b.room);
         if (!b.available && S.roomCfg[b.room]) S.roomCfg[b.room].off[l] = b.off_reason || true;
@@ -824,7 +829,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const n = pickSelNow().length;
     return `<div class="pane-pad rooms-pad"><div class="pane-head"><div><h2>${n ? 'Your room' : 'Pick your room'}</h2><p class="muted">Tap a bed to take it. ${esc(S.rdept || '')} rooms are outlined. A bed in a shared room asks the other nurse first.</p></div>${n ? `<button type="button" class="btn" data-a="pickdone">Done · ${n} bed${n > 1 ? 's' : ''}</button>` : ''}</div>
       ${isPhone() ? fpzBlock('pick') + '<h4 class="ph-sub ph-or">Or pick from the list</h4>' : ''}${isPhone() ? D.ROOMS.map((r) => `<h4 class="ph-sub">${esc(roomName(r.id))} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), 'pick')).join('')}</div>`).join('')
-        : `<div class="floor-wrap${erOn() ? ' er' : ''}"><div class="floor pick${erOn() ? ' er' : ''}" aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
+        : `<div class="floor-wrap${flWrap()}"><div class="floor pick${flCls()}"${flSty()} aria-label="Pick your room">${floorInner('pick')}</div></div>`}</div>`;
   }
 
   // ---------- PATIENT CARE: ON CALL (and the Supervisor's Requests) ----------
@@ -930,7 +935,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     return `<div class="move-ask"><div class="ma-h"><b>End the session</b><button type="button" class="link" data-a="endsessx">Not yet</button></div>
       ${open.length ? `<p class="muted small">${open.length} open case${open.length > 1 ? 's' : ''}. Each needs an outcome before the session ends.</p><ul class="es-list">${open.map((p) => `<li style="--u:${p.urgency ? U(p.urgency).colour : '#9aa9c4'}"><b>${esc(p.name)}</b><small>${esc(status(p))}${p.nurse ? ' · ' + esc(first(p.nurse)) : ''}</small>${p.stage === 'care' ? `<button type="button" class="btn small ghost" data-finish="${p.id}">Finish now</button>` : ''}<button type="button" class="btn small ghost" data-endcase="${p.id}">Close as Session ended</button></li>`).join('')}</ul>` : ''}
       <button type="button" class="btn" data-a="endall">${open.length ? 'Close all as Session ended, and end' : 'End the session'}</button><small class="muted">Online patients still waiting are told “We're closing for now, sorry”, and online check-in closes. Nothing is deleted.</small></div>`; }
-  const shortBed = (b) => (roomIdOf(b) === 'MT' ? 'Triage ' + b.slice(-1) : isEr(roomIdOf(b)) ? roomIdOf(b) : b.replace(' Bed ', ''));
+  const shortBed = (b) => (roomIdOf(b) === 'MT' ? 'Triage ' + b.slice(-1) : roomIdOf(b) === 'PO' ? 'Pre-Op ' + b.slice(-1) : isNamed(roomIdOf(b)) ? roomIdOf(b) : b.replace(' Bed ', ''));
   const helping = (sid) => S.reqs.find((x) => isOpenReq(x) && x.acceptedBy === sid && x.type !== 'imaging');
   const personStatus = (sid) => { const r = S.staffRole[sid], rq = helping(sid), m = mine(sid), tc = S.staffCall[sid], tcc = tc && callById(tc.id);
     const vis = visitOf(sid); if (vis) return vis.state === 'arrived' ? [`Visiting ${roomName(vis.room)}: ${vWords(vis)}`, 'busy'] : [`On the way to ${roomName(vis.room)}`, 'go'];
@@ -949,12 +954,17 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     return `<button type="button" class="staff-drop${S.face === x.id ? ' sel' : ''}" data-sid="${x.id}" data-dragsid="${x.id}" title="${esc(x.name)} · ${esc(st)}" style="--dc:${deptColour(x.dept)};--st:${{ ok: '#0D7D74', go: '#F0A530', busy: '#3A82D0', off: '#9aa9c4' }[sc]}">${face(x.id)}<span><b>${esc(x.name)}</b><small>${esc(ROLE_NAME[r])}${r === 'oncall' || r === 'room' ? ' · ' + esc(x.dept) : ''}${b.length ? ' · ' + esc(b.map(shortBed).join(', ')) : ''}${m.length ? ` · ${m.length} of ${D.LIMIT}` : ''}</small></span><em class="ps-st ${sc}">${esc(st)}</em></button>`; };
   const incomingChips = () => S.incoming.filter((i) => !i.done).map((i) => `<span class="q-chip inc${S.role === 'super' ? '' : ' ro'}" style="--u:${U(i.urgency).colour}"${S.role === 'super' && !isPhone() ? ` data-drag="${i.id}" title="Drag onto a bed to reserve it"` : ''}><b>${esc(i.name)}</b><small>Ambulance · ${since(i.at) >= SEC(i.eta * 60) ? 'arriving now' : 'ETA ' + countdown(i.at, i.eta * 60)}</small></span>${S.role === 'super' && !S.calls.some((c) => c.pid === i.id) ? bayPlaceBtn(byId(i.id)) || `<button type="button" class="tc-chip" data-tc="new" data-tcpid="${i.id}" title="Call a trauma team for ${esc(i.name)}">Trauma call</button>` : ''}`).join('');
   // The People list starts narrow while the Emergency wing is on, so the wider plan has the room (still opens with ‹).
-  const pplOpen = () => (S.peopleOpen == null ? window.innerWidth >= (erOn() ? 1900 : 1400) : S.peopleOpen);
-  const bedsInUse = () => `${Object.keys(roomsInUse()).filter((b) => D.BEDS.includes(b)).length} of ${D.BEDS.length} beds in use`;
+  const pplOpen = () => (S.peopleOpen == null ? window.innerWidth >= (plainMain() ? 1400 : 1900) : S.peopleOpen);
+  const bedsInUse = () => { const vb = D.BEDS.filter((b) => roomInView(roomIdOf(b))), u = roomsInUse(); return `${vb.filter((b) => u[b]).length} of ${vb.length} beds in use`; };
   // Which map the session uses (Bravo's chart_set_map; the session host picks it when making the session). Supervisors
   // switch it here; it needs a live session, and going back to the main ward is refused while anyone uses an ER bed.
-  const mapSwitch = () => (S.canSuper ? `<div class="map-sw" role="group" aria-label="Map">${[['main', 'Main ward'], ['main_er', 'With Emergency']].map(([k, l]) =>
-    `<button type="button" data-map="${k}" aria-pressed="${S.map === k}"${S.session ? '' : ' disabled title="The map can change while a session is running"'}>${l}</button>`).join('')}</div>` : '');
+  // The zone switches (0105). Top row: which zones are open in this session (a supervisor or the host changes them;
+  // closing a zone is refused while its beds are in use). Second row, once two or more are open: the zones this
+  // supervisor looks after, on this device only (zones they untick are hidden from their plan, Up next and bed count).
+  const mapSwitch = () => { if (!S.canSuper) return ''; const o = zOpen(), v = zView();
+    const tip = S.session ? '' : ' title="Zones can change while a session is running"';
+    return `<div class="map-sw zn-sw" role="group" aria-label="Zones open in this session">${ZONES.map(([z, l]) => `<button type="button" data-zone="${z}" aria-pressed="${o.includes(z)}"${S.session ? '' : ' disabled'}${tip}><i>${z}</i>${esc(l)}</button>`).join('')}</div>`
+      + (S.role === 'super' && o.length > 1 ? `<div class="map-sw zn-mine" role="group" aria-label="Zones you look after"><span>You cover</span>${o.map((z) => `<button type="button" data-myzone="${z}" aria-pressed="${v.includes(z)}" title="${esc(zName(z))}">Zone ${z}</button>`).join('')}</div>` : ''); };
   function planSection() {
     const q = upNext(), ppl = D.STAFF.filter((x) => !x.you && !isAdminOnly(x.id)), nReq = S.reqs.filter((r) => isOpenReq(r) && !r.acceptedBy && r.type !== 'imaging').length;
     const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
@@ -962,8 +972,8 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const asks = `${S.endSess ? endSessionPanel() : ''}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}`, open = pplOpen();
     return `<div class="plan">${asks ? `<div class="plan-asks">${asks}</div>` : ''}
       <div class="plan-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span><div class="pq-row">${incomingChips()}${q.length ? q.map((p) => `<button type="button" class="q-chip" style="--u:${U(p.urgency).colour}" data-drag="${p.id}" data-open="${p.id}" title="${esc(p.name)} · ${esc(U(p.urgency).name)}${isChild(p) ? ' · child' : ''}${p.room ? ' · waiting in ' + esc(p.room) : ''} · ${ago(p.queuedAt)}. Press to read their record; drag onto a bed or a person.">${p.room ? bell : ''}<b>${esc(p.name)}</b>${teamChips(p)}${flags(p)}${p.lost ? '<span class="rq-ic rt rt-wait">Needs a new nurse</span>' : ''}<small>${ago(p.queuedAt)}</small></button>${bayPlaceBtn(p)}`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>${nReq ? `<button type="button" class="link pq-req" data-sec="reqs">${nReq} request${nReq > 1 ? 's' : ''}</button>` : ''}</div>
-      <div class="plan-h"><b>${erOn() ? 'Main ward and Emergency' : 'Main ward'}</b><span class="muted small">${bedsInUse()}</span>${mapSwitch()}</div>
-      <div class="plan-grid${open ? '' : ' shut'}"><div class="floor-wrap${erOn() ? ' er' : ''}"><div class="floor${erOn() ? ' er' : ''}" aria-label="${erOn() ? 'Main ward and Emergency floor plan' : 'Main ward floor plan'}">${floorInner('super')}</div></div>
+      <div class="plan-h"><b>${esc(zTitle())}</b><span class="muted small">${bedsInUse()}</span>${mapSwitch()}</div>
+      <div class="plan-grid${open ? '' : ' shut'}"><div class="floor-wrap${flWrap()}"${['1', '1,2'].includes(zView().join()) ? '' : ` data-zmap="z${zView().join('')}"`}><div class="floor${flCls()}"${flSty()} aria-label="${esc(zTitle())} floor plan">${floorInner('super')}</div></div>
         <aside class="plan-s" aria-label="People on shift"><div class="ps-h"><h3>People</h3><button type="button" class="link" data-a="pplx" aria-expanded="${open}" title="${open ? 'Make the People list narrow' : 'Show the People list'}">${open ? 'Hide' : '‹'}</button></div>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('')}${admBox()}</aside></div>
       ${S.roomPanel ? `<div class="room-pop" data-room="${S.roomPanel}" role="dialog" aria-label="${esc(roomWord(S.roomPanel))} settings">${roomPanel()}</div>` : ''}
       ${S.face ? `<div class="popover" data-anchor="${S.face}" role="dialog" aria-label="${esc(nm(S.face))}">${facePanel()}</div>` : ''}${svPop()}${bayPop()}${pdPop()}</div>`;
@@ -978,8 +988,48 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // 21 Nov 2026: the Trauma Bays sit a little ahead of the ER Waiting Room opening). Coordinates stay main-ward units;
   // box() adds OY, so the wing's top rows have negative y.
   const MW = 415, MH = 300, ERW = 748, ERY = 45; let FW = MW, FH = MH, OY = 0;
-  const erOn = () => S.map === 'main_er';
-  function setMap() { const e = erOn(); FW = e ? ERW : MW; OY = e ? ERY : 0; FH = MH + OY; FZW = e ? FZW_ER : FZW_MAIN; FZH = e ? FZH_ER : FZH_MAIN; }
+  // ZONES (the user, 22 Nov 2026; 0105): 1 the main ward and 2 Emergency (1st floor), 3 Surgery & ICU and 4 Pediatrics &
+  // Med-Surg (2nd floor, Plans/CareBeyond/chart/maps/floor2). The session opens any set of them: S.map is 'main' (zone 1),
+  // 'main_er' (1 and 2) or the zone numbers ('1,2,3,4', '3,4', '4'). A supervisor can untick open zones they don't cover
+  // (this device only, kept as the zones to hide, so a newly opened zone shows), so one person can run both floors or two
+  // supervisors a floor each. Everyone else always sees every open zone.
+  const ZONES = [[1, 'Main ward'], [2, 'Emergency'], [3, 'Surgery & ICU'], [4, 'Pediatrics & Med-Surg']];
+  const zName = (z) => (ZONES.find((x) => x[0] === z) || [0, ''])[1];
+  const zOf = (m) => (m === 'main' ? [1] : m === 'main_er' ? [1, 2] : /^[1-4](,[1-4]){0,3}$/.test(String(m || '')) ? [...new Set(String(m).split(',').map(Number))].sort() : null);
+  const zMapNorm = (m) => { const z = zOf(m); return !z ? null : z.join() === '1' ? 'main' : z.join() === '1,2' ? 'main_er' : z.join(); };
+  const zMap = (zs) => zMapNorm([...new Set(zs)].sort().join());
+  const WING_Z = { main: 1, er: 2, z3: 3, z4: 4 };
+  const zoneOfRoom = (id) => { const r = D.ROOMS.find((x) => x.id === String(id)); return r ? WING_Z[r.wing] || 1 : 1; };
+  const zOpen = () => zOf(S.map) || [1];
+  const HIDEZ = 'cbh-chart-zones-hidden';
+  const zHidden = () => { if (S.zHide) return S.zHide; try { const v = JSON.parse(localStorage.getItem(HIDEZ)); return Array.isArray(v) ? v : []; } catch { return []; } };
+  const zView = () => { const o = zOpen(); if (S.role !== 'super') return o; const h = zHidden(), v = o.filter((z) => !h.includes(z)); return v.length ? v : o; };
+  const zOn = (z) => zView().includes(z);
+  const roomInView = (id) => zOn(zoneOfRoom(id));
+  const erOn = () => zOn(2);
+  const plainMain = () => zView().join() === '1';   // the classic main-ward-only drawing
+  const zTitle = () => { const v = zView().join(); if (v === '1,2,3,4') return 'Whole hospital'; if (v === '3,4') return '2nd floor';
+    const n = zView().map(zName); return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0]; };
+  // Where each floor sits on the plan. Coordinates stay in each floor's own units (a Trauma Bay is 100 x 92 on both);
+  // box() adds T1 (1st floor), f2() moves a 2nd-floor box into box()'s frame. With both floors showing, the 1st floor is
+  // on top and the 2nd under it, each under a small floor label, at one scale.
+  const T1 = { dx: 0, dy: 0 }, T2 = { dx: 0, dy: 0 }; let FLOORS = [];
+  const F2Z = { 3: [0, 0, 1060, 460], 4: [600, 460, 910, 1230] };   // each 2nd-floor zone's x0, y0, x1, y1
+  function setMap() {
+    const v = zView(), on1 = v.includes(1) || v.includes(2), on2 = v.includes(3) || v.includes(4), both = on1 && on2, LBL = both ? 34 : 0;
+    let y = 0; FW = 0; FLOORS = [];
+    if (on1) { const x0 = v.includes(1) ? 0 : MW, x1 = v.includes(2) ? ERW : MW, y0 = v.includes(2) ? -ERY : 0;
+      T1.dx = -x0; T1.dy = LBL - y0; FW = x1 - x0; y = LBL + MH - y0; if (both) FLOORS.push(['1st floor', 0]); }
+    if (on2) { const bs = [3, 4].filter((z) => v.includes(z)).map((z) => F2Z[z]), top = on1 ? y + 56 : 0;
+      const x0 = Math.min(...bs.map((b) => b[0])), y0 = Math.min(...bs.map((b) => b[1])), x1 = Math.max(...bs.map((b) => b[2])), y1 = Math.max(...bs.map((b) => b[3]));
+      T2.dx = -x0; T2.dy = top + LBL - y0; FW = Math.max(FW, x1 - x0); y = top + LBL + y1 - y0; if (both) FLOORS.push(['2nd floor', top]); }
+    FH = y; OY = T1.dy;
+    const k = 1369 / 748;   // the phone's zoomable drawing: the same px per unit as the Emergency map (chart-phone.css .fpz.er)
+    FZW = plainMain() ? FZW_MAIN : Math.round(FW * k) + 30; FZH = plainMain() ? FZH_MAIN : Math.round(FH * k) + 64;
+  }
+  const flCls = () => { setMap(); return plainMain() ? '' : ' er zx'; };
+  const flWrap = () => { setMap(); return plainMain() ? '' : ' er'; };
+  const flSty = () => (plainMain() ? '' : ` style="--fw:${FW};--fh:${FH}"`);   // chart-plan.css sizes .floor.zx from these (chart-zoom.js clears an inline width)
   // The Emergency wing, from the user's map (chart/maps/emergency.png), drawn right of the main ward. Its corridor runs
   // left to right from the main ward's "To Emergency" doorway (right wall, 165-190), between the top rows (Trauma Bays,
   // then ER 1-3) and the bottom row (ER 6-4, then storage). Minor Triage (tall) and Emergency Dispatch (narrow, below it)
@@ -1007,8 +1057,33 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     gaps: { top: [[140, 160, 'To Radiology'], [325, 345, 'To the ER Waiting Room']], right: [[165, 190, 'To Emergency']],
       bottom: [[130, 150, 'To the main waiting area'], [325, 345, 'To the main waiting area']] },
   };
+  // The 2nd floor (Plans/CareBeyond/chart/maps/floor2/second-floor-zones.html, approved 22 Nov 2026), in its own units:
+  // Zone 3 runs left to right from the main lift (Classroom, Pre-Op, OR 1-3 on the left of the hallway, the Lab on the
+  // right), into the PACU (bays facing you, Family Waiting behind) with the ICU round the bend above it. Zone 4 hangs
+  // below, turned on its side: the 2nd lobby off the Surgery hallway and the PACU's side door lead to one long hallway
+  // down the left of Pediatrics (201-204, Play, Baby and Changing rooms) and Med-Surg (205-209, bathrooms in the
+  // corners). Non-patient rooms are plain blocks with no words.
+  const F2 = {
+    rooms: { PO: [200, 190, 130, 130], OR1: [330, 200, 120, 120], OR2: [450, 200, 120, 120], OR3: [570, 200, 130, 120],
+      PACU1: [930, 220, 60, 60], PACU2: [930, 280, 60, 60], PACU3: [930, 340, 60, 60],
+      ICU3: [830, 0, 70, 70], ICU4: [900, 0, 70, 70], ICU2: [760, 70, 70, 70], ICU1: [760, 140, 70, 70], ICU5: [970, 70, 70, 70], ICU6: [970, 140, 70, 70],
+      201: [818, 460, 92, 70], 202: [818, 530, 92, 70], 203: [698, 708, 70, 92], 204: [628, 708, 70, 92],
+      205: [708, 900, 80, 92], 206: [788, 992, 92, 73], 207: [788, 1065, 92, 73], 208: [708, 1138, 80, 92], 209: [628, 1138, 80, 92] },
+    z3: { corr: [[25, 320, 675, 25], [700, 310, 70, 45], [770, 210, 290, 230], [830, 70, 140, 140], [590, 345, 110, 115], [700, 440, 225, 20]],
+      rest: [[0, 310, 25, 45], [40, 190, 160, 130], [330, 345, 260, 60], [990, 300, 70, 100], [775, 215, 60, 40]],
+      walls: [[770, 210, 875, 210], [925, 210, 1060, 210], [1060, 210, 1060, 440], [770, 440, 875, 440], [925, 440, 1060, 440], [770, 210, 770, 310], [770, 355, 770, 440]] },
+    z4: { corr: [[628, 460, 190, 248], [600, 460, 28, 770], [628, 992, 160, 146]],
+      rest: [[818, 600, 92, 108], [818, 708, 92, 92], [768, 708, 50, 92], [628, 555, 50, 60], [628, 900, 80, 92], [788, 900, 46, 92], [834, 900, 46, 92], [788, 1138, 46, 92], [834, 1138, 46, 92]],
+      walls: [[628, 460, 910, 460], [910, 460, 910, 800], [628, 800, 910, 800], [628, 460, 628, 485], [628, 540, 628, 635], [628, 665, 628, 800],
+        [628, 900, 880, 900], [880, 900, 880, 1230], [628, 1230, 880, 1230], [628, 900, 628, 1035], [628, 1095, 628, 1230]] },
+  };
+  const f2 = ([x, y, w, h]) => [x + T2.dx - T1.dx, y + T2.dy - T1.dy, w, h];
+  // Off the classic main ward the plan's own colour is outside, and the halls are painted in.
+  const halls = () => `${zOn(1) ? `<i class="fp-hall" style="${box([0, 0, MW, MH])}"></i>` : ''}${zOn(2) ? `<i class="fp-hall" style="${box([MW, -ERY, ERW - MW, MH + ERY])}"></i>` : ''}${[3, 4].filter(zOn).flatMap((z) => F2['z' + z].corr).map((g) => `<i class="fp-hall" style="${box(f2(g))}"></i>`).join('')}`;
+  const f2Parts = (mini) => [3, 4].filter(zOn).flatMap((z) => F2['z' + z].rest).map((g) => `<i class="${mini ? 'mf-hub' : 'fp-rest'}" style="${box(f2(g))}"></i>`).join('');
+  const floorLabels = () => FLOORS.map(([t, y]) => `<span class="fp-floor" style="top:${pc(y, FH)}">${t}</span>`).join('');
   const pc = (v, of) => `${(v / of) * 100}%`;
-  const box = ([x, y, w, h]) => `left:${pc(x, FW)};top:${pc(y + OY, FH)};width:${pc(w, FW)};height:${pc(h, FH)}`;
+  const box = ([x, y, w, h]) => `left:${pc(x + T1.dx, FW)};top:${pc(y + T1.dy, FH)};width:${pc(w, FW)};height:${pc(h, FH)}`;
   const bedIcons = (p) => `${p.stage === 'queue' ? bell : ''}${flags(p, true)}`;
   const inits = (n) => String(n || '').replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const bedCell = (bed, short, mode, shared, narrow) => { const p = roomsInUse()[bed], o = ownerOf(bed);
@@ -1019,42 +1094,49 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (mode === 'pick') { const on = pickSelNow().includes(bed), other = o && o !== 'me' ? o : null; return `<button type="button" class="${cls.replace(' mine', '')}${on ? ' mine picked' : ''} pickable" data-pickbed="${esc(bed)}" aria-pressed="${on}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}><span class="bed-n">${esc(short)}</span>${on ? `${face('me')}<b>Yours</b>` : other ? `${face(other)}<b>${esc(first(other))}</b>` : `<small class="free-l">${p ? `${esc(p.name)} waiting · nobody's` : bedOff(bed) ? 'Unavailable' : closedBed(bed) ? `Closed${S.roomCfg[roomIdOf(bed)].why ? ': ' + esc(S.roomCfg[roomIdOf(bed)].why) : ''}` : 'Free'}</small>`}</button>`; }
     return `<div class="${cls}${placing}" data-bed="${esc(bed)}"${p ? ` style="--u:${U(p.urgency).colour}" data-open="${p.id}"${mode === 'super' ? ` data-drag="${p.id}"` : ''} role="button" tabindex="0" aria-label="${esc(p.name)} in ${esc(bed)}${o ? ', ' + esc(nm(o)) + '\u2019s bed' : ''}. Enter opens the record${mode === 'super' ? ', M moves them' : ''}."` : ''}>
       ${narrow ? '' : `<span class="bed-n">${esc(short)}</span>`}${shared ? face(o, { drag: mode === 'super', room: roomIdOf(bed) }) : ''}${p ? `<b title="${esc(p.name)} · ${esc(p.stage === 'queue' ? 'Needs a nurse' : status(p))}">${esc(narrow ? p.name.split(' ')[0] : p.name)}</b>${narrow ? '' : `<small class="bed-st">${esc(p.stage === 'queue' ? 'Needs a nurse' : status(p))}</small>`}<span class="bed-tags">${bedIcons(p)}</span>` : `<small class="free-l${resOf(bed) ? ' res-l' : ''}">${bedOff(bed) ? 'Off' : resOf(bed) ? esc(resWords(resOf(bed))) : narrow ? '' : 'Free'}</small>`}${tcAway(bed)}</div>`; };
-  const geo = (id) => FLOOR.rooms[id] || (erOn() ? ER.rooms[id] : null);
+  const geo = (id) => { const z = zoneOfRoom(id); if (!zOn(z)) return null;   // only the zones on show
+    if (z === 1) return FLOOR.rooms[id] || null; if (z === 2) return ER.rooms[id] || null; return F2.rooms[id] ? f2(F2.rooms[id]) : null; };
   const roomBox = (r, mode) => { const beds = D.BEDS.filter((b) => D.roomOfBed(b) === r), g = geo(r.id); if (!g) return '';
     const c = S.roomCfg[r.id], rd = S.roomDept[r.id], open = !beds.some(ownerOf);
     const owners = [...new Set(beds.map(ownerOf).filter(Boolean))];
     const helpers = S.reqs.filter((x) => isOpenReq(x) && x.acceptedBy && x.type !== 'imaging' && beds.includes((byId(x.pid) || {}).room));
     const people = [...owners, ...helpers.map((x) => x.acceptedBy), ...S.visits.filter((v) => v.room === r.id).map((v) => v.sid)];
     const who = mode === 'pick' ? '' : `<span class="rh-who">${owners.map((o) => `${face(o, { drag: mode === 'super', room: r.id })}${g[2] >= 100 ? `<i>${esc(o === 'me' ? 'You' : first(o).replace('Dr. ', 'Dr '))}</i>` : ''}`).join('')}${helpers.map((x) => `<span class="face helper${x.hereAt ? '' : ' going'}" style="--dc:${deptColour(staffDept(x.acceptedBy))}" title="${esc(nm(x.acceptedBy))} ${x.hereAt ? 'is here' : 'is on the way'} (${esc(REQ[x.type][0].toLowerCase())})">${esc(initial(x.acceptedBy))}</span>`).join('')}${svVisitors(r.id, mode)}</span>`;
-    return `<div class="fp-room${c.kids ? ' ped' : ''}${c.closed ? ' closed' : ''}${open ? ' open' : ''}${mode === 'pick' && rd === S.rdept ? ' mydept' : ''}${g[2] > g[3] * 1.3 ? ' wide' : ''}${r.beds > 1 && g[2] <= g[3] * 1.3 ? ' stack' : ''}${g[3] <= 55 ? ' short' : ''}${isEr(r.id) ? ' er-room' : ''}${mode !== 'pick' && S.calls.some((x) => x.room === r.id) ? ' tc-on' : ''}${S.face && people.includes(S.face) ? ' hl' : ''}" data-room="${r.id}" data-people="${people.join(' ')}" title="${esc(roomWord(r.id))} ·${esc(rd)}${c.kids ? ' · children only' : ''}${c.closed ? ' · closed' : ''}" style="${box(g)};--dc:${deptColour(rd)}">
+    return `<div class="fp-room${c.kids ? ' ped' : ''}${c.closed ? ' closed' : ''}${open ? ' open' : ''}${mode === 'pick' && rd === S.rdept ? ' mydept' : ''}${g[2] > g[3] * 1.3 ? ' wide' : ''}${r.beds > 1 && g[2] <= g[3] * 1.3 ? ' stack' : ''}${g[3] <= 55 ? ' short' : ''}${isNamed(r.id) ? ' er-room' : ''}${mode !== 'pick' && S.calls.some((x) => x.room === r.id) ? ' tc-on' : ''}${S.face && people.includes(S.face) ? ' hl' : ''}" data-room="${r.id}" data-people="${people.join(' ')}" title="${esc(roomWord(r.id))} ·${esc(rd)}${c.kids ? ' · children only' : ''}${c.closed ? ' · closed' : ''}" style="${box(g)};--dc:${deptColour(rd)}">
       <div class="fp-rh"><b>${esc(roomName(r.id))}</b>${g[2] >= 100 || mode === 'pick' ? `<span class="rd-tag">${esc(rd)}</span>` : ''}${c.kids ? '<span class="ped-tag">Paediatric</span>' : ''}${c.adults ? '<span class="ad-tag">Adults</span>' : ''}${who}${svTag(r.id, mode)}${mode === 'super' ? `<button type="button" class="rh-edit" data-roomcfg="${r.id}" aria-label="${esc(roomWord(r.id))} settings" title="${esc(roomWord(r.id))} settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button>` : ''}</div>
       ${tcBayBtn(r, mode)}${c.closed ? `<div class="cl-why"><b>Closed</b>${c.why ? `<span>${esc(c.why)}</span>` : ''}</div>` : ''}
       ${(mode !== 'pick' && tcBay(r)) || `<div class="fp-beds">${beds.map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), mode, owners.length > 1, mode !== 'pick' && !(g[2] > g[3] * 1.3))).join('')}</div>`}</div>`; };
   // The Emergency wing's fixed parts: the ambulance bay outside along the top, the corridor's name, Dispatch and storage
   // (grey labelled blocks with no beds, like the Family Restroom), the ground outside the building, and its walls.
-  const erParts = () => (erOn() ? `${ER.out.map((o) => `<i class="fp-out" style="${box(o)}"></i>`).join('')}<div class="fp-amb" style="${box(ER.amb)}"><b>Ambulance parking and drop off</b></div>
+  const erParts = () => (erOn() ? `${ER.out.filter((o, i) => i || zOn(1)).map((o) => `<i class="fp-out" style="${box(o)}"></i>`).join('')}<div class="fp-amb" style="${box(ER.amb)}"><b>Ambulance parking and drop off</b></div>
     <div class="fp-corr" style="${box(ER.corr)}"><b>Emergency Department</b></div>
     <div class="fp-rest fp-disp" style="${box(ER.dispatch)}"><b>Emergency Dispatch</b></div><div class="fp-rest fp-store" style="${box(ER.store)}"><b>Storage</b></div>` : '');
-  const floorInner = (mode) => `${FLOOR.walls.map((w) => `<div class="fp-block" style="${box(w)}"></div>`).join('')}${hubSvg()}<div class="fp-rest" style="${box(FLOOR.restroom)}"><b>Family Restroom</b></div>${erParts()}${D.ROOMS.map((r) => roomBox(r, mode)).join('')}${wallSegs()}${exitLabels()}`;
+  const floorInner = (mode) => { setMap();
+    return `${plainMain() ? '' : halls()}${zOn(1) ? `${FLOOR.walls.map((w) => `<div class="fp-block" style="${box(w)}"></div>`).join('')}${hubSvg()}<div class="fp-rest" style="${box(FLOOR.restroom)}"><b>Family Restroom</b></div>` : ''}${erParts()}${f2Parts()}${floorLabels()}${D.ROOMS.map((r) => roomBox(r, mode)).join('')}${wallSegs()}${zOn(1) ? exitLabels() : ''}`; };
   // The main ward's outline (with its doorways) always spans x 0-415; with the wing on, its right wall sits inside the plan.
   function wallSegs() {
     const seg = (side, from, to) => side === 'top' || side === 'bottom'
-      ? `<i class="fp-wall fw-h" style="left:${pc(from, FW)};width:${pc(to - from, FW)};${side === 'top' ? `top:${pc(OY, FH)}` : 'bottom:0'}"></i>`
-      : `<i class="fp-wall fw-v" style="top:${pc(from + OY, FH)};height:${pc(to - from, FH)};${side === 'left' ? 'left:0' : erOn() ? `left:calc(${pc(MW, FW)} - 3px)` : 'right:0'}"></i>`;
+      ? `<i class="fp-wall fw-h" style="left:${pc(from + T1.dx, FW)};width:${pc(to - from, FW)};top:${side === 'top' ? pc(T1.dy, FH) : `calc(${pc(MH + T1.dy, FH)} - 3px)`}"></i>`
+      : `<i class="fp-wall fw-v" style="top:${pc(from + T1.dy, FH)};height:${pc(to - from, FH)};left:${side === 'left' ? pc(T1.dx, FW) : `calc(${pc(MW + T1.dx, FW)} - 3px)`}"></i>`;
     const run = (side, len) => { const gaps = (FLOOR.gaps[side] || []).slice().sort((a, b) => a[0] - b[0]); let at = 0, out = '';
       gaps.forEach(([g0, g1]) => { out += seg(side, at, g0); at = g1; }); return out + seg(side, at, len); };
-    const er = erOn() ? ER.walls.map(([x1, y1, x2, y2]) => (y1 === y2
-      ? `<i class="fp-wall fw-h" style="left:${pc(x1, FW)};width:calc(${pc(x2 - x1, FW)} + 3px);top:calc(${pc(y1 + OY, FH)} - 1.5px)"></i>`
-      : `<i class="fp-wall fw-v" style="top:${pc(y1 + OY, FH)};height:${pc(y2 - y1, FH)};left:calc(${pc(x1, FW)} - 1.5px)"></i>`)).join('') : '';
-    return run('top', MW) + run('bottom', MW) + run('left', MH) + run('right', MH) + er;
+    // straight wall lines [x1, y1, x2, y2] on either floor (t moves a point onto the plan)
+    const line = (t) => ([x1, y1, x2, y2]) => { const [X1, Y1] = t(x1, y1), [X2, Y2] = t(x2, y2); return y1 === y2
+      ? `<i class="fp-wall fw-h" style="left:${pc(X1, FW)};width:calc(${pc(X2 - X1, FW)} + 3px);top:calc(${pc(Y1, FH)} - 1.5px)"></i>`
+      : `<i class="fp-wall fw-v" style="top:${pc(Y1, FH)};height:${pc(Y2 - Y1, FH)};left:calc(${pc(X1, FW)} - 1.5px)"></i>`; };
+    const t1 = (x, y) => [x + T1.dx, y + T1.dy], t2 = (x, y) => [x + T2.dx, y + T2.dy];
+    // without the main ward, the wing gets its own wall where it meets it (the doorway stays open)
+    const er = erOn() ? [...ER.walls, ...(zOn(1) ? [] : [[MW, 0, MW, 165], [MW, 190, MW, 258]])].map(line(t1)).join('') : '';
+    const up = [3, 4].filter(zOn).flatMap((z) => F2['z' + z].walls).map(line(t2)).join('');
+    return (zOn(1) ? run('top', MW) + run('bottom', MW) + run('left', MH) + run('right', MH) : '') + er + up;
   }
   function exitLabels() {
     const lab = (side, a, b2, text) => { const mid = (a + b2) / 2;
-      return side === 'right' ? (erOn() ? '' : `<span class="fp-exit fx-right" style="top:${pc(mid + OY, FH)}">→ ${esc(text)}</span>`)   // with the wing on, the doorway leads into it
-        : `<span class="fp-exit fx-${side}" style="left:${pc(mid, FW)}${side === 'top' && OY ? `;top:calc(${pc(OY, FH)} - 20px)` : ''}">${side === 'top' ? '↑' : '↓'} ${esc(text)}</span>`; };   // with the wing on, the top labels sit in the ground above the ward
+      return side === 'right' ? (erOn() ? '' : `<span class="fp-exit fx-right" style="top:${pc(mid + T1.dy, FH)};left:calc(${pc(MW + T1.dx, FW)} + 10px)">→ ${esc(text)}</span>`)   // with the wing on, the doorway leads into it
+        : `<span class="fp-exit fx-${side}" style="left:${pc(mid + T1.dx, FW)}${side === 'top' && T1.dy ? `;top:calc(${pc(T1.dy, FH)} - 20px)` : ''}${side === 'bottom' && FH > MH + T1.dy + 1 ? `;bottom:auto;top:calc(${pc(MH + T1.dy, FH)} + 8px)` : ''}">${side === 'top' ? '↑' : '↓'} ${esc(text)}</span>`; };   // top labels sit in the ground above the ward when there's room; bottom ones under the ward
     return Object.entries(FLOOR.gaps).flatMap(([side, list]) => list.map(([a, b2, t]) => lab(side, a, b2, t))).join('');
   }
-  const hubSvg = () => `<svg class="fp-hub" viewBox="0 ${-OY} ${FW} ${FH}" preserveAspectRatio="none" aria-hidden="true"><polygon points="${FLOOR.hub.map((x) => x.join(',')).join(' ')}"/></svg>
+  const hubSvg = () => `<svg class="fp-hub" viewBox="${-T1.dx} ${-T1.dy} ${FW} ${FH}" preserveAspectRatio="none" aria-hidden="true"><polygon points="${FLOOR.hub.map((x) => x.join(',')).join(' ')}"/></svg>
     <div class="fp-hub-label" style="${box([95, 115, 230, 80])}"><b>Central Hub</b><small>Nurses' & doctors' station · break room · lockers</small></div>
     <div class="fp-hub-label front" style="${box([150, 235, 140, 55])}"><b>Reception</b><small>Front desk, facing the main waiting area</small></div>`;
   // Moving patients: drag a patient (or someone from Up next) onto a bed. The checks, a swap offer and the log live in
@@ -1430,7 +1512,9 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   function sizeFp() {
     const box = $('.fpx-floor'), fl = box && box.querySelector('.floor'); if (!fl) return;
     const cs = getComputedStyle(box), w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    const k = Math.max(0, Math.min(w / FW, h / FH)); fl.style.width = Math.floor(FW * k) + 'px'; fl.style.height = Math.floor(FH * k) + 'px';
+    // A zone map bigger than the screen keeps the Emergency map's density (748 x 345 fitted) and scrolls instead of shrinking.
+    const fit = Math.min(w / FW, h / FH), zm = !['1', '1,2'].includes(zView().join()), k = Math.max(0, zm ? Math.max(fit, Math.min(w / 748, h / 345)) : fit);
+    fl.style.width = Math.floor(FW * k) + 'px'; fl.style.height = Math.floor(FH * k) + 'px'; box.classList.toggle('fz-scroll', k > fit + 0.001);
   }
   ['resize', 'orientationchange', 'fullscreenchange'].forEach((ev) => (ev === 'fullscreenchange' ? document : window).addEventListener(ev, () => { if (S.fp) { sizeFp(); setTimeout(sizeFp, 250); } }));
   function bedActPanel() { const p = S.bedAct && byId(S.bedAct); if (!p) return '';
@@ -1438,10 +1522,10 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       <span class="muted small">${esc(p.room || '')} · ${esc(p.stage === 'queue' ? 'Waiting in room' : status(p))}${p.nurse ? ' · ' + esc(first(p.nurse)) : ''}</span>
       <div class="fpx-acts">${p.stage === 'care' ? `<button type="button" class="btn" data-fprec="${p.id}">Open record</button>` : ''}${p.stage === 'queue' ? `<button type="button" class="btn" data-fpwho="${p.id}">Give to someone</button>` : ''}<button type="button" class="btn ghost" data-mvopen="${p.id}">Move to another bed</button>${(() => { const c = openBayCall(); return c && !(p.room && roomIdOf(p.room) === c.room) ? `<button type="button" class="btn tc-btn" data-bay="place" data-baypid="${p.id}" data-bayroom="${c.room}">Place in ${esc(roomWord(c.room))}</button>` : ''; })()}${S.calls.some((c) => c.pid === p.id) ? '' : `<button type="button" class="btn tc-btn" data-tc="new" data-tcpid="${p.id}">Trauma call</button>`}</div></div>`; }
   // a small, non-interactive picture of the ward for the phone's Floor Plan tab (the real one opens full screen)
-  const miniFloor = () => `${FLOOR.walls.map((w) => `<i class="fp-block" style="${box(w)}"></i>`).join('')}<i class="mf-hub" style="${box([95, 95, 230, 115])}"></i><i class="mf-hub" style="${box([150, 205, 140, 95])}"></i>${erOn() ? `${[ER.amb, ...ER.out].map((o) => `<i class="fp-out" style="${box(o)}"></i>`).join('')}<i class="mf-hub" style="${box(ER.dispatch)}"></i><i class="mf-hub" style="${box(ER.store)}"></i>` : ''}${D.ROOMS.map((r) => { const g = geo(r.id); if (!g) return '';
+  const miniFloor = () => { setMap(); return `${plainMain() ? '' : halls()}${zOn(1) ? `${FLOOR.walls.map((w) => `<i class="fp-block" style="${box(w)}"></i>`).join('')}<i class="mf-hub" style="${box([95, 95, 230, 115])}"></i><i class="mf-hub" style="${box([150, 205, 140, 95])}"></i>` : ''}${erOn() ? `${[ER.amb, ...ER.out.filter((o, i) => i || zOn(1))].map((o) => `<i class="fp-out" style="${box(o)}"></i>`).join('')}<i class="mf-hub" style="${box(ER.dispatch)}"></i><i class="mf-hub" style="${box(ER.store)}"></i>` : ''}${f2Parts(true)}${D.ROOMS.map((r) => { const g = geo(r.id); if (!g) return '';
     const beds = D.BEDS.filter((b) => D.roomOfBed(b) === r), c = S.roomCfg[r.id] || {};
-    return `<i class="mf-room${c.closed ? ' closed' : ''}" style="${box(g)};--dc:${deptColour(S.roomDept[r.id])}"><b>${r.id === 'MT' ? 'Triage' : r.id}</b><em>${beds.map((b) => { const p = roomsInUse()[b]; return `<u class="${p ? 'on' : ''}${ownerOf(b) ? ' own' : ''}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}></u>`; }).join('')}</em></i>`; }).join('')}`;
-  const fpLaunch = (a, t, sub) => `<button type="button" class="fp-launch" data-a="${a}"><span class="floor mini${erOn() ? ' er' : ''}" aria-hidden="true">${miniFloor()}</span><span class="fp-go"><b>${t}</b><small>${sub}</small></span></button>`;
+    return `<i class="mf-room${c.closed ? ' closed' : ''}" style="${box(g)};--dc:${deptColour(S.roomDept[r.id])}"><b>${r.id === 'MT' ? 'Triage' : esc(roomName(r.id))}</b><em>${beds.map((b) => { const p = roomsInUse()[b]; return `<u class="${p ? 'on' : ''}${ownerOf(b) ? ' own' : ''}"${p ? ` style="--u:${U(p.urgency).colour}"` : ''}></u>`; }).join('')}</em></i>`; }).join('')}` };
+  const fpLaunch = (a, t, sub) => `<button type="button" class="fp-launch" data-a="${a}"><span class="floor mini${flCls()}"${plainMain() ? '' : ` style="aspect-ratio:${FW} / ${FH}"`} aria-hidden="true">${miniFloor()}</span><span class="fp-go"><b>${t}</b><small>${sub}</small></span></button>`;
   function fpView() {
     const pick = S.fp === 'pick', q = upNext(), n = pick ? pickSelNow().length : 0;
     const sheet = pick ? '' : `${S.endSess ? endSessionPanel() : ''}${svPanel()}${bayPanel()}${pdPanel()}${teamWarnPanel()}${whoPanel()}${pendRoomPanel()}${movePanel()}${bedActPanel()}${S.roomPanel ? roomPanel() : ''}${S.face ? facePanel() : ''}`;
@@ -1455,7 +1539,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const hint = S.placeFor && !pick && !sheet && byId(S.placeFor) ? `<div class="fpx-hint"><b>Place ${esc(byId(S.placeFor).name)}</b><span>Tap a lit bed.</span><button type="button" class="link" data-place="${S.placeFor}">Cancel</button></div>` : '';
     return `<div class="fpx${pick ? ' pick' : ''}" role="dialog" aria-modal="true" aria-label="${pick ? 'Pick your room' : 'Floor plan'}">
       <div class="fpx-bar"><button type="button" class="fpx-x" data-a="fpclose" aria-label="Close the floor plan">×</button>${bar}</div>
-      <div class="fpx-main"><div class="fpx-floor"><div class="floor${pick ? ' pick' : ''}${erOn() ? ' er' : ''}">${floorInner(pick ? 'pick' : 'super')}</div></div><div class="fpx-side">${hint}${side}</div></div></div>`;
+      <div class="fpx-main"><div class="fpx-floor"><div class="floor${pick ? ' pick' : ''}${flCls()}">${floorInner(pick ? 'pick' : 'super')}</div></div><div class="fpx-side">${hint}${side}</div></div></div>`;
   }
 
   // ---------- PHONE FLOOR PLAN, ZOOM AND PAN (the user, 20 Nov 2026: "zoom and pan please") ----------
@@ -1465,9 +1549,10 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // With the Emergency wing the drawing is bigger at the same scale (floor 1369 x 631 instead of 760 x 549, and no
   // "To Emergency" label on the right): chart-phone.css .fpz.er matches these sizes.
   const FZW_MAIN = 880, FZH_MAIN = 613, FZW_ER = 1399, FZH_ER = 695, FZMAX = 1.5; let FZW = FZW_MAIN, FZH = FZH_MAIN;
-  const fpzBlock = (mode) => `<div class="fpz${erOn() ? ' er' : ''}" data-mode="${mode}"><div class="fpz-in"><div class="floor${mode === 'pick' ? ' pick' : ''}${erOn() ? ' er' : ''}" aria-label="${mode === 'pick' ? 'Pick your room' : erOn() ? 'Main ward and Emergency floor plan' : 'Main ward floor plan'}">${floorInner(mode)}</div></div>
+  const fpzBlock = (mode) => `<div class="fpz${flWrap()}" data-mode="${mode}"><div class="fpz-in"${fzSty(0)}><div class="floor${mode === 'pick' ? ' pick' : ''}${flCls()}"${fzSty(1)} aria-label="${mode === 'pick' ? 'Pick your room' : esc(zTitle()) + ' floor plan'}">${floorInner(mode)}</div></div>
     <div class="fpz-ctl"><button type="button" data-fpz="in" aria-label="Zoom in">+</button><button type="button" data-fpz="out" aria-label="Zoom out">−</button><button type="button" data-fpz="fit" class="fit-b" aria-label="Show the whole ward">Fit</button></div>
     <button type="button" class="fpz-full" data-a="${mode === 'pick' ? 'fppick' : 'fpopen'}">Full screen</button></div>`;
+  const fzSty = (f) => (plainMain() ? '' : f ? ` style="width:${FZW - 30}px;height:${FZH - 64}px"` : ` style="width:${FZW}px;height:${FZH}px"`);   // sizes for any zones but the main ward alone
   const fpzView = () => { const v = $('.fpz'); return v ? { v, w: v.clientWidth, h: v.clientHeight } : null; };
   const fitK = (w, h) => Math.min(w / FZW, h / FZH);
   function fpzApply(reset) {
@@ -1531,7 +1616,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (S.fp && (S.fp === 'pick' ? !S.pick : S.role !== 'super')) S.fp = false;
     if (t.s === 'plan') { const q = upNext(), ppl = D.STAFF.filter((x) => !x.you && !isAdminOnly(x.id));
       const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
-      h = `${phHead('Floor Plan', `${erOn() ? 'Main ward and Emergency' : 'Main ward'} · ${bedsInUse()}`)}${mapSwitch()}
+      h = `${phHead('Floor Plan', `${esc(zTitle())} · ${bedsInUse()}`)}${mapSwitch()}
       <details class="ph-sess"${S.phSess ? ' open' : ''}><summary data-a="phsess">Session settings</summary><div class="ph-sess-in">
         <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Allow Reception</button>
         <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
@@ -1567,7 +1652,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (t.s === 'new1') h = `${phHead('Walk-in', 'Step 1 of 3')}<label class="f"><span>Name</span><input id="d-name" value="${esc(d.name)}" placeholder="e.g. Anna S."></label><label class="f"><span>Roblox username (optional)</span><input id="d-roblox" value="${esc(d.roblox)}"></label><label class="f"><span>Age</span><input id="d-age" type="number" inputmode="numeric" value="${esc(d.age)}" placeholder="under 18 goes to a Children only room"></label><div class="grow"></div><button type="button" class="btn big" data-pgo="new2"${d.name.trim() ? '' : ' disabled'} data-needname>Next</button>`;
     if (t.s === 'new2') h = `${phHead('What\u2019s wrong?', 'Step 2 of 3 · type each thing')}${tagList(d.symptoms, 'data-dsymrm')}${fbox('sym', 'sym', '', 'e.g. headache', 'Add')}<div class="grow"></div><button type="button" class="btn big" data-pgo="new3">Next</button>`;
     if (t.s === 'new3') h = `${phHead('Their colour', 'Step 3 of 3')}${urgPicker(d.urgency, 'data-durg')}<button type="button" class="btn big" data-a="padd"${d.urgency ? '' : ' disabled'}>Check in to Up next</button>`;
-    if (t.s === 'rooms') h = `${phHead('Rooms', `${erOn() ? 'Main ward and Emergency' : 'Main ward'} · ${bedsInUse()}`)}${D.ROOMS.map((r) => `<h4 class="ph-sub">${esc(roomName(r.id))} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? `${roomName(r.id)} · ${unitOf(r.id)} ${b.slice(-1)}` : roomName(r.id))).join('')}</div>`).join('')}`;
+    if (t.s === 'rooms') h = `${phHead('Rooms', `${esc(zTitle())} · ${bedsInUse()}`)}${D.ROOMS.map((r) => `<h4 class="ph-sub">${esc(roomName(r.id))} · ${S.roomCfg[r.id].kids ? 'Paediatric' : esc(S.roomDept[r.id] || '')}${S.roomCfg[r.id].closed ? ' · closed' : ''}</h4><div class="ph-beds">${D.BEDS.filter((b) => roomIdOf(b) === r.id).map((b) => bedCell(b, r.beds > 1 ? `${roomName(r.id)} · ${unitOf(r.id)} ${b.slice(-1)}` : roomName(r.id))).join('')}</div>`).join('')}`;
     if (t.s === 'patient' && p && p.stage === 'care') { const l = latest(p), un = p.orders.filter((o) => !o.done).length, mineP = p.nurse === 'me';
       h = `${phHead(esc(p.name) + (p.age ? `<small>, ${p.age}</small>` : ''), `${upill(p.urgency)} ${esc(p.room || p.where || '')} · ${esc(status(p))}`)}
 ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
@@ -2471,6 +2556,12 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     else if (ds.sendto) S.sendFor = S.sendFor === +ds.sendto ? null : +ds.sendto;
     else if (ds.sendsid) { const r = reqById(S.sendFor); S.sendFor = null; if (r) req.send(r, ds.sendsid); }
     // supervisor
+    else if (ds.zone) { const z = +ds.zone, o = zOpen(), n = o.includes(z) ? o.filter((x) => x !== z) : [...o, z];
+      if (!n.length) { toast('Keep at least one zone open.'); return; }
+      S.fpz = null; call('chart_set_map', { p_map: zMap(n) }, o.includes(z) ? `Zone ${z}, ${esc(zName(z))}, is closed.` : `Zone ${z}, ${esc(zName(z))}, is open: its rooms can be picked and used.`); return; }
+    else if (ds.myzone) { const z = +ds.myzone, o = zOpen(), h = zHidden().filter((x) => o.includes(x)), n = h.includes(z) ? h.filter((x) => x !== z) : [...h, z];
+      if (n.length >= o.length) { toast('Keep at least one zone on your plan.'); return; }
+      S.zHide = n; try { localStorage.setItem(HIDEZ, JSON.stringify(n)); } catch { /* private window: kept for this visit only */ } S.fpz = null; setMap(); }
     else if (ds.map) { if (ds.map !== S.map) { S.fpz = null; call('chart_set_map', { p_map: ds.map }, ds.map === 'main_er' ? 'The Emergency wing is on the map: its rooms can be picked and used.' : 'Back to the main ward only.'); } return; }
     else if (ds.roomcfg) { S.roomPanel = S.roomPanel === ds.roomcfg ? null : ds.roomcfg; S.face = null; }
     else if (ds.a === 'roompx') S.roomPanel = null;

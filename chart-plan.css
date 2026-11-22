@@ -83,3 +83,18 @@
 .chx .floor.er .fp-room.ped:not(.wide) .fp-rh { flex-wrap: wrap; }
 .chx .floor.er .fp-room.ped:not(.wide) .ped-tag { flex: none; order: 2; }
 .chx .floor.er .fp-room.ped:not(.wide) .rh-who { order: 1; }
+
+/* Zones (22 Nov 2026, 0105): the plan shows any of the four zones over two floors at one scale. Off the classic main
+   ward the plan's own colour is outside the building and the halls are painted in (.fp-hall). */
+.chx .floor.zx { background: #fbfcfe; }
+.chx .floor.er.zx, .chx .plan .floor.er.zx { width: calc(var(--fw, 748) * var(--k)); height: calc(var(--fh, 345) * var(--k)); }
+.chx .fp-hall { background: #e9eef5; }
+.chx .fp-floor { left: 0; padding: 8px 2px 0; font-size: 10.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #55688c; white-space: nowrap; pointer-events: none; }
+.chx .fp-launch .floor.mini.zx { background: #fff; }
+.chx .fp-launch .fp-hall { background: #eef1f5; }
+.chx .zn-sw button i { font-style: normal; font-weight: 800; margin-right: 5px; color: var(--teal-ink, #0D7D74); }
+.chx .zn-mine { margin-left: 0; align-items: center; }
+.chx .zn-mine > span { font-size: 11.5px; font-weight: 600; color: #55688c; padding: 0 6px 0 8px; white-space: nowrap; }
+.chx .map-sw.zn-sw { flex-wrap: wrap; }
+.chx .fpx-floor.fz-scroll { display: block; overflow: auto; -webkit-overflow-scrolling: touch; }
+.chx .fpx-floor.fz-scroll .floor { margin: 0 auto; }
