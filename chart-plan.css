@@ -116,13 +116,13 @@
 .chx .zn-tabs button:focus-visible { outline: 3px solid color-mix(in srgb, #3A82D0 40%, transparent); outline-offset: 1px; }
 @media (max-width: 700px) { .chx .zn-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 8px 0; } .chx .zn-tabs::-webkit-scrollbar { display: none; } }
 /* Pop out (0.51): the button at the end of the view tabs, and the pop-out window itself (index.html?pop=<view>#chart):
-   only the plan fills the window; the site's header, the Chart's menu, the zone switches and the People list are hidden. */
+   the plan and the People list fill the window; the site's header, the Chart's menu and the zone switches are hidden. */
 .chx .zn-tabs .zn-pop { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: #22579F; border-color: #DBE4F0; background: #fff; }
 .chx .zn-pop-i { width: 13px; height: 13px; background: currentColor; -webkit-mask: url('assets/icons/open-in-popup.png') center / contain no-repeat; mask: url('assets/icons/open-in-popup.png') center / contain no-repeat; }
 @media (hover: hover) { .chx .zn-tabs .zn-pop:hover { background: #eef4fb; border-color: #3A82D0; color: #22579F; } }
 body.cbh-pop { overflow: hidden; }
 body.cbh-pop .chx { position: fixed; inset: 0; z-index: 3000; background: #F3F7FC; overflow: auto; padding: 10px 12px 0; }
-body.cbh-pop .chx .zn-sw, body.cbh-pop .chx .zn-mine, body.cbh-pop .chx .zn-tabs, body.cbh-pop .chx .plan-s { display: none; }
-body.cbh-pop .chx .plan-grid, body.cbh-pop .chx .plan-grid.shut { grid-template-columns: minmax(0, 1fr); }
+body.cbh-pop .chx .zn-sw, body.cbh-pop .chx .zn-mine, body.cbh-pop .chx .zn-tabs { display: none; }
+/* the People list stays (narrow faces unless widened with ‹) so nurses and doctors can be dragged onto beds here too */
 body.cbh-pop .chx .plan .floor-wrap, body.cbh-pop .chx .plan .floor-wrap.er { max-height: calc(100vh - 118px); }
 body.cbh-pop .chx .plan-h { margin: 0 0 6px; }
