@@ -1009,15 +1009,25 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const ZTAB = 'cbh-chart-zone-tab';
   const zTabs = () => { const v = zView(); if (v.length < 2) return []; const f1 = v.filter((z) => z < 3), f2 = v.filter((z) => z > 2);
     return [['all', 'All'], ...(f1.length > 1 && f2.length ? [['f1', '1st floor']] : []), ...(f2.length > 1 && f1.length ? [['f2', '2nd floor']] : []), ...v.map((z) => [String(z), zName(z)])]; };
-  const zTab = () => { let t = S.ztab; if (t == null) { try { t = localStorage.getItem(ZTAB); } catch { t = null; } } return zTabs().some((x) => x[0] === t) ? t : 'all'; };
-  const zDraw = () => { const v = zView(), t = zTab(); return t === 'all' ? v : t === 'f1' ? v.filter((z) => z < 3) : t === 'f2' ? v.filter((z) => z > 2) : [+t]; };
+  // Pop-out windows (the user, 22 Nov 2026: "a bit like VATSYS... open each view as its own popout window so i can open
+  // like 4 different windows"): index.html?pop=<view>#chart shows only that view's plan, live, in its own window. Same
+  // login, its own zoom and scroll; no sounds or full-screen alerts there (the main window keeps those).
+  const POP = (() => { try { const v = new URLSearchParams(location.search).get('pop'); return /^(all|f1|f2|[1-4])$/.test(v || '') ? v : null; } catch { return null; } })();
+  const zTab = () => { if (POP) return POP; let t = S.ztab; if (t == null) { try { t = localStorage.getItem(ZTAB); } catch { t = null; } } return zTabs().some((x) => x[0] === t) ? t : 'all'; };
+  const zDraw = () => { const v = POP && POP !== 'all' ? zOpen() : zView(), t = zTab(); if (POP && /^[1-4]$/.test(t) && !v.includes(+t)) return []; return t === 'all' ? v : t === 'f1' ? v.filter((z) => z < 3) : t === 'f2' ? v.filter((z) => z > 2) : [+t]; };
   const zOn = (z) => zDraw().includes(z);   // on the map
   const roomInView = (id) => zView().includes(zoneOfRoom(id));
   const erOn = () => zView().includes(2);
   const plainMain = () => zDraw().join() === '1';   // the classic main-ward-only drawing
   const zTitle = () => { const v = zDraw().join(); if (v === '1,2,3,4') return 'Whole hospital'; if (v === '3,4') return '2nd floor'; if (v === '1,2' && zView().length > 2) return '1st floor';
     const n = zDraw().map(zName); return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0]; };
-  const tabBar = () => { const ts = zTabs(), t = zTab(); return ts.length ? `<div class="zn-tabs" role="tablist" aria-label="What the floor plan shows">${ts.map(([k, l]) => `<button type="button" role="tab" data-ztab="${k}" aria-selected="${k === t}">${esc(l)}</button>`).join('')}</div>` : ''; };
+  const tabBar = () => { const ts = zTabs(), t = zTab(); if (POP || !ts.length) return '';
+    return `<div class="zn-tabs" role="tablist" aria-label="What the floor plan shows">${ts.map(([k, l]) => `<button type="button" role="tab" data-ztab="${k}" aria-selected="${k === t}">${esc(l)}</button>`).join('')}${isPhone() ? '' : `<button type="button" class="zn-pop" data-zpop="${t}" title="Open this view in its own window: drag it to another screen, and open more for other views"><i class="zn-pop-i" aria-hidden="true"></i>Pop out</button>`}</div>`; };
+  function popOut(k) {
+    const u = new URL(location.href); u.searchParams.set('pop', k); u.hash = 'chart';
+    const w = window.open(u.href, 'cbh-chart-' + k, `popup=yes,width=${Math.min(screen.availWidth, 1280)},height=${Math.min(screen.availHeight, 860)}`);
+    if (w) w.focus(); else toast('Your browser blocked the new window. Allow pop-ups for this site, then press Pop out again.');
+  }
   // Where each floor sits on the plan. Coordinates stay in each floor's own units (a Trauma Bay is 100 x 92 on both);
   // box() adds T1 (1st floor), f2() moves a 2nd-floor box into box()'s frame. With both floors showing, the 1st floor is
   // on top and the 2nd under it, each under a small floor label, at one scale.
@@ -1457,6 +1467,10 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const g = gate(); if (g) return `${svOffRole()}${g}${svAlert()}`;
     if (S.open && (!byId(S.open) || !['care', 'queue'].includes(byId(S.open).stage))) S.open = null;
     const allowed = SECTIONS[S.role]; if (!allowed.some((x) => x[0] === S.sec)) S.sec = allowed[0][0];
+    if (POP) { document.title = `${zDraw().length ? zTitle() : 'Floor plan'} · CBH Chart`;
+      if (!allowed.some((x) => x[0] === 'plan')) return holdScreen('This window is for the floor plan', 'Pick Supervisor in the main CBH Chart window to see the floor plan here.');
+      if (!zDraw().length) return holdScreen(`Zone ${esc(POP)} isn't open`, `${esc(zName(+POP))} isn't open this session. This window shows it again as soon as it opens.`);
+      S.sec = 'plan'; return `${codeBar()}<section class="pane-sec pop-sec" aria-label="${esc(zTitle())} floor plan">${planSection()}</section>${tcSheet()}`; }
     const sec = { board: boardSection, desk: deskSection, myroom: myRoomSection, reqs: reqSection, road: roadSection, plan: planSection }[S.sec]();
     return `${codeBar()}${sndStrip()}<div class="chart-wrap">${rail()}
       <div class="ch-main">${tcBars()}${chTop()}<section class="pane-sec" aria-label="${allowed.find((x) => x[0] === S.sec)[1]}">${sec}</section></div>
@@ -2316,6 +2330,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
 
   // ---------- render (keeps every scroll area and the focus) ----------
   const app = document.createElement('div'); app.className = 'chx'; app.id = 'chx';
+  if (POP) document.body.classList.add('cbh-pop');
   wireFpz();
   const AREAS = ['.pane-sec', '.pp-screen'];
   const areaKey = (sel) => (sel === '.pane-work' ? `${S.open}|${S.tab}` : sel === '.pane-sec' ? S.sec + S.deskTab : sel === '.pp-screen' ? 'pp' : sel === 'page' ? (isPhone() ? JSON.stringify(top()) : 'c') : 'same');
@@ -2338,7 +2353,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     $('#chx-view').classList.toggle('docked-view', dock); $('#chx-dhost').classList.toggle('docked', dock); document.body.classList.toggle('phone', isPhone());
     drawer();
     app.classList.toggle('is-phone', isPhone()); document.body.classList.toggle('fp-open', !!S.fp);
-    alertWatch();
+    if (!POP) alertWatch();   // a pop-out window stays quiet: the main window sounds the alerts
     AREAS.forEach((sel) => { const e = $(sel), b = before[sel]; if (e && b && b[1] === areaKey(sel)) e.scrollTop = b[0]; });
     se.scrollTop = before.page[1] === areaKey('page') ? before.page[0] : 0;
     render.keys = { page: areaKey('page'), ...Object.fromEntries(AREAS.map((sel) => [sel, areaKey(sel)])) };
@@ -2584,6 +2599,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     else if (ds.sendto) S.sendFor = S.sendFor === +ds.sendto ? null : +ds.sendto;
     else if (ds.sendsid) { const r = reqById(S.sendFor); S.sendFor = null; if (r) req.send(r, ds.sendsid); }
     // supervisor
+    else if (ds.zpop) { popOut(ds.zpop); return; }
     else if (ds.ztab) { S.ztab = ds.ztab; try { localStorage.setItem(ZTAB, ds.ztab); } catch { /* private window: this visit only */ } S.fpz = null; setMap(); }
     else if (ds.class != null) { const c = S.classroom, mine = c && String(c.by) === ME_ID;
       if (!c) call('chart_classroom', { p_book: true }, 'The classroom is booked out to you for this session.');

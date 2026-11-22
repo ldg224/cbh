@@ -259,6 +259,11 @@
         "id": "38034",
         "commonName": "full-screen",
         "use": "Chart floor plan: fit the whole plan"
+      },
+      "open-in-popup": {
+        "id": "15100",
+        "commonName": "open-in-popup",
+        "use": "CBH Chart: pop a floor plan view out into its own window"
       }
     }
   }
