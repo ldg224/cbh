@@ -371,7 +371,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     Object.assign(meRow, { name: me.name || meRow.name || 'You', dept: me.department || me.shift_department || '', depts: me.departments || [] });
     D.STAFF = [meRow];
     // rooms and beds
-    S.map = zMapNorm(ops.map) || 'main'; setMap();
+    S.map = zMapNorm(ops.map) || 'main'; setMap(); S.classroom = ops.classroom || null;
     if (s.rooms) {
       D.ROOMS = s.rooms.map((r) => ({ id: String(r.id), beds: r.beds, area: r.area, ped: r.who === 'kids', wing: r.wing || (isEr(r.id) ? 'er' : 'main') }));
       s.rooms.forEach((r) => { S.roomDept[r.id] = r.department; S.roomCfg[r.id] = Object.assign(S.roomCfg[r.id] || { log: [] }, { kids: r.who === 'kids', adults: r.who === 'adults', closed: !!r.closed, why: r.closed_reason || '', problem: r.problem || null, off: {} }); });
@@ -1070,7 +1070,8 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       201: [818, 460, 92, 70], 202: [818, 530, 92, 70], 203: [698, 708, 70, 92], 204: [628, 708, 70, 92],
       205: [708, 900, 80, 92], 206: [788, 992, 92, 73], 207: [788, 1065, 92, 73], 208: [708, 1138, 80, 92], 209: [628, 1138, 80, 92] },
     z3: { corr: [[25, 320, 675, 25], [700, 310, 70, 45], [770, 210, 290, 230], [830, 70, 140, 140], [590, 345, 110, 115], [700, 440, 225, 20]],
-      rest: [[0, 310, 25, 45], [40, 190, 160, 130], [330, 345, 260, 60], [990, 300, 70, 100], [775, 215, 60, 40]],
+      cls: [40, 190, 160, 130],   // the Medical Classroom: booked out, never given patients (0105 chart_classroom)
+      rest: [[0, 310, 25, 45], [330, 345, 260, 60], [990, 300, 70, 100], [775, 215, 60, 40]],
       walls: [[770, 210, 875, 210], [925, 210, 1060, 210], [1060, 210, 1060, 440], [770, 440, 875, 440], [925, 440, 1060, 440], [770, 210, 770, 310], [770, 355, 770, 440]] },
     z4: { corr: [[628, 460, 190, 248], [600, 460, 28, 770], [628, 992, 160, 146]],
       rest: [[818, 600, 92, 108], [818, 708, 92, 92], [768, 708, 50, 92], [628, 555, 50, 60], [628, 900, 80, 92], [788, 900, 46, 92], [834, 900, 46, 92], [788, 1138, 46, 92], [834, 1138, 46, 92]],
@@ -1080,7 +1081,11 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const f2 = ([x, y, w, h]) => [x + T2.dx - T1.dx, y + T2.dy - T1.dy, w, h];
   // Off the classic main ward the plan's own colour is outside, and the halls are painted in.
   const halls = () => `${zOn(1) ? `<i class="fp-hall" style="${box([0, 0, MW, MH])}"></i>` : ''}${zOn(2) ? `<i class="fp-hall" style="${box([MW, -ERY, ERW - MW, MH + ERY])}"></i>` : ''}${[3, 4].filter(zOn).flatMap((z) => F2['z' + z].corr).map((g) => `<i class="fp-hall" style="${box(f2(g))}"></i>`).join('')}`;
-  const f2Parts = (mini) => [3, 4].filter(zOn).flatMap((z) => F2['z' + z].rest).map((g) => `<i class="${mini ? 'mf-hub' : 'fp-rest'}" style="${box(f2(g))}"></i>`).join('');
+  const f2Parts = (mini) => [3, 4].filter(zOn).flatMap((z) => F2['z' + z].rest).map((g) => `<i class="${mini ? 'mf-hub' : 'fp-rest'}" style="${box(f2(g))}"></i>`).join('')
+    + (zOn(3) ? (mini ? `<i class="mf-hub${S.classroom ? ' mf-class' : ''}" style="${box(f2(F2.z3.cls))}"></i>` : classBox()) : '');
+  // The classroom: tap to book it out for this session; the person who booked it (or a supervisor) taps to hand it back.
+  const classBox = () => { const c = S.classroom, mine = c && String(c.by) === ME_ID;
+    return `<button type="button" class="fp-rest fp-class${c ? ' on' : ''}" data-class style="${box(f2(F2.z3.cls))}" aria-label="${c ? `Classroom, booked by ${esc(mine ? 'you' : c.name)}` : 'Classroom, free: book it out'}"><b>Classroom</b><span>${c ? `Booked · ${esc(mine ? 'You' : c.name.split(' ').slice(0, c.name.startsWith('Dr.') ? 2 : 1).join(' '))}` : 'Free'}</span></button>`; };
   const floorLabels = () => FLOORS.map(([t, y]) => `<span class="fp-floor" style="top:${pc(y, FH)}">${t}</span>`).join('');
   const pc = (v, of) => `${(v / of) * 100}%`;
   const box = ([x, y, w, h]) => `left:${pc(x + T1.dx, FW)};top:${pc(y + T1.dy, FH)};width:${pc(w, FW)};height:${pc(h, FH)}`;
@@ -2556,6 +2561,10 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     else if (ds.sendto) S.sendFor = S.sendFor === +ds.sendto ? null : +ds.sendto;
     else if (ds.sendsid) { const r = reqById(S.sendFor); S.sendFor = null; if (r) req.send(r, ds.sendsid); }
     // supervisor
+    else if (ds.class != null) { const c = S.classroom, mine = c && String(c.by) === ME_ID;
+      if (!c) call('chart_classroom', { p_book: true }, 'The classroom is booked out to you for this session.');
+      else if (mine || S.role === 'super') call('chart_classroom', { p_book: false }, mine ? 'The classroom is handed back.' : `The classroom is handed back from ${esc(c.name)}.`);
+      else toast(`${esc(c.name)} has the classroom booked.`); return; }
     else if (ds.zone) { const z = +ds.zone, o = zOpen(), n = o.includes(z) ? o.filter((x) => x !== z) : [...o, z];
       if (!n.length) { toast('Keep at least one zone open.'); return; }
       S.fpz = null; call('chart_set_map', { p_map: zMap(n) }, o.includes(z) ? `Zone ${z}, ${esc(zName(z))}, is closed.` : `Zone ${z}, ${esc(zName(z))}, is open: its rooms can be picked and used.`); return; }

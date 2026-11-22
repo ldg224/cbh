@@ -98,3 +98,12 @@
 .chx .map-sw.zn-sw { flex-wrap: wrap; }
 .chx .fpx-floor.fz-scroll { display: block; overflow: auto; -webkit-overflow-scrolling: touch; }
 .chx .fpx-floor.fz-scroll .floor { margin: 0 auto; }
+/* The Medical Classroom (Zone 3) is booked out, not given patients: free = teal word, booked = blue fill and the name */
+.chx .fp-rest.fp-class { cursor: pointer; font: inherit; align-content: center; gap: 2px; transition: border-color .15s, background-color .15s; }
+.chx .fp-class b { color: var(--text, #0B1E4A); font-size: 12.5px; font-weight: 800; }
+.chx .fp-class span { font-size: 11px; font-weight: 700; color: var(--teal-ink, #0D7D74); line-height: 1.2; }
+.chx .fp-class:hover, .chx .fp-class:focus-visible { border-color: #3A82D0; }
+.chx .fp-class:focus-visible { outline: 3px solid color-mix(in srgb, #3A82D0 40%, transparent); outline-offset: 1px; }
+.chx .fp-class.on { background: #EAF2FC; border-color: #3A82D0; }
+.chx .fp-class.on span { color: #22579F; }
+.chx .fp-launch .mf-hub.mf-class { background: #EAF2FC; }

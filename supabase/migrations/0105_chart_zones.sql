@@ -123,6 +123,9 @@ begin
   from (select id, (case wing when 'main' then 1 when 'er' then 2 when 'z3' then 3 else 4 end = any (z)) want from public.chart_rooms) x
   where x.id = r.id and r.active is distinct from x.want;
   update public.chart_ops set map_applied = m where id = 1 and map_applied is distinct from m;
+  -- closing Zone 3 hands the classroom back
+  update public.chart_ops set class_by = null, class_at = null, class_session = null
+  where id = 1 and class_by is not null and not 3 = any (public.chart_map_zones(m));
   return null;
 end $$;
 
@@ -156,3 +159,56 @@ grant execute on function public.chart_map_zones(text) to service_role;
 grant execute on function public.chart_map_norm(text) to service_role;
 grant execute on function public.chart_map_apply(text) to service_role;
 grant execute on function public.chart_set_map(text) to service_role, authenticated;
+
+-- ---------- the Medical Classroom (Zone 3) is booked out, never given patients ----------
+-- The user (22 Nov 2026): "allow me to book out the classroom rather than assign patients to it". It isn't a
+-- chart_rooms row, so nothing can place a patient there. Anyone on shift in the Chart books it for this session; the
+-- person who booked it or a supervisor hands it back. It ends with the session (the poll only shows a booking made in
+-- the live session) or when Zone 3 closes (chart_map_apply above).
+alter table public.chart_ops add column if not exists class_by text;
+alter table public.chart_ops add column if not exists class_at timestamptz;
+alter table public.chart_ops add column if not exists class_session bigint;
+
+create or replace function public.chart_classroom(p_book boolean) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare me public.chart_staff := public.chart_begin(); o public.chart_ops; sid bigint := public.chart_session_live();
+begin
+  if p_book is null then perform public.chart_err('bad_input', 'Book the classroom or hand it back.'); end if;
+  if sid is null then perform public.chart_err('no_session', 'The classroom can only be booked during a session.'); end if;
+  select * into o from public.chart_ops where id = 1;
+  if not 3 = any (public.chart_map_zones(o.map_applied)) then
+    perform public.chart_err('zone_off', 'The classroom is in Zone 3, which isn''t open this session.');
+  end if;
+  if o.class_session is distinct from sid then o.class_by := null; end if;   -- a booking from an earlier session has ended
+  if p_book then
+    if o.class_by = me.discord_id then return public.chart_done(); end if;
+    if o.class_by is not null then
+      perform public.chart_err('class_booked', format('%s has the classroom booked.', public.chart_short(o.class_by)));
+    end if;
+    update public.chart_ops set class_by = me.discord_id, class_at = now(), class_session = sid where id = 1;
+    perform public.chart_act('class_book');
+  else
+    if o.class_by is null then return public.chart_done(); end if;
+    if o.class_by is distinct from me.discord_id and me.role is distinct from 'supervisor' and not public.chart_can_supervise() then
+      perform public.chart_err('not_yours', format('%s has the classroom booked: they or a supervisor can hand it back.', public.chart_short(o.class_by)));
+    end if;
+    update public.chart_ops set class_by = null, class_at = null, class_session = null where id = 1;
+    perform public.chart_act('class_free', null, jsonb_build_object('booked_by', o.class_by));
+  end if;
+  return public.chart_done();
+end $$;
+revoke execute on function public.chart_classroom(boolean) from public, anon, authenticated;
+grant execute on function public.chart_classroom(boolean) to service_role, authenticated;
+
+-- the poll's ops gain 'classroom' (who has it, since when) while a booking from the live session stands
+do $m$
+declare d text; n text;
+begin
+  d := pg_get_functiondef('public.chart_poll_shared()'::regprocedure);
+  n := replace(d, $a$'online_mode', o.online_mode, 'launched', o.launched) from public.chart_ops o where o.id = 1)$a$,
+                  $b$'online_mode', o.online_mode, 'launched', o.launched,
+       'classroom', case when o.class_by is not null and o.class_session = public.chart_session_live()
+                         then jsonb_build_object('by', o.class_by, 'name', public.chart_pname(o.class_by), 'at', o.class_at) end) from public.chart_ops o where o.id = 1)$b$);
+  if n = d then raise exception '0105: chart_poll_shared text not found'; end if;
+  execute n;
+end $m$;

@@ -84,3 +84,20 @@ end $$;
 
 drop function if exists public.chart_map_norm(text);
 drop function if exists public.chart_map_zones(text);
+
+-- the classroom booking
+do $m$
+declare d text; n text;
+begin
+  d := pg_get_functiondef('public.chart_poll_shared()'::regprocedure);
+  n := replace(d, $b$'online_mode', o.online_mode, 'launched', o.launched,
+       'classroom', case when o.class_by is not null and o.class_session = public.chart_session_live()
+                         then jsonb_build_object('by', o.class_by, 'name', public.chart_pname(o.class_by), 'at', o.class_at) end) from public.chart_ops o where o.id = 1)$b$,
+                  $a$'online_mode', o.online_mode, 'launched', o.launched) from public.chart_ops o where o.id = 1)$a$);
+  if n = d then raise exception '0105 down: chart_poll_shared text not found'; end if;
+  execute n;
+end $m$;
+drop function if exists public.chart_classroom(boolean);
+alter table public.chart_ops drop column if exists class_by;
+alter table public.chart_ops drop column if exists class_at;
+alter table public.chart_ops drop column if exists class_session;
