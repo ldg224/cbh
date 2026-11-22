@@ -3,6 +3,19 @@
 Every published version of CBH (the CareBeyond Hospital staff dashboard and the CareBeyond Helper bot, which share one
 version number). Newest first. How versions work and how to roll back: `docs/RELEASING.md`.
 
+## 0.50.0 (2026-11-22)
+
+**Added:**
+- **The CBH Chart covers the whole hospital, in four zones.** Zone 1 the main ward, Zone 2 Emergency, Zone 3 Surgery & ICU (Pre-Op with 4 beds, OR 1-3, PACU 1-3, ICU 1-6) and Zone 4 Pediatrics & Med-Surg (201-204 for children, 205-209). The session turns each zone on or off, so one supervisor can run both floors, two can split them, or one can run a single zone. The 1st floor is drawn above the 2nd at the same scale. Pre-Op, the ORs and PACU are Surgical; ICU and Med-Surg are Medical; Pediatrics is Nursing, children only.
+- **"You cover".** With two or more zones open, each supervisor ticks the zones they cover; their map, Up next and bed count show only those.
+- **Book out the Medical Classroom.** Tap the Classroom on the 2nd floor to book it for the session and again to hand it back (whoever booked it, or a supervisor). It never takes patients. The booking ends with the session or when Zone 3 closes.
+
+**Changed:**
+- The "Main ward / With Emergency" switch is now the four zone buttons. A zone can't be closed while one of its beds is held or has a patient.
+- Bigger maps open with their full width in view and scroll down; on a phone in full screen they keep the Emergency map's room size and scroll instead of shrinking. The main ward and the main ward with Emergency look exactly as before.
+
+Database change: yes (0105: the four zones, the 2nd-floor rooms and the classroom booking; additive).
+
 ## 0.49.0 (2026-11-21)
 
 **Added:**
