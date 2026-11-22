@@ -955,7 +955,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const incomingChips = () => S.incoming.filter((i) => !i.done).map((i) => `<span class="q-chip inc${S.role === 'super' ? '' : ' ro'}" style="--u:${U(i.urgency).colour}"${S.role === 'super' && !isPhone() ? ` data-drag="${i.id}" title="Drag onto a bed to reserve it"` : ''}><b>${esc(i.name)}</b><small>Ambulance · ${since(i.at) >= SEC(i.eta * 60) ? 'arriving now' : 'ETA ' + countdown(i.at, i.eta * 60)}</small></span>${S.role === 'super' && !S.calls.some((c) => c.pid === i.id) ? bayPlaceBtn(byId(i.id)) || `<button type="button" class="tc-chip" data-tc="new" data-tcpid="${i.id}" title="Call a trauma team for ${esc(i.name)}">Trauma call</button>` : ''}`).join('');
   // The People list starts narrow while the Emergency wing is on, so the wider plan has the room (still opens with ‹).
   const pplOpen = () => (S.peopleOpen == null ? window.innerWidth >= (plainMain() ? 1400 : 1900) : S.peopleOpen);
-  const bedsInUse = () => { const vb = D.BEDS.filter((b) => roomInView(roomIdOf(b))), u = roomsInUse(); return `${vb.filter((b) => u[b]).length} of ${vb.length} beds in use`; };
+  const bedsInUse = () => { const vb = D.BEDS.filter((b) => zOn(zoneOfRoom(roomIdOf(b)))), u = roomsInUse(); return `${vb.filter((b) => u[b]).length} of ${vb.length} beds in use`; };
   // Which map the session uses (Bravo's chart_set_map; the session host picks it when making the session). Supervisors
   // switch it here; it needs a live session, and going back to the main ward is refused while anyone uses an ER bed.
   // The zone switches (0105). Top row: which zones are open in this session (a supervisor or the host changes them;
@@ -973,7 +973,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     return `<div class="plan">${asks ? `<div class="plan-asks">${asks}</div>` : ''}
       <div class="plan-q" aria-label="Up next"><span class="pq-l">Up next <i>${q.length}</i></span><div class="pq-row">${incomingChips()}${q.length ? q.map((p) => `<button type="button" class="q-chip" style="--u:${U(p.urgency).colour}" data-drag="${p.id}" data-open="${p.id}" title="${esc(p.name)} · ${esc(U(p.urgency).name)}${isChild(p) ? ' · child' : ''}${p.room ? ' · waiting in ' + esc(p.room) : ''} · ${ago(p.queuedAt)}. Press to read their record; drag onto a bed or a person.">${p.room ? bell : ''}<b>${esc(p.name)}</b>${teamChips(p)}${flags(p)}${p.lost ? '<span class="rq-ic rt rt-wait">Needs a new nurse</span>' : ''}<small>${ago(p.queuedAt)}</small></button>${bayPlaceBtn(p)}`).join('') : '<span class="muted small">Nobody waiting</span>'}</div>${nReq ? `<button type="button" class="link pq-req" data-sec="reqs">${nReq} request${nReq > 1 ? 's' : ''}</button>` : ''}</div>
       <div class="plan-h"><b>${esc(zTitle())}</b><span class="muted small">${bedsInUse()}</span>${mapSwitch()}</div>
-      <div class="plan-grid${open ? '' : ' shut'}"><div class="floor-wrap${flWrap()}"${['1', '1,2'].includes(zView().join()) ? '' : ` data-zmap="z${zView().join('')}"`}><div class="floor${flCls()}"${flSty()} aria-label="${esc(zTitle())} floor plan">${floorInner('super')}</div></div>
+      ${tabBar()}<div class="plan-grid${open ? '' : ' shut'}"><div class="floor-wrap${flWrap()}"${['1', '1,2'].includes(zDraw().join()) ? '' : ` data-zmap="z${zDraw().join('')}"`}><div class="floor${flCls()}"${flSty()} aria-label="${esc(zTitle())} floor plan">${floorInner('super')}</div></div>
         <aside class="plan-s" aria-label="People on shift"><div class="ps-h"><h3>People</h3><button type="button" class="link" data-a="pplx" aria-expanded="${open}" title="${open ? 'Make the People list narrow' : 'Show the People list'}">${open ? 'Hide' : '‹'}</button></div>${grp.map(([k, l]) => { const xs = ppl.filter((x) => S.staffRole[x.id] === k); return xs.length ? `<span class="ps-l">${l}</span>${xs.map(staffChip).join('')}` : ''; }).join('')}${admBox()}</aside></div>
       ${S.roomPanel ? `<div class="room-pop" data-room="${S.roomPanel}" role="dialog" aria-label="${esc(roomWord(S.roomPanel))} settings">${roomPanel()}</div>` : ''}
       ${S.face ? `<div class="popover" data-anchor="${S.face}" role="dialog" aria-label="${esc(nm(S.face))}">${facePanel()}</div>` : ''}${svPop()}${bayPop()}${pdPop()}</div>`;
@@ -1004,19 +1004,27 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   const HIDEZ = 'cbh-chart-zones-hidden';
   const zHidden = () => { if (S.zHide) return S.zHide; try { const v = JSON.parse(localStorage.getItem(HIDEZ)); return Array.isArray(v) ? v : []; } catch { return []; } };
   const zView = () => { const o = zOpen(); if (S.role !== 'super') return o; const h = zHidden(), v = o.filter((z) => !h.includes(z)); return v.length ? v : o; };
-  const zOn = (z) => zView().includes(z);
-  const roomInView = (id) => zOn(zoneOfRoom(id));
-  const erOn = () => zOn(2);
-  const plainMain = () => zView().join() === '1';   // the classic main-ward-only drawing
-  const zTitle = () => { const v = zView().join(); if (v === '1,2,3,4') return 'Whole hospital'; if (v === '3,4') return '2nd floor';
-    const n = zView().map(zName); return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0]; };
+  // The tabs over the plan (the user, 22 Nov 2026: "add the other views like little tabs"): All, each floor when both have
+  // zones in view, or one zone. Only what the map draws changes; Up next keeps to the zones in view. This device only.
+  const ZTAB = 'cbh-chart-zone-tab';
+  const zTabs = () => { const v = zView(); if (v.length < 2) return []; const f1 = v.filter((z) => z < 3), f2 = v.filter((z) => z > 2);
+    return [['all', 'All'], ...(f1.length > 1 && f2.length ? [['f1', '1st floor']] : []), ...(f2.length > 1 && f1.length ? [['f2', '2nd floor']] : []), ...v.map((z) => [String(z), zName(z)])]; };
+  const zTab = () => { let t = S.ztab; if (t == null) { try { t = localStorage.getItem(ZTAB); } catch { t = null; } } return zTabs().some((x) => x[0] === t) ? t : 'all'; };
+  const zDraw = () => { const v = zView(), t = zTab(); return t === 'all' ? v : t === 'f1' ? v.filter((z) => z < 3) : t === 'f2' ? v.filter((z) => z > 2) : [+t]; };
+  const zOn = (z) => zDraw().includes(z);   // on the map
+  const roomInView = (id) => zView().includes(zoneOfRoom(id));
+  const erOn = () => zView().includes(2);
+  const plainMain = () => zDraw().join() === '1';   // the classic main-ward-only drawing
+  const zTitle = () => { const v = zDraw().join(); if (v === '1,2,3,4') return 'Whole hospital'; if (v === '3,4') return '2nd floor'; if (v === '1,2' && zView().length > 2) return '1st floor';
+    const n = zDraw().map(zName); return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0]; };
+  const tabBar = () => { const ts = zTabs(), t = zTab(); return ts.length ? `<div class="zn-tabs" role="tablist" aria-label="What the floor plan shows">${ts.map(([k, l]) => `<button type="button" role="tab" data-ztab="${k}" aria-selected="${k === t}">${esc(l)}</button>`).join('')}</div>` : ''; };
   // Where each floor sits on the plan. Coordinates stay in each floor's own units (a Trauma Bay is 100 x 92 on both);
   // box() adds T1 (1st floor), f2() moves a 2nd-floor box into box()'s frame. With both floors showing, the 1st floor is
   // on top and the 2nd under it, each under a small floor label, at one scale.
   const T1 = { dx: 0, dy: 0 }, T2 = { dx: 0, dy: 0 }; let FLOORS = [];
-  const F2Z = { 3: [0, 0, 1060, 460], 4: [600, 460, 910, 1230] };   // each 2nd-floor zone's x0, y0, x1, y1
+  const F2Z = { 3: [0, 0, 680, 365], 4: [290, 365, 542, 850] };   // each 2nd-floor zone's x0, y0, x1, y1
   function setMap() {
-    const v = zView(), on1 = v.includes(1) || v.includes(2), on2 = v.includes(3) || v.includes(4), both = on1 && on2, LBL = both ? 34 : 0;
+    const v = zDraw(), on1 = v.includes(1) || v.includes(2), on2 = v.includes(3) || v.includes(4), both = on1 && on2, LBL = both ? 34 : 0;
     let y = 0; FW = 0; FLOORS = [];
     if (on1) { const x0 = v.includes(1) ? 0 : MW, x1 = v.includes(2) ? ERW : MW, y0 = v.includes(2) ? -ERY : 0;
       T1.dx = -x0; T1.dy = LBL - y0; FW = x1 - x0; y = LBL + MH - y0; if (both) FLOORS.push(['1st floor', 0]); }
@@ -1063,25 +1071,38 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
   // below, turned on its side: the 2nd lobby off the Surgery hallway and the PACU's side door lead to one long hallway
   // down the left of Pediatrics (201-204, Play, Baby and Changing rooms) and Med-Surg (205-209, bathrooms in the
   // corners). Non-patient rooms are plain blocks with no words.
+  // Redrawn at the main ward's density (the user, 22 Nov 2026: "the main ward is very neatly stylised and is simple to look
+  // at, but i feel as if the new stuff isnt"): rooms about the main ward's size, flush round short corridors, each block
+  // closed by an outline wall; spaces with no patients (Lab, PACU desk, Play/Baby/Changing rooms, storage, supply,
+  // bathrooms) are the main ward's hatched filler with no words. Every connection is as approved: Classroom, Pre-Op and
+  // OR 1-3 along the Surgery corridor with the Lab opposite and the 2nd lobby by OR 3; the corridor enters the PACU's left
+  // wall; the PACU's top door to the ICU (station, 3 and 4 at the top, 2 and 1 left, 5 and 6 right) and its bottom door
+  // (on your right coming from Surgery) to a hallway back to the lobby; the long hallway down the left of Pediatrics (201,
+  // 202 and the Play Room on the far wall, the Baby Room in its corner, 204, 203 and Changing along the bottom, storage
+  // between the two doors) and Med-Surg (Supply, 205 and two bathrooms; 206 and 207 on the right; 209, 208 and two
+  // bathrooms at the bottom).
   const F2 = {
-    rooms: { PO: [200, 190, 130, 130], OR1: [330, 200, 120, 120], OR2: [450, 200, 120, 120], OR3: [570, 200, 130, 120],
-      PACU1: [930, 220, 60, 60], PACU2: [930, 280, 60, 60], PACU3: [930, 340, 60, 60],
-      ICU3: [830, 0, 70, 70], ICU4: [900, 0, 70, 70], ICU2: [760, 70, 70, 70], ICU1: [760, 140, 70, 70], ICU5: [970, 70, 70, 70], ICU6: [970, 140, 70, 70],
-      201: [818, 460, 92, 70], 202: [818, 530, 92, 70], 203: [698, 708, 70, 92], 204: [628, 708, 70, 92],
-      205: [708, 900, 80, 92], 206: [788, 992, 92, 73], 207: [788, 1065, 92, 73], 208: [708, 1138, 80, 92], 209: [628, 1138, 80, 92] },
-    z3: { corr: [[25, 320, 675, 25], [700, 310, 70, 45], [770, 210, 290, 230], [830, 70, 140, 140], [590, 345, 110, 115], [700, 440, 225, 20]],
-      cls: [40, 190, 160, 130],   // the Medical Classroom: booked out, never given patients (0105 chart_classroom)
-      rest: [[0, 310, 25, 45], [330, 345, 260, 60], [990, 300, 70, 100], [775, 215, 60, 40]],
-      walls: [[770, 210, 875, 210], [925, 210, 1060, 210], [1060, 210, 1060, 440], [770, 440, 875, 440], [925, 440, 1060, 440], [770, 210, 770, 310], [770, 355, 770, 440]] },
-    z4: { corr: [[628, 460, 190, 248], [600, 460, 28, 770], [628, 992, 160, 146]],
-      rest: [[818, 600, 92, 108], [818, 708, 92, 92], [768, 708, 50, 92], [628, 555, 50, 60], [628, 900, 80, 92], [788, 900, 46, 92], [834, 900, 46, 92], [788, 1138, 46, 92], [834, 1138, 46, 92]],
-      walls: [[628, 460, 910, 460], [910, 460, 910, 800], [628, 800, 910, 800], [628, 460, 628, 485], [628, 540, 628, 635], [628, 665, 628, 800],
-        [628, 900, 880, 900], [880, 900, 880, 1230], [628, 1230, 880, 1230], [628, 900, 628, 1035], [628, 1095, 628, 1230]] },
+    rooms: { PO: [95, 150, 110, 90], OR1: [205, 150, 78, 90], OR2: [283, 150, 78, 90], OR3: [361, 150, 79, 90],
+      PACU1: [620, 165, 60, 60], PACU2: [620, 225, 60, 60], PACU3: [620, 285, 60, 60],
+      ICU3: [500, 0, 60, 55], ICU4: [560, 0, 60, 55], ICU2: [440, 55, 60, 55], ICU1: [440, 110, 60, 55], ICU5: [620, 55, 60, 55], ICU6: [620, 110, 60, 55],
+      201: [472, 365, 70, 55], 202: [472, 420, 70, 55], 203: [377, 525, 65, 55], 204: [312, 525, 65, 55],
+      205: [382, 620, 70, 60], 206: [452, 680, 70, 55], 207: [452, 735, 70, 55], 208: [382, 790, 70, 60], 209: [312, 790, 70, 60] },
+    z3: { corr: [[0, 240, 440, 22], [440, 165, 240, 180], [500, 55, 120, 110], [290, 262, 110, 103], [400, 345, 185, 20]],
+      cls: [0, 150, 95, 90],   // the Medical Classroom: booked out, never given patients (0105 chart_classroom)
+      rest: [[0, 262, 290, 50], [400, 262, 40, 83], [448, 173, 44, 28]],
+      walls: [[0, 150, 440, 150], [0, 150, 0, 312], [0, 312, 290, 312], [290, 312, 290, 365],
+        [440, 165, 535, 165], [585, 165, 680, 165], [680, 55, 680, 345], [440, 345, 535, 345], [585, 345, 680, 345], [440, 55, 440, 240], [440, 262, 440, 345],
+        [500, 0, 620, 0], [440, 55, 500, 55], [620, 55, 680, 55], [500, 0, 500, 55], [620, 0, 620, 55], [585, 345, 585, 365], [312, 365, 585, 365]] },
+    z4: { corr: [[290, 365, 22, 485], [312, 365, 160, 160], [312, 680, 140, 110]],
+      rest: [[472, 475, 70, 50], [472, 525, 70, 55], [442, 525, 30, 55], [312, 425, 30, 40],
+        [312, 620, 70, 60], [452, 620, 35, 60], [487, 620, 35, 60], [452, 790, 35, 60], [487, 790, 35, 60]],
+      walls: [[312, 365, 585, 365], [542, 365, 542, 580], [312, 580, 542, 580], [312, 365, 312, 380], [312, 410, 312, 480], [312, 510, 312, 580],
+        [312, 620, 522, 620], [522, 620, 522, 850], [312, 850, 522, 850], [312, 620, 312, 700], [312, 760, 312, 850], [290, 365, 290, 850], [290, 850, 312, 850]] },
   };
   const f2 = ([x, y, w, h]) => [x + T2.dx - T1.dx, y + T2.dy - T1.dy, w, h];
   // Off the classic main ward the plan's own colour is outside, and the halls are painted in.
   const halls = () => `${zOn(1) ? `<i class="fp-hall" style="${box([0, 0, MW, MH])}"></i>` : ''}${zOn(2) ? `<i class="fp-hall" style="${box([MW, -ERY, ERW - MW, MH + ERY])}"></i>` : ''}${[3, 4].filter(zOn).flatMap((z) => F2['z' + z].corr).map((g) => `<i class="fp-hall" style="${box(f2(g))}"></i>`).join('')}`;
-  const f2Parts = (mini) => [3, 4].filter(zOn).flatMap((z) => F2['z' + z].rest).map((g) => `<i class="${mini ? 'mf-hub' : 'fp-rest'}" style="${box(f2(g))}"></i>`).join('')
+  const f2Parts = (mini) => [3, 4].filter(zOn).flatMap((z) => F2['z' + z].rest).map((g) => `<i class="fp-block${mini ? '' : ' f2-x'}" style="${box(f2(g))}"></i>`).join('')
     + (zOn(3) ? (mini ? `<i class="mf-hub${S.classroom ? ' mf-class' : ''}" style="${box(f2(F2.z3.cls))}"></i>` : classBox()) : '');
   // The classroom: tap to book it out for this session; the person who booked it (or a supervisor) taps to hand it back.
   const classBox = () => { const c = S.classroom, mine = c && String(c.by) === ME_ID;
@@ -1113,7 +1134,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       ${(mode !== 'pick' && tcBay(r)) || `<div class="fp-beds">${beds.map((b) => bedCell(b, r.beds > 1 ? `${unitOf(r.id)} ${b.slice(-1)}` : unitOf(r.id), mode, owners.length > 1, mode !== 'pick' && !(g[2] > g[3] * 1.3))).join('')}</div>`}</div>`; };
   // The Emergency wing's fixed parts: the ambulance bay outside along the top, the corridor's name, Dispatch and storage
   // (grey labelled blocks with no beds, like the Family Restroom), the ground outside the building, and its walls.
-  const erParts = () => (erOn() ? `${ER.out.filter((o, i) => i || zOn(1)).map((o) => `<i class="fp-out" style="${box(o)}"></i>`).join('')}<div class="fp-amb" style="${box(ER.amb)}"><b>Ambulance parking and drop off</b></div>
+  const erParts = () => (zOn(2) ? `${ER.out.filter((o, i) => i || zOn(1)).map((o) => `<i class="fp-out" style="${box(o)}"></i>`).join('')}<div class="fp-amb" style="${box(ER.amb)}"><b>Ambulance parking and drop off</b></div>
     <div class="fp-corr" style="${box(ER.corr)}"><b>Emergency Department</b></div>
     <div class="fp-rest fp-disp" style="${box(ER.dispatch)}"><b>Emergency Dispatch</b></div><div class="fp-rest fp-store" style="${box(ER.store)}"><b>Storage</b></div>` : '');
   const floorInner = (mode) => { setMap();
@@ -1131,13 +1152,13 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
       : `<i class="fp-wall fw-v" style="top:${pc(Y1, FH)};height:${pc(Y2 - Y1, FH)};left:calc(${pc(X1, FW)} - 1.5px)"></i>`; };
     const t1 = (x, y) => [x + T1.dx, y + T1.dy], t2 = (x, y) => [x + T2.dx, y + T2.dy];
     // without the main ward, the wing gets its own wall where it meets it (the doorway stays open)
-    const er = erOn() ? [...ER.walls, ...(zOn(1) ? [] : [[MW, 0, MW, 165], [MW, 190, MW, 258]])].map(line(t1)).join('') : '';
+    const er = zOn(2) ? [...ER.walls, ...(zOn(1) ? [] : [[MW, 0, MW, 165], [MW, 190, MW, 258]])].map(line(t1)).join('') : '';
     const up = [3, 4].filter(zOn).flatMap((z) => F2['z' + z].walls).map(line(t2)).join('');
     return (zOn(1) ? run('top', MW) + run('bottom', MW) + run('left', MH) + run('right', MH) : '') + er + up;
   }
   function exitLabels() {
     const lab = (side, a, b2, text) => { const mid = (a + b2) / 2;
-      return side === 'right' ? (erOn() ? '' : `<span class="fp-exit fx-right" style="top:${pc(mid + T1.dy, FH)};left:calc(${pc(MW + T1.dx, FW)} + 10px)">→ ${esc(text)}</span>`)   // with the wing on, the doorway leads into it
+      return side === 'right' ? (zOn(2) ? '' : `<span class="fp-exit fx-right" style="top:${pc(mid + T1.dy, FH)};left:calc(${pc(MW + T1.dx, FW)} + 10px)">→ ${esc(text)}</span>`)   // with the wing on, the doorway leads into it
         : `<span class="fp-exit fx-${side}" style="left:${pc(mid + T1.dx, FW)}${side === 'top' && T1.dy ? `;top:calc(${pc(T1.dy, FH)} - 20px)` : ''}${side === 'bottom' && FH > MH + T1.dy + 1 ? `;bottom:auto;top:calc(${pc(MH + T1.dy, FH)} + 8px)` : ''}">${side === 'top' ? '↑' : '↓'} ${esc(text)}</span>`; };   // top labels sit in the ground above the ward when there's room; bottom ones under the ward
     return Object.entries(FLOOR.gaps).flatMap(([side, list]) => list.map(([a, b2, t]) => lab(side, a, b2, t))).join('');
   }
@@ -1518,7 +1539,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     const box = $('.fpx-floor'), fl = box && box.querySelector('.floor'); if (!fl) return;
     const cs = getComputedStyle(box), w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     // A zone map bigger than the screen keeps the Emergency map's density (748 x 345 fitted) and scrolls instead of shrinking.
-    const fit = Math.min(w / FW, h / FH), zm = !['1', '1,2'].includes(zView().join()), k = Math.max(0, zm ? Math.max(fit, Math.min(w / 748, h / 345)) : fit);
+    const fit = Math.min(w / FW, h / FH), zm = !['1', '1,2'].includes(zDraw().join()), k = Math.max(0, zm ? Math.max(fit, Math.min(w / 748, h / 345)) : fit);
     fl.style.width = Math.floor(FW * k) + 'px'; fl.style.height = Math.floor(FH * k) + 'px'; box.classList.toggle('fz-scroll', k > fit + 0.001);
   }
   ['resize', 'orientationchange', 'fullscreenchange'].forEach((ev) => (ev === 'fullscreenchange' ? document : window).addEventListener(ev, () => { if (S.fp) { sizeFp(); setTimeout(sizeFp, 250); } }));
@@ -1621,7 +1642,7 @@ window.CBH_CHART_OFF = !!(window.CBH_CONFIG && window.CBH_CONFIG.chartKill === t
     if (S.fp && (S.fp === 'pick' ? !S.pick : S.role !== 'super')) S.fp = false;
     if (t.s === 'plan') { const q = upNext(), ppl = D.STAFF.filter((x) => !x.you && !isAdminOnly(x.id));
       const grp = [['room', 'Room'], ['oncall', 'On call'], ['road', 'Road'], ['reception', 'Reception'], ['break', 'On a break'], ['off', 'Off the Chart']];
-      h = `${phHead('Floor Plan', `${esc(zTitle())} · ${bedsInUse()}`)}${mapSwitch()}
+      h = `${phHead('Floor Plan', `${esc(zTitle())} · ${bedsInUse()}`)}${mapSwitch()}${tabBar()}
       <details class="ph-sess"${S.phSess ? ' open' : ''}><summary data-a="phsess">Session settings</summary><div class="ph-sess-in">
         <button type="button" class="dm-t${S.recOpen ? ' on' : ''}" data-a="recopen" aria-pressed="${S.recOpen}">Allow Reception</button>
         <button type="button" class="dm-t${S.online ? ' on' : ''}" data-a="online" aria-pressed="${S.online}">Online check-in open</button>
@@ -2324,6 +2345,8 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     if (!isPhone()) { sizeBoard(); placePop(); placeSvPop(); }
     if (S.fp) { sizeFp(); requestAnimationFrame(sizeFp); }
     if ($('.fpz')) fpzApply();
+    // a scrolling tab row (phones) keeps the chosen view tab in sight
+    document.querySelectorAll('.chx .zn-tabs').forEach((zt) => { const t = zt.querySelector('[aria-selected="true"]'); if (t && zt.scrollWidth > zt.clientWidth) zt.scrollLeft = t.offsetLeft - (zt.clientWidth - t.offsetWidth) / 2; });
     const fw1 = $('.plan .floor-wrap'); if (window.CBHZoom && fw1) { try { window.CBHZoom.attach(fw1); } catch (e) { console.error('CBH Chart zoom:', e); } }   // Delta's zoom (chart-zoom.js), before the scroll comes back
     if (fw1 && fwS) { fw1.scrollLeft = fwS[0]; fw1.scrollTop = fwS[1]; }
     tcFocus();
@@ -2561,6 +2584,7 @@ ${nextBarHtml(p)}${S.pd && S.pd.pid === p.id ? pdPanel() : ''}
     else if (ds.sendto) S.sendFor = S.sendFor === +ds.sendto ? null : +ds.sendto;
     else if (ds.sendsid) { const r = reqById(S.sendFor); S.sendFor = null; if (r) req.send(r, ds.sendsid); }
     // supervisor
+    else if (ds.ztab) { S.ztab = ds.ztab; try { localStorage.setItem(ZTAB, ds.ztab); } catch { /* private window: this visit only */ } S.fpz = null; setMap(); }
     else if (ds.class != null) { const c = S.classroom, mine = c && String(c.by) === ME_ID;
       if (!c) call('chart_classroom', { p_book: true }, 'The classroom is booked out to you for this session.');
       else if (mine || S.role === 'super') call('chart_classroom', { p_book: false }, mine ? 'The classroom is handed back.' : `The classroom is handed back from ${esc(c.name)}.`);
